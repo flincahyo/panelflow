@@ -355,4 +355,51 @@ describe("usePanelStore - Default 2D & Context Menu Actions", () => {
     expect(usePanelStore.getState().inspectorOpen).toBe(true);
     expect(usePanelStore.getState().rightPanelTab).toBe("inspector");
   });
+
+  it("manages favorite and recent parts with max limit of 8 items", () => {
+    const store = usePanelStore.getState();
+    usePanelStore.setState({
+      favoritePartIds: [],
+      recentPartIds: [],
+    });
+
+    // Toggle favorite
+    store.toggleFavoritePart("mcb-1p");
+    expect(usePanelStore.getState().favoritePartIds).toEqual(["mcb-1p"]);
+
+    store.toggleFavoritePart("contactor");
+    expect(usePanelStore.getState().favoritePartIds).toEqual(["contactor", "mcb-1p"]);
+
+    store.toggleFavoritePart("mcb-1p");
+    expect(usePanelStore.getState().favoritePartIds).toEqual(["contactor"]);
+
+    // Recent parts pushing and capping at 8 items
+    const parts = [
+      "mcb-1p",
+      "mcb-2p",
+      "mcb-3p",
+      "mcb-4p",
+      "mccb-100a",
+      "contactor",
+      "tor",
+      "psu-24v",
+      "terminal-block",
+    ] as const;
+
+    for (const p of parts) {
+      store.addRecentPart(p);
+    }
+
+    const state = usePanelStore.getState();
+    expect(state.recentPartIds.length).toBe(8);
+    // Most recent is at front
+    expect(state.recentPartIds[0]).toBe("terminal-block");
+    // Oldest 'mcb-1p' was dropped
+    expect(state.recentPartIds.includes("mcb-1p")).toBe(false);
+
+    // Adding existing moves it to top
+    store.addRecentPart("mcb-2p");
+    expect(usePanelStore.getState().recentPartIds[0]).toBe("mcb-2p");
+    expect(usePanelStore.getState().recentPartIds.length).toBe(8);
+  });
 });

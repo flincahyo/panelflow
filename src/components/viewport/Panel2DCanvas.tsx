@@ -17,6 +17,15 @@ import { detectCollisionsAndBounds } from "@/lib/collision";
 import { getBackplateDimensions } from "@/lib/template-export";
 import { parseDxfToMmSegments } from "@/lib/dxf-parser";
 import { WIRE_COLOR_MAP } from "@/lib/sheet-export";
+import {
+  computePlateRulerTicks,
+  computeSelectionFootprint,
+  getRulerStepMm,
+  plateToWorldX,
+  plateToWorldY,
+  worldToPlateX,
+  worldToPlateY,
+} from "@/lib/ruler";
 import { getRotatedDimensions, rotateLocalPoint, snapToGrid } from "@/lib/snap";
 import { formatDim } from "@/lib/units";
 import {
@@ -1136,20 +1145,49 @@ export function Panel2DCanvas() {
     return map;
   }, [components, cadAssets]);
 
-  // Ruler ticks computation
-  const rulerStepMm = zoom > 1.5 ? 25 : zoom > 0.7 ? 50 : 100;
-  const xStartMm = Math.floor(-pan.x / zoom / rulerStepMm) * rulerStepMm;
-  const xEndMm =
-    Math.ceil((viewportSize.width - pan.x) / zoom / rulerStepMm) * rulerStepMm;
-  const yTopMm = Math.ceil(pan.y / zoom / rulerStepMm) * rulerStepMm;
-  const yBottomMm =
-    Math.floor((pan.y - viewportSize.height) / zoom / rulerStepMm) * rulerStepMm;
+  // Plate-relative ruler ticks computation (origin 0,0 at top-left of mounting plate)
+  const rulerStepMm = getRulerStepMm(zoom);
+  const worldXMin = -pan.x / zoom;
+  const worldXMax = (viewportSize.width - pan.x) / zoom;
+  const worldYMax = pan.y / zoom;
+  const worldYMin = (pan.y - viewportSize.height) / zoom;
 
-  const xTicks: number[] = [];
-  for (let x = xStartMm; x <= xEndMm; x += rulerStepMm) xTicks.push(x);
+  const plateXMin = worldToPlateX(worldXMin, plateW);
+  const plateXMax = worldToPlateX(worldXMax, plateW);
+  const plateYMin = worldToPlateY(worldYMax, plateH);
+  const plateYMax = worldToPlateY(worldYMin, plateH);
 
-  const yTicks: number[] = [];
-  for (let y = yBottomMm; y <= yTopMm; y += rulerStepMm) yTicks.push(y);
+  const xTicks = computePlateRulerTicks(plateXMin, plateXMax, rulerStepMm);
+  const yTicks = computePlateRulerTicks(plateYMin, plateYMax, rulerStepMm);
+
+  const plateLeftRulerPx = pan.x + plateToWorldX(0, plateW) * zoom - 24;
+  const plateRightRulerPx = pan.x + plateToWorldX(plateW, plateW) * zoom - 24;
+  const plateTopRulerPx = pan.y - plateToWorldY(0, plateH) * zoom - 24;
+  const plateBottomRulerPx = pan.y - plateToWorldY(plateH, plateH) * zoom - 24;
+
+  const selectionFootprint = useMemo(
+    () =>
+      computeSelectionFootprint({
+        selected,
+        selectedIds,
+        components,
+        cadAssets,
+        rails,
+        ducts,
+        plateWidthMm: plateW,
+        plateHeightMm: plateH,
+      }),
+    [selected, selectedIds, components, cadAssets, rails, ducts, plateW, plateH]
+  );
+
+  const cursorPlate = cursorWorld
+    ? {
+        xMm: worldToPlateX(cursorWorld.xMm, plateW),
+        yMm: worldToPlateY(cursorWorld.yMm, plateH),
+        topRulerLeftPx: pan.x + cursorWorld.xMm * zoom - 24,
+        leftRulerTopPx: pan.y - cursorWorld.yMm * zoom - 24,
+      }
+    : null;
 
   // Title block geometry (bottom-right of sheet)
   const tbW = 264;
@@ -1164,7 +1202,10 @@ export function Panel2DCanvas() {
       onWheel={handleWheel}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
-      onPointerLeave={handlePointerUp}
+      onPointerLeave={() => {
+        setCursorWorld(null);
+        handlePointerUp();
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
         const worldPos = screenToWorld(e.clientX, e.clientY);
@@ -1175,38 +1216,130 @@ export function Panel2DCanvas() {
         });
       }}
     >
-      {/* Top Engineering Ruler */}
+      {/* Top Engineering Ruler (Plate Top-Left Origin: 0 -> plateW) */}
       <div className="pointer-events-none absolute top-0 right-0 left-6 z-20 h-6 overflow-hidden border-b border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#0c0e14]/90 font-mono text-[9px] text-[#64748b] dark:text-slate-400 backdrop-blur-md">
-        {xTicks.map((xMm) => {
-          const left = pan.x + xMm * zoom - 24;
-          if (left < 6) return null;
+        {/* Dimmed out-of-plate zones */}
+        {plateLeftRulerPx > 0 && (
+          <div
+            style={{ left: 0, width: plateLeftRulerPx }}
+            className="absolute top-0 bottom-0 bg-slate-200/45 dark:bg-black/45"
+          />
+        )}
+        <div
+          style={{ left: Math.max(0, plateRightRulerPx), right: 0 }}
+          className="absolute top-0 bottom-0 bg-slate-200/45 dark:bg-black/45"
+        />
+
+        {/* Selection Footprint Highlight (X1..X2) */}
+        {selectionFootprint && (() => {
+          const fpLeft = pan.x + plateToWorldX(selectionFootprint.x1Mm, plateW) * zoom - 24;
+          const fpRight = pan.x + plateToWorldX(selectionFootprint.x2Mm, plateW) * zoom - 24;
+          const fpWidth = Math.max(2, fpRight - fpLeft);
           return (
             <div
-              key={xMm}
+              style={{ left: fpLeft, width: fpWidth }}
+              className="absolute top-0 bottom-0 border-x border-sky-500/80 bg-sky-500/20 dark:border-sky-400/80 dark:bg-sky-400/20"
+            />
+          );
+        })()}
+
+        {/* Ruler Ticks */}
+        {xTicks.map((plateXMm) => {
+          const left = pan.x + plateToWorldX(plateXMm, plateW) * zoom - 24;
+          if (left < 0) return null;
+          const isOutsidePlate = plateXMm < 0 || plateXMm > plateW;
+          const isOrigin = plateXMm === 0;
+          return (
+            <div
+              key={plateXMm}
               style={{ transform: `translateX(${left}px)` }}
-              className="absolute top-0 bottom-0 border-l border-[#e2e8f0] dark:border-white/10 pl-1"
+              className={`absolute top-0 bottom-0 border-l pl-1 ${
+                isOrigin
+                  ? "border-sky-500/80 font-bold text-sky-600 dark:text-sky-400"
+                  : isOutsidePlate
+                    ? "border-[#e2e8f0]/60 dark:border-white/5 text-[#94a3b8]/70 dark:text-slate-600"
+                    : "border-[#cbd5e1] dark:border-white/15 text-[#475569] dark:text-slate-300"
+              }`}
             >
-              {xMm}
+              {plateXMm}
             </div>
           );
         })}
+
+        {/* Cursor Hairline Tracker */}
+        {cursorPlate && cursorPlate.topRulerLeftPx >= 0 && (
+          <div
+            style={{ transform: `translateX(${cursorPlate.topRulerLeftPx}px)` }}
+            className="absolute top-0 bottom-0 z-10 w-[1.5px] bg-rose-500 dark:bg-rose-400"
+          >
+            <span className="absolute top-0.5 left-1 rounded bg-rose-500 px-1 py-[1px] text-[8px] font-semibold leading-none text-white shadow-xs dark:bg-rose-400 dark:text-slate-950">
+              {Math.round(cursorPlate.xMm)}
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Left Engineering Ruler */}
+      {/* Left Engineering Ruler (Plate Top-Left Origin: 0 -> plateH downward) */}
       <div className="pointer-events-none absolute top-6 bottom-0 left-0 z-20 w-6 overflow-hidden border-r border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#0c0e14]/90 font-mono text-[9px] text-[#64748b] dark:text-slate-400 backdrop-blur-md">
-        {yTicks.map((yMm) => {
-          const top = pan.y - yMm * zoom - 24;
-          if (top < 6) return null;
+        {/* Dimmed out-of-plate zones */}
+        {plateTopRulerPx > 0 && (
+          <div
+            style={{ top: 0, height: plateTopRulerPx }}
+            className="absolute right-0 left-0 bg-slate-200/45 dark:bg-black/45"
+          />
+        )}
+        <div
+          style={{ top: Math.max(0, plateBottomRulerPx), bottom: 0 }}
+          className="absolute right-0 left-0 bg-slate-200/45 dark:bg-black/45"
+        />
+
+        {/* Selection Footprint Highlight (Y1..Y2) */}
+        {selectionFootprint && (() => {
+          const fpTop = pan.y - plateToWorldY(selectionFootprint.y1Mm, plateH) * zoom - 24;
+          const fpBottom = pan.y - plateToWorldY(selectionFootprint.y2Mm, plateH) * zoom - 24;
+          const fpHeight = Math.max(2, fpBottom - fpTop);
           return (
             <div
-              key={yMm}
+              style={{ top: fpTop, height: fpHeight }}
+              className="absolute right-0 left-0 border-y border-sky-500/80 bg-sky-500/20 dark:border-sky-400/80 dark:bg-sky-400/20"
+            />
+          );
+        })()}
+
+        {/* Ruler Ticks */}
+        {yTicks.map((plateYMm) => {
+          const top = pan.y - plateToWorldY(plateYMm, plateH) * zoom - 24;
+          if (top < 0) return null;
+          const isOutsidePlate = plateYMm < 0 || plateYMm > plateH;
+          const isOrigin = plateYMm === 0;
+          return (
+            <div
+              key={plateYMm}
               style={{ transform: `translateY(${top}px)` }}
-              className="absolute right-0 left-0 border-t border-[#e2e8f0] dark:border-white/10 pt-0.5 text-center"
+              className={`absolute right-0 left-0 border-t pt-0.5 text-center ${
+                isOrigin
+                  ? "border-sky-500/80 font-bold text-sky-600 dark:text-sky-400"
+                  : isOutsidePlate
+                    ? "border-[#e2e8f0]/60 dark:border-white/5 text-[#94a3b8]/70 dark:text-slate-600"
+                    : "border-[#cbd5e1] dark:border-white/15 text-[#475569] dark:text-slate-300"
+              }`}
             >
-              {yMm}
+              {plateYMm}
             </div>
           );
         })}
+
+        {/* Cursor Hairline Tracker */}
+        {cursorPlate && cursorPlate.leftRulerTopPx >= 0 && (
+          <div
+            style={{ transform: `translateY(${cursorPlate.leftRulerTopPx}px)` }}
+            className="absolute right-0 left-0 z-10 h-[1.5px] bg-rose-500 dark:bg-rose-400"
+          >
+            <span className="absolute top-0.5 left-0.5 rounded bg-rose-500 px-0.5 py-[1px] text-[7px] font-semibold leading-none text-white shadow-xs dark:bg-rose-400 dark:text-slate-950">
+              {Math.round(cursorPlate.yMm)}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Corner Origin Badge */}
@@ -1400,9 +1533,9 @@ export function Panel2DCanvas() {
       {/* Bottom Left / Center: Cursor & Snap Coordinates + Zoom Controls */}
       <div className="absolute bottom-3 left-9 z-20 flex flex-wrap items-center gap-2">
         <div className="rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#171a21]/95 px-3 py-1 font-mono text-[11px] tabular-nums text-[#0f172a] dark:text-slate-300 shadow-sm dark:shadow-xl backdrop-blur-xl">
-          {cursorWorld
-            ? `X: ${Math.round(cursorWorld.xMm)}mm | Y: ${Math.round(
-                cursorWorld.yMm
+          {cursorPlate
+            ? `X: ${Math.round(cursorPlate.xMm)}mm | Y: ${Math.round(
+                cursorPlate.yMm
               )}mm | Snap: ${gridSnapMm}mm`
             : `Snap: ${gridSnapMm}mm`}
         </div>

@@ -58,6 +58,35 @@ function makeUid(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+export const FAVORITES_STORAGE_KEY = "panelflow_favorite_parts";
+export const RECENTS_STORAGE_KEY = "panelflow_recent_parts";
+export const MAX_RECENT_PARTS = 8;
+
+function loadPartIdsFromStorage(key: string): ComponentTemplateId[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (id): id is ComponentTemplateId =>
+        typeof id === "string" && id in COMPONENT_CATALOG
+    );
+  } catch {
+    return [];
+  }
+}
+
+function savePartIdsToStorage(key: string, ids: ComponentTemplateId[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, JSON.stringify(ids));
+  } catch {
+    // ignore storage errors
+  }
+}
+
 function applyThemeToDom(theme: "dark" | "light") {
   if (typeof document !== "undefined") {
     const root = document.documentElement;
@@ -394,6 +423,13 @@ interface PanelStore {
   duplicateComponent: (id: string, offsetMm?: { x: number; y: number }) => string | null;
   snapComponentToRail: (id: string) => void;
 
+  // Favorites & Recent Parts Library
+  recentPartIds: ComponentTemplateId[];
+  favoritePartIds: ComponentTemplateId[];
+  addRecentPart: (id: ComponentTemplateId) => void;
+  toggleFavoritePart: (id: ComponentTemplateId) => void;
+  hydratePartPreferences: () => void;
+
   // CAD Asset Actions
   addCadAsset: (asset: CustomCadAsset) => void;
   updateCadAsset: (id: string, partial: Partial<CustomCadAsset>) => void;
@@ -477,6 +513,38 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   rightPanelTab: "inspector",
   canUndo: false,
   canRedo: false,
+  recentPartIds: [],
+  favoritePartIds: [],
+
+  addRecentPart: (id) => {
+    if (!(id in COMPONENT_CATALOG)) return;
+    const next = [id, ...get().recentPartIds.filter((x) => x !== id)].slice(
+      0,
+      MAX_RECENT_PARTS
+    );
+    savePartIdsToStorage(RECENTS_STORAGE_KEY, next);
+    set({ recentPartIds: next });
+  },
+
+  toggleFavoritePart: (id) => {
+    if (!(id in COMPONENT_CATALOG)) return;
+    const current = get().favoritePartIds;
+    const next = current.includes(id)
+      ? current.filter((x) => x !== id)
+      : [id, ...current];
+    savePartIdsToStorage(FAVORITES_STORAGE_KEY, next);
+    set({ favoritePartIds: next });
+  },
+
+  hydratePartPreferences: () => {
+    set({
+      favoritePartIds: loadPartIdsFromStorage(FAVORITES_STORAGE_KEY),
+      recentPartIds: loadPartIdsFromStorage(RECENTS_STORAGE_KEY).slice(
+        0,
+        MAX_RECENT_PARTS
+      ),
+    });
+  },
 
   undo: () => {
     if (historyStack.past.length === 0) return;
@@ -1622,9 +1690,15 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
         : s
     );
     const active = updated.find((s) => s.id === activeSheetId)!;
+    const nextRecents = [
+      templateId,
+      ...get().recentPartIds.filter((x) => x !== templateId),
+    ].slice(0, MAX_RECENT_PARTS);
+    savePartIdsToStorage(RECENTS_STORAGE_KEY, nextRecents);
     set({
       sheets: updated,
       selected: { kind: "component", id },
+      recentPartIds: nextRecents,
       canUndo: true,
       canRedo: false,
       ...syncActiveSheetProjection(active),

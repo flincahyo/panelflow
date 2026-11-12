@@ -5,17 +5,20 @@ import {
   Box,
   Check,
   ChevronDown,
+  Clock,
   Cpu,
   FileUp,
   Layers,
   MapPin,
   Plus,
   Search,
+  Star,
   Trash2,
   X,
 } from "lucide-react";
 import { useEffect, useState, type ChangeEvent } from "react";
 import {
+  COMPONENT_CATALOG,
   COMPONENT_CATEGORIES,
   COMPONENT_LIST,
 } from "@/lib/components-catalog";
@@ -223,6 +226,8 @@ export function LeftSidebar() {
   const [railsOpen, setRailsOpen] = useState(true);
   const [ductsOpen, setDuctsOpen] = useState(true);
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({
+    Favorites: true,
+    "Recent Symbols": true,
     "Protection & Switchgear": true,
     "Control & Automation": true,
     "Power & Distribution": true,
@@ -233,13 +238,16 @@ export function LeftSidebar() {
   const [customLibrary, setCustomLibrary] = useState<CustomLibraryCadItem[]>([]);
   const [savedToastId, setSavedToastId] = useState<string | null>(null);
 
+  const hydratePartPreferences = usePanelStore((s) => s.hydratePartPreferences);
+
   useEffect(() => {
+    hydratePartPreferences();
     listCustomCadLibrary()
       .then((items) => setCustomLibrary(items))
       .catch(() => {
         // IndexedDB unavailable
       });
-  }, []);
+  }, [hydratePartPreferences]);
 
   const displayUnit = usePanelStore((s) => s.displayUnit);
   const enclosure = usePanelStore((s) => s.enclosure);
@@ -259,6 +267,9 @@ export function LeftSidebar() {
   const addDuct = usePanelStore((s) => s.addDuct);
   const removeDuct = usePanelStore((s) => s.removeDuct);
   const addComponent = usePanelStore((s) => s.addComponent);
+  const recentPartIds = usePanelStore((s) => s.recentPartIds);
+  const favoritePartIds = usePanelStore((s) => s.favoritePartIds);
+  const toggleFavoritePart = usePanelStore((s) => s.toggleFavoritePart);
   const addCadAsset = usePanelStore((s) => s.addCadAsset);
   const removeCadAsset = usePanelStore((s) => s.removeCadAsset);
   const setPinMarkingMode = usePanelStore((s) => s.setPinMarkingMode);
@@ -277,6 +288,26 @@ export function LeftSidebar() {
       c.shortName.toLowerCase().includes(q) ||
       c.category.toLowerCase().includes(q)
   );
+  const favoriteItems = favoritePartIds
+    .map((id) => COMPONENT_CATALOG[id])
+    .filter(
+      (c): c is NonNullable<typeof c> =>
+        Boolean(c) &&
+        (!q ||
+          c.name.toLowerCase().includes(q) ||
+          c.shortName.toLowerCase().includes(q) ||
+          c.category.toLowerCase().includes(q))
+    );
+  const recentItems = recentPartIds
+    .map((id) => COMPONENT_CATALOG[id])
+    .filter(
+      (c): c is NonNullable<typeof c> =>
+        Boolean(c) &&
+        (!q ||
+          c.name.toLowerCase().includes(q) ||
+          c.shortName.toLowerCase().includes(q) ||
+          c.category.toLowerCase().includes(q))
+    );
   const filteredRails = rails.filter(
     (r) => !q || r.name.toLowerCase().includes(q)
   );
@@ -461,6 +492,155 @@ export function LeftSidebar() {
       <div className="flex-1 overflow-y-auto px-2.5 pb-3 space-y-3 text-xs">
         {activeTab === "components" && (
           <div className="space-y-2.5">
+            {/* ★ FAVORITES Section */}
+            {favoriteItems.length > 0 && (
+              <div className="rounded-xl border border-amber-300 dark:border-amber-500/30 bg-amber-50/40 dark:bg-amber-950/20 p-2.5 space-y-2 shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => toggleCategory("Favorites")}
+                  className="flex w-full items-center justify-between font-mono text-[11px] font-semibold uppercase tracking-wider text-amber-800 dark:text-amber-300"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 transition-transform ${
+                        openCategories["Favorites"] ? "" : "-rotate-90"
+                      }`}
+                    />
+                    <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-500" />
+                    FAVORITES
+                  </span>
+                  <span className="rounded-full bg-amber-200/60 dark:bg-amber-900/50 px-2 py-0.5 text-[10px] text-amber-800 dark:text-amber-200 font-mono">
+                    {favoriteItems.length}
+                  </span>
+                </button>
+
+                {openCategories["Favorites"] && (
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    {favoriteItems.map((tpl) => (
+                      <div
+                        key={`fav-${tpl.id}`}
+                        className="group relative flex flex-col items-center justify-between rounded-xl border border-amber-200 dark:border-amber-500/20 bg-white dark:bg-[#171a21] p-2 text-center transition-all hover:border-amber-400 dark:hover:border-amber-400 hover:bg-amber-50/30 dark:hover:bg-[#1d212b]"
+                      >
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavoritePart(tpl.id);
+                          }}
+                          title="Remove from Favorites"
+                          className="absolute top-1 right-1 z-10 rounded-full p-1 text-amber-500 hover:bg-amber-100 dark:hover:bg-amber-950/60 transition-colors"
+                        >
+                          <Star className="h-3 w-3 fill-amber-400 text-amber-500" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => addComponent(tpl.id)}
+                          title={`Add ${tpl.name} (${tpl.widthMm}×${tpl.heightMm}mm)`}
+                          className="w-full flex flex-col items-center"
+                        >
+                          <div className="flex h-10 w-full items-center justify-center">
+                            <PartVectorIcon
+                              templateId={tpl.id}
+                              accentColor={tpl.accentColor}
+                            />
+                          </div>
+                          <div className="mt-1.5 w-full">
+                            <div className="truncate text-[12px] font-medium text-[#0f172a] dark:text-slate-100 group-hover:text-amber-700 dark:group-hover:text-amber-300">
+                              {tpl.shortName}
+                            </div>
+                            <div className="mt-0.5 font-mono text-[10px] tabular-nums text-[#64748b] dark:text-slate-500">
+                              {formatDim(tpl.widthMm, displayUnit, 0)} ×{" "}
+                              {formatDim(tpl.heightMm, displayUnit, 0)}
+                            </div>
+                          </div>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 🕒 RECENT SYMBOLS Section */}
+            {recentItems.length > 0 && (
+              <div className="rounded-xl border border-indigo-200 dark:border-indigo-500/30 bg-indigo-50/30 dark:bg-indigo-950/20 p-2.5 space-y-2 shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => toggleCategory("Recent Symbols")}
+                  className="flex w-full items-center justify-between font-mono text-[11px] font-semibold uppercase tracking-wider text-indigo-800 dark:text-indigo-300"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 transition-transform ${
+                        openCategories["Recent Symbols"] ? "" : "-rotate-90"
+                      }`}
+                    />
+                    <Clock className="h-3.5 w-3.5 text-indigo-500" />
+                    RECENT SYMBOLS
+                  </span>
+                  <span className="rounded-full bg-indigo-200/60 dark:bg-indigo-900/50 px-2 py-0.5 text-[10px] text-indigo-800 dark:text-indigo-200 font-mono">
+                    {recentItems.length}
+                  </span>
+                </button>
+
+                {openCategories["Recent Symbols"] && (
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    {recentItems.map((tpl) => {
+                      const isFav = favoritePartIds.includes(tpl.id);
+                      return (
+                        <div
+                          key={`rec-${tpl.id}`}
+                          className="group relative flex flex-col items-center justify-between rounded-xl border border-indigo-200/60 dark:border-indigo-500/20 bg-white dark:bg-[#171a21] p-2 text-center transition-all hover:border-indigo-400 dark:hover:border-indigo-400 hover:bg-indigo-50/20 dark:hover:bg-[#1d212b]"
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFavoritePart(tpl.id);
+                            }}
+                            title={isFav ? "Starred favorite" : "Add to Favorites"}
+                            className={`absolute top-1 right-1 z-10 rounded-full p-1 transition-colors ${
+                              isFav
+                                ? "text-amber-500"
+                                : "text-[#94a3b8] opacity-0 group-hover:opacity-100 hover:text-amber-500"
+                            }`}
+                          >
+                            <Star
+                              className={`h-3 w-3 ${
+                                isFav ? "fill-amber-400 text-amber-500" : ""
+                              }`}
+                            />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => addComponent(tpl.id)}
+                            title={`Add ${tpl.name} (${tpl.widthMm}×${tpl.heightMm}mm)`}
+                            className="w-full flex flex-col items-center"
+                          >
+                            <div className="flex h-10 w-full items-center justify-center">
+                              <PartVectorIcon
+                                templateId={tpl.id}
+                                accentColor={tpl.accentColor}
+                              />
+                            </div>
+                            <div className="mt-1.5 w-full">
+                              <div className="truncate text-[12px] font-medium text-[#0f172a] dark:text-slate-100 group-hover:text-indigo-700 dark:group-hover:text-indigo-300">
+                                {tpl.shortName}
+                              </div>
+                              <div className="mt-0.5 font-mono text-[10px] tabular-nums text-[#64748b] dark:text-slate-500">
+                                {formatDim(tpl.widthMm, displayUnit, 0)} ×{" "}
+                                {formatDim(tpl.heightMm, displayUnit, 0)}
+                              </div>
+                            </div>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* My CAD Library Accordion */}
             {filteredLibrary.length > 0 && (
               <div className="rounded-xl border border-sky-200 dark:border-sky-500/20 bg-sky-50/50 dark:bg-sky-950/20 p-2.5 space-y-2 shadow-xs">
@@ -560,34 +740,58 @@ export function LeftSidebar() {
 
                   {isOpen && (
                     <div className="grid grid-cols-2 gap-2 pt-1">
-                      {catItems.map((tpl) => (
-                        <button
-                          key={tpl.id}
-                          type="button"
-                          onClick={() => addComponent(tpl.id)}
-                          title={`Add ${tpl.name} (${tpl.widthMm}×${tpl.heightMm}mm)`}
-                          className="group relative flex flex-col items-center justify-between rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] p-2 text-center transition-all hover:border-[#cbd5e1] dark:hover:border-white/25 hover:bg-[#f1f5f9] dark:hover:bg-[#1d212b] active:scale-[0.98]"
-                        >
-                          <div className="flex h-10 w-full items-center justify-center">
-                            <PartVectorIcon
-                              templateId={tpl.id}
-                              accentColor={tpl.accentColor}
-                            />
+                      {catItems.map((tpl) => {
+                        const isFav = favoritePartIds.includes(tpl.id);
+                        return (
+                          <div
+                            key={tpl.id}
+                            className="group relative flex flex-col items-center justify-between rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] p-2 text-center transition-all hover:border-[#cbd5e1] dark:hover:border-white/25 hover:bg-[#f1f5f9] dark:hover:bg-[#1d212b]"
+                          >
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleFavoritePart(tpl.id);
+                              }}
+                              title={isFav ? "Remove from Favorites" : "Add to Favorites"}
+                              aria-label={isFav ? `Unfavorite ${tpl.shortName}` : `Favorite ${tpl.shortName}`}
+                              className={`absolute top-1 right-1 z-10 rounded-full p-1 transition-colors ${
+                                isFav
+                                  ? "text-amber-500"
+                                  : "text-[#94a3b8] opacity-0 group-hover:opacity-100 hover:text-amber-500"
+                              }`}
+                            >
+                              <Star
+                                className={`h-3 w-3 ${
+                                  isFav ? "fill-amber-400 text-amber-500" : ""
+                                }`}
+                              />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => addComponent(tpl.id)}
+                              title={`Add ${tpl.name} (${tpl.widthMm}×${tpl.heightMm}mm)`}
+                              className="w-full flex flex-col items-center active:scale-[0.98]"
+                            >
+                              <div className="flex h-10 w-full items-center justify-center">
+                                <PartVectorIcon
+                                  templateId={tpl.id}
+                                  accentColor={tpl.accentColor}
+                                />
+                              </div>
+                              <div className="mt-1.5 w-full">
+                                <div className="truncate text-[12px] font-medium text-[#0f172a] dark:text-slate-100 group-hover:text-[#0f172a] dark:group-hover:text-white">
+                                  {tpl.shortName}
+                                </div>
+                                <div className="mt-0.5 font-mono text-[10px] tabular-nums text-[#64748b] dark:text-slate-500">
+                                  {formatDim(tpl.widthMm, displayUnit, 0)} ×{" "}
+                                  {formatDim(tpl.heightMm, displayUnit, 0)}
+                                </div>
+                              </div>
+                            </button>
                           </div>
-                          <div className="mt-1.5 w-full">
-                            <div className="truncate text-[12px] font-medium text-[#0f172a] dark:text-slate-100 group-hover:text-[#0f172a] dark:group-hover:text-white">
-                              {tpl.shortName}
-                            </div>
-                            <div className="mt-0.5 font-mono text-[10px] tabular-nums text-[#64748b] dark:text-slate-500">
-                              {formatDim(tpl.widthMm, displayUnit, 0)} ×{" "}
-                              {formatDim(tpl.heightMm, displayUnit, 0)}
-                            </div>
-                          </div>
-                          <span className="absolute top-1.5 right-1.5 rounded-full bg-[#e2e8f0] dark:bg-white/5 p-0.5 text-[#64748b] dark:text-slate-500 opacity-0 transition-opacity group-hover:opacity-100 group-hover:text-[#0f172a] dark:group-hover:text-white">
-                            <Plus className="h-2.5 w-2.5" />
-                          </span>
-                        </button>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
