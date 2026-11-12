@@ -423,4 +423,134 @@ describe("usePanelStore - Default 2D & Context Menu Actions", () => {
     expect(usePanelStore.getState().recentPartIds[0]).toBe("mcb-2p");
     expect(usePanelStore.getState().recentPartIds.length).toBe(8);
   });
+
+  it("handles keyboard nudge for 1mm and 5mm", () => {
+    const store = usePanelStore.getState();
+    const c1 = store.components.find((c) => c.id === "comp-1")!;
+    const startX = c1.xMm;
+    const startY = c1.yMm;
+
+    store.setSelected({ kind: "component", id: "comp-1" });
+    store.nudgeSelectedItems(1, 0);
+
+    let state = usePanelStore.getState();
+    let updatedC1 = state.components.find((c) => c.id === "comp-1")!;
+    expect(updatedC1.xMm).toBe(startX + 1);
+    expect(updatedC1.yMm).toBe(startY);
+
+    // Shift nudge (5mm)
+    store.nudgeSelectedItems(0, -5);
+    state = usePanelStore.getState();
+    updatedC1 = state.components.find((c) => c.id === "comp-1")!;
+    expect(updatedC1.xMm).toBe(startX + 1);
+    expect(updatedC1.yMm).toBe(startY - 5);
+
+    // Undo restores position
+    store.undo();
+    state = usePanelStore.getState();
+    updatedC1 = state.components.find((c) => c.id === "comp-1")!;
+    expect(updatedC1.xMm).toBe(startX + 1);
+    expect(updatedC1.yMm).toBe(startY);
+  });
+
+  it("copies and pastes components with +15mm offset, new ID and auto-incremented name", () => {
+    const store = usePanelStore.getState();
+    const c1 = store.components.find((c) => c.id === "comp-1")!;
+    store.setSelected({ kind: "component", id: "comp-1" });
+
+    const copiedCount = store.copySelectedToClipboard();
+    expect(copiedCount).toBe(1);
+    expect(usePanelStore.getState().clipboardItems.length).toBe(1);
+
+    const pasted = store.pasteFromClipboard({ x: 15, y: -15 });
+    expect(pasted.length).toBe(1);
+    expect(pasted[0].kind).toBe("component");
+
+    const state = usePanelStore.getState();
+    const pastedComp = state.components.find((c) => c.id === pasted[0].id)!;
+    expect(pastedComp).toBeDefined();
+    expect(pastedComp.id).not.toBe(c1.id);
+    expect(pastedComp.xMm).toBe(c1.xMm + 15);
+    expect(pastedComp.yMm).toBe(c1.yMm - 15);
+    expect(pastedComp.name).toContain(c1.name);
+    expect(pastedComp.pins.length).toBe(c1.pins.length);
+    expect(pastedComp.pins[0].id).not.toBe(c1.pins[0].id);
+  });
+
+  it("handles grouping (Ctrl+G), paired drag movement, and ungrouping (Ctrl+Shift+G)", () => {
+    const store = usePanelStore.getState();
+    const c1 = store.components.find((c) => c.id === "comp-1")!;
+    const c2 = store.components.find((c) => c.id === "comp-2")!;
+
+    store.setSelectedIds([
+      { kind: "component", id: c1.id },
+      { kind: "component", id: c2.id },
+    ]);
+
+    const groupId = store.groupSelectedItems();
+    expect(groupId).toBeTruthy();
+
+    let state = usePanelStore.getState();
+    let comp1 = state.components.find((c) => c.id === c1.id)!;
+    let comp2 = state.components.find((c) => c.id === c2.id)!;
+    expect(comp1.groupId).toBe(groupId);
+    expect(comp2.groupId).toBe(groupId);
+
+    // Moving comp1 moves comp2 by same delta
+    const deltaX = 20;
+    const deltaY = 10;
+    store.moveComponent(comp1.id, comp1.xMm + deltaX, comp1.yMm + deltaY, {
+      skipGridSnapX: true,
+      skipGridSnapY: true,
+    });
+
+    state = usePanelStore.getState();
+    comp1 = state.components.find((c) => c.id === c1.id)!;
+    comp2 = state.components.find((c) => c.id === c2.id)!;
+    expect(comp1.xMm).toBe(c1.xMm + deltaX);
+    expect(comp2.xMm).toBe(c2.xMm + deltaX);
+
+    // Ungroup
+    store.setSelected({ kind: "component", id: comp1.id });
+    store.ungroupSelectedItems();
+
+    state = usePanelStore.getState();
+    comp1 = state.components.find((c) => c.id === c1.id)!;
+    comp2 = state.components.find((c) => c.id === c2.id)!;
+    expect(comp1.groupId).toBeUndefined();
+    expect(comp2.groupId).toBeUndefined();
+  });
+
+  it("locks and unlocks items preventing dragged movement", () => {
+    const store = usePanelStore.getState();
+    const c1 = store.components.find((c) => c.id === "comp-1")!;
+    const startX = c1.xMm;
+    const startY = c1.yMm;
+
+    store.setSelected({ kind: "component", id: c1.id });
+    store.toggleLockSelectedItems(true);
+
+    let state = usePanelStore.getState();
+    let comp1 = state.components.find((c) => c.id === c1.id)!;
+    expect(comp1.locked).toBe(true);
+
+    // Attempt moving locked component directly
+    store.moveComponent(comp1.id, startX + 50, startY + 50);
+    state = usePanelStore.getState();
+    comp1 = state.components.find((c) => c.id === c1.id)!;
+    expect(comp1.xMm).toBe(startX);
+    expect(comp1.yMm).toBe(startY);
+
+    // Unlock
+    store.toggleLockSelectedItems(false);
+    state = usePanelStore.getState();
+    comp1 = state.components.find((c) => c.id === c1.id)!;
+    expect(comp1.locked).toBe(false);
+
+    // Move succeeds
+    store.moveComponent(comp1.id, startX + 50, startY, { skipGridSnapX: true });
+    state = usePanelStore.getState();
+    comp1 = state.components.find((c) => c.id === c1.id)!;
+    expect(comp1.xMm).toBe(startX + 50);
+  });
 });
