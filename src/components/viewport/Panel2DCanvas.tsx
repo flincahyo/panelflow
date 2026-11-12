@@ -18,9 +18,9 @@ import { getBackplateDimensions } from "@/lib/template-export";
 import { parseDxfToMmSegments } from "@/lib/dxf-parser";
 import { WIRE_COLOR_MAP } from "@/lib/sheet-export";
 import {
-  computePlateRulerTicks,
+  computePlateRulerSubTicks,
   computeSelectionFootprint,
-  getRulerStepMm,
+  getRulerStepsMm,
   plateToWorldX,
   plateToWorldY,
   worldToPlateX,
@@ -1146,7 +1146,7 @@ export function Panel2DCanvas() {
   }, [components, cadAssets]);
 
   // Plate-relative ruler ticks computation (origin 0,0 at top-left of mounting plate)
-  const rulerStepMm = getRulerStepMm(zoom);
+  const rulerSteps = getRulerStepsMm(zoom);
   const worldXMin = -pan.x / zoom;
   const worldXMax = (viewportSize.width - pan.x) / zoom;
   const worldYMax = pan.y / zoom;
@@ -1157,8 +1157,8 @@ export function Panel2DCanvas() {
   const plateYMin = worldToPlateY(worldYMax, plateH);
   const plateYMax = worldToPlateY(worldYMin, plateH);
 
-  const xTicks = computePlateRulerTicks(plateXMin, plateXMax, rulerStepMm);
-  const yTicks = computePlateRulerTicks(plateYMin, plateYMax, rulerStepMm);
+  const xSubTicks = computePlateRulerSubTicks(plateXMin, plateXMax, rulerSteps);
+  const ySubTicks = computePlateRulerSubTicks(plateYMin, plateYMax, rulerSteps);
 
   const plateLeftRulerPx = pan.x + plateToWorldX(0, plateW) * zoom - 24;
   const plateRightRulerPx = pan.x + plateToWorldX(plateW, plateW) * zoom - 24;
@@ -1243,26 +1243,54 @@ export function Panel2DCanvas() {
           );
         })()}
 
-        {/* Ruler Ticks */}
-        {xTicks.map((plateXMm) => {
-          const left = pan.x + plateToWorldX(plateXMm, plateW) * zoom - 24;
+        {/* Ruler Sub-Ticks (Major 10px + label, Medium 6px, Minor 3px) */}
+        {xSubTicks.map((tick) => {
+          const left = pan.x + plateToWorldX(tick.mm, plateW) * zoom - 24;
           if (left < 0) return null;
-          const isOutsidePlate = plateXMm < 0 || plateXMm > plateW;
-          const isOrigin = plateXMm === 0;
+          const isOutsidePlate = tick.mm < 0 || tick.mm > plateW;
+          const isOrigin = tick.mm === 0;
+          if (tick.kind === "major") {
+            return (
+              <div
+                key={tick.mm}
+                style={{ transform: `translateX(${left}px)` }}
+                className="absolute top-0 bottom-0"
+              >
+                <div
+                  className={`absolute bottom-0 left-0 h-[10px] w-px ${
+                    isOrigin
+                      ? "bg-sky-500/90 dark:bg-sky-400"
+                      : isOutsidePlate
+                        ? "bg-[#cbd5e1]/60 dark:bg-white/10"
+                        : "bg-[#64748b] dark:bg-slate-400"
+                  }`}
+                />
+                <span
+                  className={`absolute top-0.5 left-1 leading-none ${
+                    isOrigin
+                      ? "font-bold text-sky-600 dark:text-sky-400"
+                      : isOutsidePlate
+                        ? "text-[#94a3b8]/70 dark:text-slate-600"
+                        : "text-[#475569] dark:text-slate-300"
+                  }`}
+                >
+                  {tick.mm}
+                </span>
+              </div>
+            );
+          }
+          const tickHeightClass = tick.kind === "medium" ? "h-[6px]" : "h-[3px]";
+          const tickColorClass = isOutsidePlate
+            ? "bg-[#cbd5e1]/40 dark:bg-white/5"
+            : tick.kind === "medium"
+              ? "bg-[#94a3b8] dark:bg-slate-500"
+              : "bg-[#cbd5e1] dark:bg-slate-600";
           return (
             <div
-              key={plateXMm}
+              key={tick.mm}
               style={{ transform: `translateX(${left}px)` }}
-              className={`absolute top-0 bottom-0 border-l pl-1 ${
-                isOrigin
-                  ? "border-sky-500/80 font-bold text-sky-600 dark:text-sky-400"
-                  : isOutsidePlate
-                    ? "border-[#e2e8f0]/60 dark:border-white/5 text-[#94a3b8]/70 dark:text-slate-600"
-                    : "border-[#cbd5e1] dark:border-white/15 text-[#475569] dark:text-slate-300"
-              }`}
-            >
-              {plateXMm}
-            </div>
+              className={`absolute bottom-0 w-px ${tickHeightClass} ${tickColorClass}`}
+            />
           );
         })}
 
@@ -1306,26 +1334,54 @@ export function Panel2DCanvas() {
           );
         })()}
 
-        {/* Ruler Ticks */}
-        {yTicks.map((plateYMm) => {
-          const top = pan.y - plateToWorldY(plateYMm, plateH) * zoom - 24;
+        {/* Ruler Sub-Ticks (Major 10px + label, Medium 6px, Minor 3px) */}
+        {ySubTicks.map((tick) => {
+          const top = pan.y - plateToWorldY(tick.mm, plateH) * zoom - 24;
           if (top < 0) return null;
-          const isOutsidePlate = plateYMm < 0 || plateYMm > plateH;
-          const isOrigin = plateYMm === 0;
+          const isOutsidePlate = tick.mm < 0 || tick.mm > plateH;
+          const isOrigin = tick.mm === 0;
+          if (tick.kind === "major") {
+            return (
+              <div
+                key={tick.mm}
+                style={{ transform: `translateY(${top}px)` }}
+                className="absolute right-0 left-0"
+              >
+                <div
+                  className={`absolute top-0 right-0 h-px w-[10px] ${
+                    isOrigin
+                      ? "bg-sky-500/90 dark:bg-sky-400"
+                      : isOutsidePlate
+                        ? "bg-[#cbd5e1]/60 dark:bg-white/10"
+                        : "bg-[#64748b] dark:bg-slate-400"
+                  }`}
+                />
+                <span
+                  className={`block pt-0.5 pr-1 text-center text-[8px] leading-none ${
+                    isOrigin
+                      ? "font-bold text-sky-600 dark:text-sky-400"
+                      : isOutsidePlate
+                        ? "text-[#94a3b8]/70 dark:text-slate-600"
+                        : "text-[#475569] dark:text-slate-300"
+                  }`}
+                >
+                  {tick.mm}
+                </span>
+              </div>
+            );
+          }
+          const tickWidthClass = tick.kind === "medium" ? "w-[6px]" : "w-[3px]";
+          const tickColorClass = isOutsidePlate
+            ? "bg-[#cbd5e1]/40 dark:bg-white/5"
+            : tick.kind === "medium"
+              ? "bg-[#94a3b8] dark:bg-slate-500"
+              : "bg-[#cbd5e1] dark:bg-slate-600";
           return (
             <div
-              key={plateYMm}
+              key={tick.mm}
               style={{ transform: `translateY(${top}px)` }}
-              className={`absolute right-0 left-0 border-t pt-0.5 text-center ${
-                isOrigin
-                  ? "border-sky-500/80 font-bold text-sky-600 dark:text-sky-400"
-                  : isOutsidePlate
-                    ? "border-[#e2e8f0]/60 dark:border-white/5 text-[#94a3b8]/70 dark:text-slate-600"
-                    : "border-[#cbd5e1] dark:border-white/15 text-[#475569] dark:text-slate-300"
-              }`}
-            >
-              {plateYMm}
-            </div>
+              className={`absolute right-0 h-px ${tickWidthClass} ${tickColorClass}`}
+            />
           );
         })}
 

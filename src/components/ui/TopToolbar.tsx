@@ -29,8 +29,13 @@ import {
   Moon,
   Undo2,
   Zap,
+  Cloud,
+  LogIn,
+  LogOut,
+  User as UserIcon,
 } from "lucide-react";
 import { clearAutoSaveSession } from "@/lib/indexed-db";
+import { useAuthStore } from "@/store/useAuthStore";
 import {
   parseAndValidatePflow,
   rehydrateCadAssets,
@@ -99,6 +104,14 @@ export function TopToolbar({
   const setRightPanelTab = usePanelStore((s) => s.setRightPanelTab);
   const setInspectorOpen = usePanelStore((s) => s.setInspectorOpen);
 
+  const user = useAuthStore((s) => s.user);
+  const setAuthModalOpen = useAuthStore((s) => s.setAuthModalOpen);
+  const setProjectsDrawerOpen = useAuthStore((s) => s.setProjectsDrawerOpen);
+  const logout = useAuthStore((s) => s.logout);
+  const syncStatus = useAuthStore((s) => s.syncStatus);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+
   const [activeMenu, setActiveMenu] = useState<"file" | "edit" | "view" | null>(
     null
   );
@@ -116,6 +129,12 @@ export function TopToolbar({
         !menuBarRef.current.contains(e.target as Node)
       ) {
         setActiveMenu(null);
+      }
+      if (
+        accountMenuRef.current &&
+        !accountMenuRef.current.contains(e.target as Node)
+      ) {
+        setAccountMenuOpen(false);
       }
     };
     window.addEventListener("mousedown", handleDown);
@@ -753,6 +772,97 @@ export function TopToolbar({
               <PanelRightOpen className="h-3.5 w-3.5" />
             )}
           </button>
+        )}
+
+        {/* Auth / Account Pill (RelayFlow parity) */}
+        {!user ? (
+          <button
+            type="button"
+            onClick={() => setAuthModalOpen(true)}
+            className="flex h-8 items-center gap-1.5 rounded-full border border-[#e2e8f0] dark:border-white/15 bg-white text-[#0f172a] dark:bg-white dark:text-black px-3.5 text-xs font-semibold shadow-xs transition-all hover:bg-[#f8fafc] dark:hover:bg-slate-100"
+          >
+            <LogIn className="h-3.5 w-3.5" />
+            Login
+          </button>
+        ) : (
+          <div className="relative" ref={accountMenuRef}>
+            <button
+              type="button"
+              onClick={() => setAccountMenuOpen((o) => !o)}
+              className="flex h-8 items-center gap-2 rounded-full border border-[#e2e8f0] dark:border-white/15 bg-white dark:bg-[#171a21] pr-2.5 pl-1.5 text-xs font-medium text-[#0f172a] dark:text-slate-200 shadow-xs hover:bg-[#f8fafc] dark:hover:bg-white/10"
+            >
+              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0f172a] dark:bg-white text-[10px] font-bold text-white dark:text-black">
+                {(user.name || user.email).charAt(0).toUpperCase()}
+              </span>
+              <span className="max-w-[110px] truncate">
+                {user.name || user.email.split("@")[0]}
+              </span>
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  syncStatus === "saving"
+                    ? "bg-amber-400 animate-pulse"
+                    : syncStatus === "error"
+                      ? "bg-rose-500"
+                      : "bg-emerald-500"
+                }`}
+                title={`Cloud Auto-Save: ${syncStatus}`}
+              />
+              <ChevronDown className="h-3 w-3 text-[#64748b] dark:text-slate-400" />
+            </button>
+
+            {accountMenuOpen && (
+              <div className="absolute top-10 right-0 z-50 w-56 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white/98 dark:bg-[#111318]/98 p-1.5 shadow-xl backdrop-blur-xl text-[13px]">
+                <div className="px-2.5 py-1.5 border-b border-[#e2e8f0] dark:border-white/10 mb-1">
+                  <div className="truncate text-xs font-semibold text-[#0f172a] dark:text-white">
+                    {user.name || "PanelFlow Engineer"}
+                  </div>
+                  <div className="truncate font-mono text-[10px] text-[#64748b] dark:text-slate-400">
+                    {user.email}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccountMenuOpen(false);
+                    setProjectsDrawerOpen(true);
+                  }}
+                  className={dropdownItemClass}
+                >
+                  <Cloud className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400" />
+                  My Cloud Projects
+                </button>
+                <div className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-xs text-[#64748b] dark:text-slate-400">
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      syncStatus === "saving"
+                        ? "bg-amber-400 animate-pulse"
+                        : syncStatus === "error"
+                          ? "bg-rose-500"
+                          : "bg-emerald-500"
+                    }`}
+                  />
+                  <span>
+                    Cloud Auto-Save:{" "}
+                    <strong className="text-emerald-600 dark:text-emerald-400">
+                      {syncStatus === "saving" ? "Syncing..." : "Active"}
+                    </strong>
+                  </span>
+                </div>
+                <div className={dropdownDividerClass} />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAccountMenuOpen(false);
+                    logout();
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                  Sign Out
+                </button>
+              </div>
+            )}
+          </div>
         )}
       </div>
       <input

@@ -6,12 +6,15 @@ import { LeftSidebar } from "@/components/ui/LeftSidebar";
 import { RightInspector } from "@/components/ui/RightInspector";
 import { SheetTabs } from "@/components/ui/SheetTabs";
 import { TopToolbar } from "@/components/ui/TopToolbar";
+import { AuthModal } from "@/components/modals/AuthModal";
+import { CloudProjectsDrawer } from "@/components/modals/CloudProjectsDrawer";
 import { Panel2DCanvas } from "@/components/viewport/Panel2DCanvas";
 import {
   loadAutoSaveSession,
   saveAutoSaveSession,
 } from "@/lib/indexed-db";
 import { rehydrateCadAssets } from "@/lib/project-io";
+import { useAuthStore } from "@/store/useAuthStore";
 import { usePanelStore } from "@/store/usePanelStore";
 
 const PanelViewport = dynamic(
@@ -35,7 +38,13 @@ export function PanelWorkbench() {
   const loadProjectState = usePanelStore((s) => s.loadProjectState);
   const inspectorOpen = usePanelStore((s) => s.inspectorOpen);
   const setInspectorOpen = usePanelStore((s) => s.setInspectorOpen);
+  const fetchMe = useAuthStore((s) => s.fetchMe);
   const restoredRef = useRef(false);
+
+  // Hydrate authenticated user & cloud preferences/library on mount
+  useEffect(() => {
+    fetchMe();
+  }, [fetchMe]);
 
   // Sync theme from localStorage on initial client mount
   useEffect(() => {
@@ -75,27 +84,101 @@ export function PanelWorkbench() {
     };
   }, [loadProjectState]);
 
-  // Debounced auto-save to IndexedDB (~1.5s) whenever sheets or activeSheetId change
+  // Debounced auto-save to IndexedDB (~1.5s) and PostgreSQL Cloud (~2s) when logged in
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    let idbTimer: ReturnType<typeof setTimeout> | null = null;
+    let cloudTimer: ReturnType<typeof setTimeout> | null = null;
+    let prefsTimer: ReturnType<typeof setTimeout> | null = null;
+
     const unsub = usePanelStore.subscribe((state, prevState) => {
       if (!restoredRef.current) return;
-      if (
-        state.sheets === prevState.sheets &&
-        state.activeSheetId === prevState.activeSheetId
-      ) {
-        return;
+
+      const projectChanged =
+        state.sheets !== prevState.sheets ||
+        state.activeSheetId !== prevState.activeSheetId ||
+        state.titleBlock !== prevState.titleBlock;
+
+      if (projectChanged) {
+        if (idbTimer) clearTimeout(idbTimer);
+        idbTimer = setTimeout(() => {
+          saveAutoSaveSession(state.sheets, state.activeSheetId).catch(() => {
+            // ignore storage quota errors
+          });
+        }, 1500);
+
+        const auth = useAuthStore.getState();
+        if (auth.user) {
+          if (cloudTimer) clearTimeout(cloudTimer);
+          cloudTimer = setTimeout(async () => {
+            const currentAuth = useAuthStore.getState();
+            if (!currentAuth.user) return;
+            currentAuth.setSyncStatus("saving");
+            try {
+              const cleanSheets = state.sheets.map((sheet) => ({
+                ...sheet,
+                cadAssets: sheet.cadAssets.map(
+                  ({ objectUrl: _omitted, ...rest }) => rest
+                ),
+              }));
+              const res = await fetch("/api/projects", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  id: currentAuth.cloudProjectId,
+                  name: state.titleBlock.projectName || "PanelFlow Project",
+                  data: {
+                    sheets: cleanSheets,
+                    activeSheetId: state.activeSheetId,
+                    displayUnit: state.displayUnit,
+                    gridSnapMm: state.gridSnapMm,
+                    autoRouteDuctsEnabled: state.autoRouteDuctsEnabled,
+                    titleBlock: state.titleBlock,
+                  },
+                }),
+              });
+              if (res.ok) {
+                const json = await res.json();
+                if (json.project?.id && json.project.id !== currentAuth.cloudProjectId) {
+                  currentAuth.setCloudProjectId(json.project.id);
+                }
+                currentAuth.setSyncStatus("saved");
+              } else {
+                currentAuth.setSyncStatus("error");
+              }
+            } catch {
+              useAuthStore.getState().setSyncStatus("error");
+            }
+          }, 2000);
+        }
       }
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        saveAutoSaveSession(state.sheets, state.activeSheetId).catch(() => {
-          // ignore storage quota errors
-        });
-      }, 1500);
+
+      const prefsChanged =
+        state.favoritePartIds !== prevState.favoritePartIds ||
+        state.recentPartIds !== prevState.recentPartIds;
+
+      if (prefsChanged && useAuthStore.getState().user) {
+        if (prefsTimer) clearTimeout(prefsTimer);
+        prefsTimer = setTimeout(() => {
+          if (!useAuthStore.getState().user) return;
+          fetch("/api/preferences", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              favoritePartIds: state.favoritePartIds,
+              recentPartIds: state.recentPartIds,
+            }),
+          }).catch(() => {
+            // ignore network error
+          });
+        }, 1200);
+      }
     });
+
     return () => {
       unsub();
-      if (timer) clearTimeout(timer);
+      if (idbTimer) clearTimeout(idbTimer);
+      if (cloudTimer) clearTimeout(cloudTimer);
+      if (prefsTimer) clearTimeout(prefsTimer);
     };
   }, []);
 
@@ -115,6 +198,8 @@ export function PanelWorkbench() {
         </section>
         {inspectorOpen && <RightInspector onClose={() => setInspectorOpen(false)} />}
       </main>
+      <AuthModal />
+      <CloudProjectsDrawer />
     </div>
   );
 }

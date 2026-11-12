@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  computePlateRulerSubTicks,
   computePlateRulerTicks,
   computeSelectionFootprint,
   getRulerStepMm,
+  getRulerStepsMm,
   plateToWorldX,
   plateToWorldY,
   worldToPlateX,
@@ -44,13 +46,32 @@ describe("ruler plate-relative projection and footprint", () => {
     expect(plateToWorldY(800, plateH)).toBe(worldBottomRightY);
   });
 
-  it("computes zoom-dependent step and ticks aligned to step multiples", () => {
-    expect(getRulerStepMm(2.0)).toBe(25);
+  it("computes zoom-dependent adaptive major/medium/minor steps and sub-ticks", () => {
+    expect(getRulerStepsMm(3.0)).toEqual({ majorMm: 10, mediumMm: 5, minorMm: 1 });
+    expect(getRulerStepsMm(2.0)).toEqual({ majorMm: 20, mediumMm: 10, minorMm: 5 });
+    expect(getRulerStepsMm(1.0)).toEqual({ majorMm: 50, mediumMm: 25, minorMm: 10 });
+    expect(getRulerStepsMm(0.5)).toEqual({ majorMm: 100, mediumMm: 50, minorMm: 25 });
+
+    expect(getRulerStepMm(3.0)).toBe(10);
+    expect(getRulerStepMm(2.0)).toBe(20);
     expect(getRulerStepMm(1.0)).toBe(50);
     expect(getRulerStepMm(0.5)).toBe(100);
 
     const ticks = computePlateRulerTicks(-45, 120, 50);
     expect(ticks).toEqual([-50, 0, 50, 100, 150]);
+
+    const subTicks = computePlateRulerSubTicks(0, 20, {
+      majorMm: 20,
+      mediumMm: 10,
+      minorMm: 5,
+    });
+    expect(subTicks).toEqual([
+      { mm: 0, kind: "major" },
+      { mm: 5, kind: "minor" },
+      { mm: 10, kind: "medium" },
+      { mm: 15, kind: "minor" },
+      { mm: 20, kind: "major" },
+    ]);
   });
 
   it("calculates selection footprint correctly for a placed component", () => {

@@ -242,11 +242,21 @@ export function LeftSidebar() {
 
   useEffect(() => {
     hydratePartPreferences();
-    listCustomCadLibrary()
-      .then((items) => setCustomLibrary(items))
-      .catch(() => {
-        // IndexedDB unavailable
-      });
+    const reloadLibrary = () => {
+      listCustomCadLibrary()
+        .then((items) => setCustomLibrary(items))
+        .catch(() => {
+          // IndexedDB unavailable
+        });
+    };
+    reloadLibrary();
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("panelflow:custom-library-updated", reloadLibrary);
+      return () => {
+        window.removeEventListener("panelflow:custom-library-updated", reloadLibrary);
+      };
+    }
   }, [hydratePartPreferences]);
 
   const displayUnit = usePanelStore((s) => s.displayUnit);
@@ -344,6 +354,20 @@ export function LeftSidebar() {
         }
         return [saved, ...prev];
       });
+
+      // If user is logged in, also sync custom part to PostgreSQL cloud
+      fetch("/api/custom-parts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: asset.name,
+          format: asset.format,
+          bounding_box: asset.boundingBoxMm,
+          pins: asset.pins,
+          cad_data: asset.rawText || asset.dataUrl || null,
+        }),
+      }).catch(() => {});
+
       setSavedToastId(asset.id);
       setTimeout(() => {
         setSavedToastId((curr) => (curr === asset.id ? null : curr));

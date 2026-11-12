@@ -428,6 +428,10 @@ interface PanelStore {
   favoritePartIds: ComponentTemplateId[];
   addRecentPart: (id: ComponentTemplateId) => void;
   toggleFavoritePart: (id: ComponentTemplateId) => void;
+  setPartPreferences: (params: {
+    favoritePartIds?: ComponentTemplateId[];
+    recentPartIds?: ComponentTemplateId[];
+  }) => void;
   hydratePartPreferences: () => void;
 
   // CAD Asset Actions
@@ -534,6 +538,23 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
       : [id, ...current];
     savePartIdsToStorage(FAVORITES_STORAGE_KEY, next);
     set({ favoritePartIds: next });
+  },
+
+  setPartPreferences: ({ favoritePartIds, recentPartIds }) => {
+    const nextFav = Array.isArray(favoritePartIds)
+      ? favoritePartIds.filter((id): id is ComponentTemplateId => id in COMPONENT_CATALOG)
+      : get().favoritePartIds;
+    const nextRec = Array.isArray(recentPartIds)
+      ? recentPartIds
+          .filter((id): id is ComponentTemplateId => id in COMPONENT_CATALOG)
+          .slice(0, MAX_RECENT_PARTS)
+      : get().recentPartIds;
+    savePartIdsToStorage(FAVORITES_STORAGE_KEY, nextFav);
+    savePartIdsToStorage(RECENTS_STORAGE_KEY, nextRec);
+    set({
+      favoritePartIds: nextFav,
+      recentPartIds: nextRec,
+    });
   },
 
   hydratePartPreferences: () => {
