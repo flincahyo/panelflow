@@ -9,10 +9,11 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
+import { ContextMenu } from "@/components/ui/ContextMenu";
 import { getBackplateDimensions } from "@/lib/template-export";
 import { parseDxfToMmSegments } from "@/lib/dxf-parser";
 import { WIRE_COLOR_MAP } from "@/lib/sheet-export";
-import { snapToGrid } from "@/lib/snap";
+import { rotateLocalPoint, snapToGrid } from "@/lib/snap";
 import { pointsToSvgPath, routeOrthogonalWire } from "@/lib/wire-router";
 import { usePanelStore } from "@/store/usePanelStore";
 import type {
@@ -88,6 +89,7 @@ function Component2DSymbol({
   isWireMode,
   activeWireStartPin,
   onPointerDown,
+  onContextMenu,
   onPinClick,
 }: {
   comp: PlacedComponent;
@@ -95,6 +97,7 @@ function Component2DSymbol({
   isWireMode: boolean;
   activeWireStartPin: { componentId: string; pinId: string } | null;
   onPointerDown: (e: React.PointerEvent) => void;
+  onContextMenu: (e: React.MouseEvent) => void;
   onPinClick: (e: React.PointerEvent, pinId: string) => void;
 }) {
   // SVG Y is down, world Y is up
@@ -122,9 +125,13 @@ function Component2DSymbol({
         : "#64748b"
       : comp.accentColor;
 
+  const rot = comp.rotationDeg ?? 0;
+
   return (
     <g
       onPointerDown={onPointerDown}
+      onContextMenu={onContextMenu}
+      transform={rot ? `rotate(${rot} ${comp.xMm} ${-comp.yMm})` : undefined}
       className={isWireMode ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}
     >
       {/* Selection halo */}
@@ -287,6 +294,7 @@ function CadAsset2DSymbol({
   isWireMode,
   activeWireStartPin,
   onPointerDown,
+  onContextMenu,
   onPinClick,
 }: {
   asset: CustomCadAsset;
@@ -295,6 +303,7 @@ function CadAsset2DSymbol({
   isWireMode: boolean;
   activeWireStartPin: { componentId: string; pinId: string } | null;
   onPointerDown: (e: React.PointerEvent) => void;
+  onContextMenu: (e: React.MouseEvent) => void;
   onPinClick: (e: React.PointerEvent, pinId: string) => void;
 }) {
   const dxfParsed = useMemo(() => {
@@ -311,10 +320,13 @@ function CadAsset2DSymbol({
 
   const shortLabel =
     asset.name.length > 18 ? `${asset.name.slice(0, 16)}…` : asset.name;
+  const rot = asset.rotationDeg ?? 0;
 
   return (
     <g
       onPointerDown={onPointerDown}
+      onContextMenu={onContextMenu}
+      transform={rot ? `rotate(${rot} ${asset.xMm} ${-asset.yMm})` : undefined}
       className={
         isMarkingThis || isWireMode
           ? "cursor-crosshair"
@@ -473,6 +485,11 @@ export function Panel2DCanvas() {
   const [pan, setPan] = useState({ x: 480, y: 380 });
   const [spacePressed, setSpacePressed] = useState(false);
   const [dragState, setDragState] = useState<DragState | null>(null);
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    target: import("@/components/ui/ContextMenu").ContextMenuTarget;
+  } | null>(null);
   const [cursorWorld, setCursorWorld] = useState<{ xMm: number; yMm: number } | null>(
     null
   );
@@ -719,18 +736,22 @@ export function Panel2DCanvas() {
   const pinMap = useMemo(() => {
     const map = new Map<string, { x: number; y: number }>();
     for (const c of components) {
+      const rot = c.rotationDeg ?? 0;
       for (const p of c.pins) {
+        const rotated = rotateLocalPoint(p.localXMm, p.localYMm, rot);
         map.set(`${c.id}:${p.id}`, {
-          x: c.xMm + p.localXMm,
-          y: -(c.yMm + p.localYMm),
+          x: c.xMm + rotated.xMm,
+          y: -(c.yMm + rotated.yMm),
         });
       }
     }
     for (const a of cadAssets) {
+      const rot = a.rotationDeg ?? 0;
       for (const p of a.pins) {
+        const rotated = rotateLocalPoint(p.localXMm, p.localYMm, rot);
         map.set(`${a.id}:${p.id}`, {
-          x: a.xMm + p.localXMm,
-          y: -(a.yMm + p.localYMm),
+          x: a.xMm + rotated.xMm,
+          y: -(a.yMm + rotated.yMm),
         });
       }
     }
@@ -766,6 +787,15 @@ export function Panel2DCanvas() {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerLeave={handlePointerUp}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        const worldPos = screenToWorld(e.clientX, e.clientY);
+        setContextMenu({
+          x: e.clientX,
+          y: e.clientY,
+          target: { kind: "canvas", worldPos },
+        });
+      }}
     >
       {/* Top Engineering Ruler */}
       <div className="pointer-events-none absolute top-0 right-0 left-6 z-20 h-6 overflow-hidden border-b border-slate-300 bg-slate-100/95 font-mono text-[9px] text-slate-600">
@@ -1031,7 +1061,7 @@ export function Panel2DCanvas() {
                 <g key={d.id}>
                   <g
                     onPointerDown={(e) => {
-                      if (canvasTool2D !== "select" || spacePressed) return;
+                      if (e.button !== 0 || canvasTool2D !== "select" || spacePressed) return;
                       e.stopPropagation();
                       setSelected({ kind: "duct", id: d.id });
                       const w = screenToWorld(e.clientX, e.clientY);
@@ -1040,6 +1070,16 @@ export function Panel2DCanvas() {
                         id: d.id,
                         offsetXMm: w.xMm - d.xMm,
                         offsetYMm: w.yMm - d.yMm,
+                      });
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSelected({ kind: "duct", id: d.id });
+                      setContextMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        target: { kind: "duct", id: d.id },
                       });
                     }}
                     className="cursor-move"
@@ -1137,7 +1177,7 @@ export function Panel2DCanvas() {
                 <g key={r.id}>
                   <g
                     onPointerDown={(e) => {
-                      if (canvasTool2D !== "select" || spacePressed) return;
+                      if (e.button !== 0 || canvasTool2D !== "select" || spacePressed) return;
                       e.stopPropagation();
                       setSelected({ kind: "rail", id: r.id });
                       const w = screenToWorld(e.clientX, e.clientY);
@@ -1146,6 +1186,16 @@ export function Panel2DCanvas() {
                         id: r.id,
                         offsetXMm: w.xMm - r.xMm,
                         offsetYMm: w.yMm - r.yMm,
+                      });
+                    }}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setSelected({ kind: "rail", id: r.id });
+                      setContextMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        target: { kind: "rail", id: r.id },
                       });
                     }}
                     className="cursor-move"
@@ -1261,7 +1311,7 @@ export function Panel2DCanvas() {
                 isWireMode={canvasTool2D === "wire"}
                 activeWireStartPin={activeWireStartPin}
                 onPointerDown={(e) => {
-                  if (canvasTool2D !== "select" || spacePressed) return;
+                  if (e.button !== 0 || canvasTool2D !== "select" || spacePressed) return;
                   e.stopPropagation();
                   setSelected({ kind: "component", id: comp.id });
                   const w = screenToWorld(e.clientX, e.clientY);
@@ -1270,6 +1320,16 @@ export function Panel2DCanvas() {
                     id: comp.id,
                     offsetXMm: w.xMm - comp.xMm,
                     offsetYMm: w.yMm - comp.yMm,
+                  });
+                }}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setSelected({ kind: "component", id: comp.id });
+                  setContextMenu({
+                    x: e.clientX,
+                    y: e.clientY,
+                    target: { kind: "component", id: comp.id },
                   });
                 }}
                 onPinClick={(e, pinId) => {
@@ -1296,7 +1356,7 @@ export function Panel2DCanvas() {
                   isWireMode={canvasTool2D === "wire"}
                   activeWireStartPin={activeWireStartPin}
                   onPointerDown={(e) => {
-                    if (spacePressed) return;
+                    if (e.button !== 0 || spacePressed) return;
                     if (isMarkingThis) {
                       e.stopPropagation();
                       const w = screenToWorld(e.clientX, e.clientY);
@@ -1317,6 +1377,16 @@ export function Panel2DCanvas() {
                       id: asset.id,
                       offsetXMm: w.xMm - asset.xMm,
                       offsetYMm: w.yMm - asset.yMm,
+                    });
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setSelected({ kind: "cad", id: asset.id });
+                    setContextMenu({
+                      x: e.clientX,
+                      y: e.clientY,
+                      target: { kind: "cad", id: asset.id },
                     });
                   }}
                   onPinClick={(e, pinId) => {
@@ -1346,9 +1416,19 @@ export function Panel2DCanvas() {
                 <g
                   key={w.id}
                   onPointerDown={(e) => {
-                    if (canvasTool2D !== "select" || spacePressed) return;
+                    if (e.button !== 0 || canvasTool2D !== "select" || spacePressed) return;
                     e.stopPropagation();
                     setSelected({ kind: "wire", id: w.id });
+                  }}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setSelected({ kind: "wire", id: w.id });
+                    setContextMenu({
+                      x: e.clientX,
+                      y: e.clientY,
+                      target: { kind: "wire", id: w.id },
+                    });
                   }}
                   className="cursor-pointer"
                 >
@@ -1536,6 +1616,12 @@ export function Panel2DCanvas() {
           </g>
         </g>
       </svg>
+
+      <ContextMenu
+        menu={contextMenu}
+        onClose={() => setContextMenu(null)}
+        onFitToScreen={fitToView}
+      />
     </div>
   );
 }

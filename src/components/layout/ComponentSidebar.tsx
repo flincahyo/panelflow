@@ -34,7 +34,7 @@ export function ComponentSidebar({ onOpenCadUpload }: { onOpenCadUpload: () => v
 
       <div className="p-3 space-y-2 border-b border-zinc-800/80">
         <button
-          onClick={addRail}
+          onClick={() => addRail()}
           className="w-full flex items-center justify-between px-3 py-2 rounded-md bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 text-zinc-200 transition-colors cursor-pointer"
         >
           <span className="flex items-center gap-2">

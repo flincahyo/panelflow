@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { COMPONENT_CATALOG } from "@/lib/components-catalog";
-import { clampToBackplate, snapComponentToNearestRail, snapToGrid } from "@/lib/snap";
+import {
+  clampToBackplate,
+  DIN_RAIL_HEIGHT_MM,
+  getRotatedDimensions,
+  snapComponentToNearestRail,
+  snapToGrid,
+} from "@/lib/snap";
 import { getBackplateDimensions } from "@/lib/template-export";
 import type {
   CanvasTool2D,
@@ -13,6 +19,7 @@ import type {
   LengthUnit,
   PinTerminal,
   PlacedComponent,
+  RotationDeg,
   SelectionTarget,
   TitleBlockMeta,
   ViewportMode,
@@ -20,6 +27,31 @@ import type {
   WireConnection,
   WireDuct,
 } from "@/types/panel";
+
+function nextIncrementedName(baseName: string, existingNames: string[]): string {
+  const existing = new Set(existingNames);
+  const hashMatch = baseName.match(/^(.*?)\s*#(\d+)$/);
+  if (hashMatch) {
+    const prefix = hashMatch[1];
+    let n = Number(hashMatch[2]) + 1;
+    while (existing.has(`${prefix} #${n}`)) n += 1;
+    return `${prefix} #${n}`;
+  }
+  const trailingNumMatch = baseName.match(/^(.*?)(\d+)$/);
+  if (trailingNumMatch) {
+    const prefix = trailingNumMatch[1];
+    let n = Number(trailingNumMatch[2]) + 1;
+    while (existing.has(`${prefix}${n}`)) n += 1;
+    return `${prefix}${n}`;
+  }
+  let n = 2;
+  while (existing.has(`${baseName} #${n}`)) n += 1;
+  return `${baseName} #${n}`;
+}
+
+function makeUid(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+}
 
 interface PanelStore {
   viewportMode: ViewportMode;
@@ -39,6 +71,9 @@ interface PanelStore {
   selected: SelectionTarget;
   isPinMarkingMode: boolean;
   activeMarkingAssetId: string | null;
+  inspectorFocusNonce: number;
+
+  requestInspectorFocus: () => void;
 
   setViewportMode: (mode: ViewportMode) => void;
   setCanvasTool2D: (tool: CanvasTool2D) => void;
@@ -59,29 +94,43 @@ interface PanelStore {
   setSelected: (target: SelectionTarget) => void;
   setPinMarkingMode: (enabled: boolean, assetId?: string | null) => void;
 
-  addRail: () => void;
+  addRail: (customPos?: { xMm: number; yMm: number }) => void;
   updateRail: (id: string, partial: Partial<DinRail>) => void;
   removeRail: (id: string) => void;
 
-  addDuct: (orientation?: "horizontal" | "vertical") => void;
+  addDuct: (
+    orientation?: "horizontal" | "vertical",
+    customPos?: { xMm: number; yMm: number }
+  ) => void;
   updateDuct: (id: string, partial: Partial<WireDuct>) => void;
   removeDuct: (id: string) => void;
 
-  addComponent: (templateId: ComponentTemplateId, nearYMm?: number) => void;
+  // Component Actions
+  addComponent: (templateId: ComponentTemplateId, nearYMm?: number, customPos?: { xMm: number; yMm: number }) => void;
   updateComponent: (id: string, partial: Partial<PlacedComponent>) => void;
   moveComponent: (id: string, targetXMm: number, targetYMm: number) => void;
   removeComponent: (id: string) => void;
+  rotateComponent: (id: string, deltaDeg?: 90 | 180 | 270) => void;
+  duplicateComponent: (id: string, offsetMm?: { x: number; y: number }) => string | null;
+  snapComponentToRail: (id: string) => void;
+
+  // Rail & Duct Duplication / Alignment
+  duplicateRail: (id: string, offsetMm?: { x: number; y: number }) => string | null;
+  duplicateDuct: (id: string, offsetMm?: { x: number; y: number }) => string | null;
+  alignComponentsOnRail: (railId: string, mode: "distribute" | "left" | "center" | "right") => void;
 
   addCadAsset: (asset: CustomCadAsset) => void;
   updateCadAsset: (id: string, partial: Partial<CustomCadAsset>) => void;
   moveCadAsset: (id: string, targetXMm: number, targetYMm: number) => void;
   removeCadAsset: (id: string) => void;
+  rotateCadAsset: (id: string, deltaDeg?: 90 | 180 | 270) => void;
+  duplicateCadAsset: (id: string, offsetMm?: { x: number; y: number }) => string | null;
   addPinToAsset: (assetId: string, pin: Omit<PinTerminal, "id">) => void;
   removePinFromAsset: (assetId: string, pinId: string) => void;
 }
 
 export const usePanelStore = create<PanelStore>((set, get) => ({
-  viewportMode: "3d",
+  viewportMode: "2d",
   canvasTool2D: "select",
   displayUnit: "mm",
   gridSnapMm: 10,
@@ -262,7 +311,10 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   selected: null,
   isPinMarkingMode: false,
   activeMarkingAssetId: null,
+  inspectorFocusNonce: 0,
 
+  requestInspectorFocus: () =>
+    set((state) => ({ inspectorFocusNonce: state.inspectorFocusNonce + 1 })),
   setViewportMode: (mode) => set({ viewportMode: mode }),
   setCanvasTool2D: (tool) => set({ canvasTool2D: tool, activeWireStartPin: null }),
   setActiveWireColor: (color) => set({ activeWireColor: color }),
@@ -305,16 +357,18 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   setPinMarkingMode: (enabled, assetId = null) =>
     set({ isPinMarkingMode: enabled, activeMarkingAssetId: assetId }),
 
-  addRail: () => {
+  addRail: (customPos) => {
     const { rails, gridSnapMm, enclosure } = get();
     const { widthMm } = getBackplateDimensions(enclosure);
-    const newY = rails.length > 0 ? rails[rails.length - 1].yMm - 80 : 0;
+    const newY = customPos?.yMm ?? (rails.length > 0 ? rails[rails.length - 1].yMm - 80 : 0);
+    const newX = customPos?.xMm ?? 0;
     const snappedY = snapToGrid(newY, gridSnapMm);
-    const id = `rail-${Date.now()}`;
+    const snappedX = snapToGrid(newX, gridSnapMm);
+    const id = makeUid("rail");
     const newRail: DinRail = {
       id,
-      name: `DIN Rail ${rails.length + 1}`,
-      xMm: 0,
+      name: nextIncrementedName("DIN Rail", rails.map((r) => r.name)),
+      xMm: snappedX,
       yMm: snappedY,
       lengthMm: Math.min(460, widthMm - 40),
     };
@@ -322,6 +376,36 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
       rails: [...state.rails, newRail],
       selected: { kind: "rail", id },
     }));
+  },
+
+  duplicateRail: (id, offsetMm = { x: 0, y: -120 }) => {
+    const { rails, enclosure, gridSnapMm } = get();
+    const source = rails.find((r) => r.id === id);
+    if (!source) return null;
+    const { widthMm, heightMm } = getBackplateDimensions(enclosure);
+    const rawX = snapToGrid(source.xMm + offsetMm.x, gridSnapMm);
+    const rawY = snapToGrid(source.yMm + offsetMm.y, gridSnapMm);
+    const clamped = clampToBackplate(
+      rawX,
+      rawY,
+      source.lengthMm,
+      DIN_RAIL_HEIGHT_MM,
+      widthMm,
+      heightMm
+    );
+    const newId = makeUid("rail");
+    const duplicated: DinRail = {
+      ...source,
+      id: newId,
+      name: nextIncrementedName(source.name, rails.map((r) => r.name)),
+      xMm: clamped.xMm,
+      yMm: clamped.yMm,
+    };
+    set((state) => ({
+      rails: [...state.rails, duplicated],
+      selected: { kind: "rail", id: newId },
+    }));
+    return newId;
   },
 
   updateRail: (id, partial) =>
@@ -338,17 +422,20 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
       selected: state.selected?.id === id ? null : state.selected,
     })),
 
-  addDuct: (orientation = "horizontal") => {
-    const { ducts, enclosure } = get();
+  addDuct: (orientation = "horizontal", customPos) => {
+    const { ducts, enclosure, gridSnapMm } = get();
     const { widthMm, heightMm } = getBackplateDimensions(enclosure);
-    const id = `duct-${Date.now()}`;
+    const id = makeUid("duct");
+    const rawX = customPos ? snapToGrid(customPos.xMm, gridSnapMm) : 0;
+    const rawY = customPos ? snapToGrid(customPos.yMm, gridSnapMm) : 0;
     const newDuct: WireDuct = {
       id,
-      name: `${orientation === "horizontal" ? "Horiz" : "Vert"} Duct ${
-        ducts.length + 1
-      }`,
-      xMm: 0,
-      yMm: 0,
+      name: nextIncrementedName(
+        orientation === "horizontal" ? "Horiz Duct" : "Vert Duct",
+        ducts.map((d) => d.name)
+      ),
+      xMm: rawX,
+      yMm: rawY,
       widthMm: orientation === "horizontal" ? Math.min(460, widthMm - 20) : 40,
       heightMm: orientation === "vertical" ? Math.min(500, heightMm - 40) : 40,
       depthMm: 60,
@@ -358,6 +445,39 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
       ducts: [...state.ducts, newDuct],
       selected: { kind: "duct", id },
     }));
+  },
+
+  duplicateDuct: (id, offsetMm) => {
+    const { ducts, enclosure, gridSnapMm } = get();
+    const source = ducts.find((d) => d.id === id);
+    if (!source) return null;
+    const defaultOffset =
+      source.orientation === "vertical" ? { x: 80, y: 0 } : { x: 0, y: -120 };
+    const effOffset = offsetMm ?? defaultOffset;
+    const { widthMm, heightMm } = getBackplateDimensions(enclosure);
+    const rawX = snapToGrid(source.xMm + effOffset.x, gridSnapMm);
+    const rawY = snapToGrid(source.yMm + effOffset.y, gridSnapMm);
+    const clamped = clampToBackplate(
+      rawX,
+      rawY,
+      source.widthMm,
+      source.heightMm,
+      widthMm,
+      heightMm
+    );
+    const newId = makeUid("duct");
+    const duplicated: WireDuct = {
+      ...source,
+      id: newId,
+      name: nextIncrementedName(source.name, ducts.map((d) => d.name)),
+      xMm: clamped.xMm,
+      yMm: clamped.yMm,
+    };
+    set((state) => ({
+      ducts: [...state.ducts, duplicated],
+      selected: { kind: "duct", id: newId },
+    }));
+    return newId;
   },
 
   updateDuct: (id, partial) =>
@@ -371,28 +491,117 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
       selected: state.selected?.id === id ? null : state.selected,
     })),
 
-  addComponent: (templateId, nearYMm) => {
+  alignComponentsOnRail: (railId, mode) => {
+    const { rails, components } = get();
+    const targetRail = rails.find((r) => r.id === railId);
+    if (!targetRail) return;
+
+    const attached = components.filter((c) => c.railId === railId);
+    if (attached.length === 0) return;
+
+    // Sort by current x position left to right
+    const sorted = [...attached].sort((a, b) => a.xMm - b.xMm);
+    const railLeft = targetRail.xMm - targetRail.lengthMm / 2;
+    const railRight = targetRail.xMm + targetRail.lengthMm / 2;
+    const totalCompWidth = sorted.reduce((sum, c) => {
+      const dims = getRotatedDimensions(c.widthMm, c.heightMm, c.rotationDeg ?? 0);
+      return sum + dims.widthMm;
+    }, 0);
+
+    const positions = new Map<string, number>();
+
+    if (mode === "left") {
+      let curX = railLeft + 15; // 15mm clearance from rail edge
+      for (const comp of sorted) {
+        const dims = getRotatedDimensions(comp.widthMm, comp.heightMm, comp.rotationDeg ?? 0);
+        positions.set(comp.id, curX + dims.widthMm / 2);
+        curX += dims.widthMm + 6; // 6mm gap
+      }
+    } else if (mode === "right") {
+      let curX = railRight - 15;
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        const comp = sorted[i];
+        const dims = getRotatedDimensions(comp.widthMm, comp.heightMm, comp.rotationDeg ?? 0);
+        positions.set(comp.id, curX - dims.widthMm / 2);
+        curX -= dims.widthMm + 6;
+      }
+    } else if (mode === "center") {
+      const gap = 8;
+      const totalBlockWidth = totalCompWidth + Math.max(0, sorted.length - 1) * gap;
+      let curX = targetRail.xMm - totalBlockWidth / 2;
+      for (const comp of sorted) {
+        const dims = getRotatedDimensions(comp.widthMm, comp.heightMm, comp.rotationDeg ?? 0);
+        positions.set(comp.id, curX + dims.widthMm / 2);
+        curX += dims.widthMm + gap;
+      }
+    } else if (mode === "distribute") {
+      if (sorted.length === 1) {
+        positions.set(sorted[0].id, targetRail.xMm);
+      } else {
+        const availableSpan = targetRail.lengthMm - 30; // 15mm padding on both sides
+        const spacing = (availableSpan - totalCompWidth) / (sorted.length - 1);
+        const effectiveSpacing = Math.max(4, spacing);
+        let curX = railLeft + 15;
+        for (const comp of sorted) {
+          const dims = getRotatedDimensions(comp.widthMm, comp.heightMm, comp.rotationDeg ?? 0);
+          positions.set(comp.id, curX + dims.widthMm / 2);
+          curX += dims.widthMm + effectiveSpacing;
+        }
+      }
+    }
+
+    set((state) => ({
+      components: state.components.map((c) => {
+        if (!positions.has(c.id)) return c;
+        return {
+          ...c,
+          xMm: Number(positions.get(c.id)!.toFixed(2)),
+          yMm: targetRail.yMm,
+        };
+      }),
+    }));
+  },
+
+  addComponent: (templateId, nearYMm, customPos) => {
     const template = COMPONENT_CATALOG[templateId];
     if (!template) return;
     const { rails, gridSnapMm, components } = get();
-    const targetY = nearYMm ?? (rails[0]?.yMm ?? 0);
-    const snapResult = snapComponentToNearestRail(
-      0,
-      targetY,
-      template.widthMm,
-      template.depthMm,
-      rails,
-      gridSnapMm
-    );
 
-    const id = `comp-${Date.now()}`;
+    let snapResult: { railId: string | null; xMm: number; yMm: number; zMm: number };
+    if (customPos) {
+      snapResult = snapComponentToNearestRail(
+        customPos.xMm,
+        customPos.yMm,
+        template.widthMm,
+        template.depthMm,
+        rails,
+        gridSnapMm,
+        35
+      );
+    } else {
+      const targetY = nearYMm ?? (rails[0]?.yMm ?? 0);
+      snapResult = snapComponentToNearestRail(
+        0,
+        targetY,
+        template.widthMm,
+        template.depthMm,
+        rails,
+        gridSnapMm
+      );
+    }
+
+    const id = makeUid("comp");
     const newComponent: PlacedComponent = {
       id,
       templateId,
-      name: `${template.shortName} #${components.length + 1}`,
+      name: nextIncrementedName(
+        template.shortName,
+        components.map((c) => c.name)
+      ),
       xMm: snapResult.xMm,
       yMm: snapResult.yMm,
       zMm: snapResult.zMm,
+      rotationDeg: 0,
       railId: snapResult.railId,
       widthMm: template.widthMm,
       heightMm: template.heightMm,
@@ -408,6 +617,94 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     set((state) => ({
       components: [...state.components, newComponent],
       selected: { kind: "component", id },
+    }));
+  },
+
+  rotateComponent: (id, deltaDeg = 90) => {
+    set((state) => ({
+      components: state.components.map((c) => {
+        if (c.id !== id) return c;
+        const current = c.rotationDeg ?? 0;
+        const nextDeg = (((current + deltaDeg) % 360) + 360) % 360 as RotationDeg;
+        return { ...c, rotationDeg: nextDeg };
+      }),
+    }));
+  },
+
+  duplicateComponent: (id, offsetMm = { x: 20, y: 0 }) => {
+    const { components, rails, gridSnapMm, enclosure } = get();
+    const source = components.find((c) => c.id === id);
+    if (!source) return null;
+
+    const newId = makeUid("comp");
+    const targetX = source.xMm + offsetMm.x;
+    const targetY = source.yMm + offsetMm.y;
+
+    const snapResult = snapComponentToNearestRail(
+      targetX,
+      targetY,
+      source.widthMm,
+      source.depthMm,
+      rails,
+      gridSnapMm,
+      source.railId ? 20 : Infinity
+    );
+
+    const { widthMm: plateW, heightMm: plateH } = getBackplateDimensions(enclosure);
+    const clamped = clampToBackplate(
+      snapResult.xMm,
+      snapResult.yMm,
+      source.widthMm,
+      source.heightMm,
+      plateW,
+      plateH
+    );
+
+    const duplicated: PlacedComponent = {
+      ...source,
+      id: newId,
+      name: nextIncrementedName(source.name, components.map((c) => c.name)),
+      xMm: clamped.xMm,
+      yMm: clamped.yMm,
+      zMm: snapResult.zMm,
+      railId: snapResult.railId,
+      pins: source.pins.map((p, idx) => ({
+        ...p,
+        id: `${newId}-pin-${idx + 1}`,
+      })),
+    };
+
+    set((state) => ({
+      components: [...state.components, duplicated],
+      selected: { kind: "component", id: newId },
+    }));
+    return newId;
+  },
+
+  snapComponentToRail: (id) => {
+    const comp = get().components.find((c) => c.id === id);
+    if (!comp) return;
+    const { rails, gridSnapMm } = get();
+    const snapResult = snapComponentToNearestRail(
+      comp.xMm,
+      comp.yMm,
+      comp.widthMm,
+      comp.depthMm,
+      rails,
+      gridSnapMm
+    );
+    set((state) => ({
+      components: state.components.map((c) =>
+        c.id === id
+          ? {
+              ...c,
+              xMm: snapResult.xMm,
+              yMm: snapResult.yMm,
+              zMm: snapResult.zMm,
+              railId: snapResult.railId,
+            }
+          : c
+      ),
     }));
   },
 
@@ -460,6 +757,9 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   removeComponent: (id) =>
     set((state) => ({
       components: state.components.filter((c) => c.id !== id),
+      wires: state.wires.filter(
+        (w) => w.fromComponentId !== id && w.toComponentId !== id
+      ),
       selected: state.selected?.id === id ? null : state.selected,
     })),
 
@@ -468,6 +768,54 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
       cadAssets: [...state.cadAssets, asset],
       selected: { kind: "cad", id: asset.id },
     })),
+
+  rotateCadAsset: (id, deltaDeg = 90) => {
+    set((state) => ({
+      cadAssets: state.cadAssets.map((a) => {
+        if (a.id !== id) return a;
+        const current = a.rotationDeg ?? 0;
+        const nextDeg = (((current + deltaDeg) % 360) + 360) % 360 as RotationDeg;
+        return { ...a, rotationDeg: nextDeg };
+      }),
+    }));
+  },
+
+  duplicateCadAsset: (id, offsetMm = { x: 20, y: 0 }) => {
+    const { cadAssets, enclosure, gridSnapMm } = get();
+    const source = cadAssets.find((a) => a.id === id);
+    if (!source) return null;
+
+    const newId = makeUid("cad");
+    const { widthMm: plateW, heightMm: plateH } = getBackplateDimensions(enclosure);
+    const rawX = snapToGrid(source.xMm + offsetMm.x, gridSnapMm);
+    const rawY = snapToGrid(source.yMm + offsetMm.y, gridSnapMm);
+    const clamped = clampToBackplate(
+      rawX,
+      rawY,
+      source.boundingBoxMm.w,
+      source.boundingBoxMm.h,
+      plateW,
+      plateH
+    );
+
+    const duplicated: CustomCadAsset = {
+      ...source,
+      id: newId,
+      name: nextIncrementedName(source.name, cadAssets.map((a) => a.name)),
+      xMm: clamped.xMm,
+      yMm: clamped.yMm,
+      pins: source.pins.map((p, idx) => ({
+        ...p,
+        id: `${newId}-pin-${idx + 1}`,
+      })),
+    };
+
+    set((state) => ({
+      cadAssets: [...state.cadAssets, duplicated],
+      selected: { kind: "cad", id: newId },
+    }));
+    return newId;
+  },
 
   updateCadAsset: (id, partial) =>
     set((state) => ({
@@ -517,6 +865,9 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   removeCadAsset: (id) =>
     set((state) => ({
       cadAssets: state.cadAssets.filter((a) => a.id !== id),
+      wires: state.wires.filter(
+        (w) => w.fromComponentId !== id && w.toComponentId !== id
+      ),
       selected: state.selected?.id === id ? null : state.selected,
       isPinMarkingMode:
         state.activeMarkingAssetId === id ? false : state.isPinMarkingMode,

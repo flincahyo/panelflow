@@ -17,16 +17,22 @@ const BACKPLATE_PLANE = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
 
 interface Props {
   onDragChange: (dragging: boolean) => void;
+  onContextMenu?: (
+    e: ThreeEvent<MouseEvent>,
+    target: import("@/components/ui/ContextMenu").ContextMenuTarget
+  ) => void;
 }
 
 function DinRailMesh({
   rail,
   isSelected,
   onDragChange,
+  onContextMenu,
 }: {
   rail: DinRail;
   isSelected: boolean;
   onDragChange: (dragging: boolean) => void;
+  onContextMenu?: (e: ThreeEvent<MouseEvent>) => void;
 }) {
   const gridSnapMm = usePanelStore((s) => s.gridSnapMm);
   const enclosure = usePanelStore((s) => s.enclosure);
@@ -38,6 +44,7 @@ function DinRailMesh({
   const hitPoint = useRef(new THREE.Vector3());
 
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    if (e.button !== 0) return;
     e.stopPropagation();
     setSelected({ kind: "rail", id: rail.id });
     if (e.ray.intersectPlane(BACKPLATE_PLANE, hitPoint.current)) {
@@ -92,6 +99,7 @@ function DinRailMesh({
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onContextMenu={onContextMenu}
     >
       {/* Back base flange */}
       <mesh position={[0, 0, 1]}>
@@ -116,10 +124,12 @@ function WireDuctMesh({
   duct,
   isSelected,
   onDragChange,
+  onContextMenu,
 }: {
   duct: WireDuct;
   isSelected: boolean;
   onDragChange: (dragging: boolean) => void;
+  onContextMenu?: (e: ThreeEvent<MouseEvent>) => void;
 }) {
   const gridSnapMm = usePanelStore((s) => s.gridSnapMm);
   const enclosure = usePanelStore((s) => s.enclosure);
@@ -131,6 +141,7 @@ function WireDuctMesh({
   const hitPoint = useRef(new THREE.Vector3());
 
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    if (e.button !== 0) return;
     e.stopPropagation();
     setSelected({ kind: "duct", id: duct.id });
     if (e.ray.intersectPlane(BACKPLATE_PLANE, hitPoint.current)) {
@@ -184,6 +195,7 @@ function WireDuctMesh({
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onContextMenu={onContextMenu}
     >
       <mesh>
         <boxGeometry args={[duct.widthMm, duct.heightMm, duct.depthMm]} />
@@ -204,7 +216,7 @@ function WireDuctMesh({
   );
 }
 
-export function RailsAndDucts3D({ onDragChange }: Props) {
+export function RailsAndDucts3D({ onDragChange, onContextMenu }: Props) {
   const rails = usePanelStore((s) => s.rails);
   const ducts = usePanelStore((s) => s.ducts);
   const selected = usePanelStore((s) => s.selected);
@@ -217,6 +229,12 @@ export function RailsAndDucts3D({ onDragChange }: Props) {
           rail={rail}
           isSelected={selected?.kind === "rail" && selected.id === rail.id}
           onDragChange={onDragChange}
+          onContextMenu={(e) => {
+            if (onContextMenu) {
+              e.stopPropagation();
+              onContextMenu(e, { kind: "rail", id: rail.id });
+            }
+          }}
         />
       ))}
       {ducts.map((duct) => (
@@ -225,6 +243,12 @@ export function RailsAndDucts3D({ onDragChange }: Props) {
           duct={duct}
           isSelected={selected?.kind === "duct" && selected.id === duct.id}
           onDragChange={onDragChange}
+          onContextMenu={(e) => {
+            if (onContextMenu) {
+              e.stopPropagation();
+              onContextMenu(e, { kind: "duct", id: duct.id });
+            }
+          }}
         />
       ))}
     </group>

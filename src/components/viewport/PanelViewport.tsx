@@ -1,8 +1,9 @@
 "use client";
 
 import { OrbitControls } from "@react-three/drei";
-import { Canvas } from "@react-three/fiber";
-import { useState } from "react";
+import { Canvas, type ThreeEvent } from "@react-three/fiber";
+import { useCallback, useRef, useState } from "react";
+import { ContextMenu, type ContextMenuState, type ContextMenuTarget } from "@/components/ui/ContextMenu";
 import { Components3D } from "@/components/viewport/Components3D";
 import { CustomCad3D } from "@/components/viewport/CustomCad3D";
 import { Enclosure3D } from "@/components/viewport/Enclosure3D";
@@ -12,13 +13,52 @@ import { usePanelStore } from "@/store/usePanelStore";
 
 export function PanelViewport() {
   const [isDraggingItem, setIsDraggingItem] = useState(false);
+  const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
+  const meshContextHandledRef = useRef(false);
+
   const displayUnit = usePanelStore((s) => s.displayUnit);
   const gridSnapMm = usePanelStore((s) => s.gridSnapMm);
   const enclosure = usePanelStore((s) => s.enclosure);
   const isPinMarkingMode = usePanelStore((s) => s.isPinMarkingMode);
+  const setSelected = usePanelStore((s) => s.setSelected);
+
+  const handle3DContextMenu = useCallback(
+    (e: ThreeEvent<MouseEvent>, target: ContextMenuTarget) => {
+      e.nativeEvent.preventDefault();
+      meshContextHandledRef.current = true;
+      if (
+        target.kind === "component" ||
+        target.kind === "rail" ||
+        target.kind === "duct" ||
+        target.kind === "cad"
+      ) {
+        setSelected({ kind: target.kind, id: target.id });
+      }
+      setContextMenu({
+        x: e.nativeEvent.clientX,
+        y: e.nativeEvent.clientY,
+        target,
+      });
+    },
+    [setSelected]
+  );
 
   return (
-    <div className="relative h-full w-full bg-[#0d1016] select-none">
+    <div
+      className="relative h-full w-full bg-[#0d1016] select-none"
+      onContextMenu={(e) => {
+        e.preventDefault();
+        if (meshContextHandledRef.current) {
+          meshContextHandledRef.current = false;
+          return;
+        }
+        setContextMenu({
+          x: e.clientX,
+          y: e.clientY,
+          target: { kind: "canvas", worldPos: { xMm: 0, yMm: 0 } },
+        });
+      }}
+    >
       <Canvas
         dpr={[1, 1.5]}
         gl={{ powerPreference: "high-performance", antialias: true }}
@@ -35,9 +75,15 @@ export function PanelViewport() {
         <directionalLight position={[-600, -400, 700]} intensity={0.45} />
 
         <Enclosure3D />
-        <RailsAndDucts3D onDragChange={setIsDraggingItem} />
-        <Components3D onDragChange={setIsDraggingItem} />
-        <CustomCad3D />
+        <RailsAndDucts3D
+          onDragChange={setIsDraggingItem}
+          onContextMenu={handle3DContextMenu}
+        />
+        <Components3D
+          onDragChange={setIsDraggingItem}
+          onContextMenu={handle3DContextMenu}
+        />
+        <CustomCad3D onContextMenu={handle3DContextMenu} />
 
         <OrbitControls
           makeDefault
@@ -65,6 +111,8 @@ export function PanelViewport() {
           </span>
         )}
       </div>
+
+      <ContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />
     </div>
   );
 }

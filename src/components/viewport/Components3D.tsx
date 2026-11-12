@@ -13,10 +13,12 @@ function ComponentItem3D({
   comp,
   isSelected,
   onDragChange,
+  onContextMenu,
 }: {
   comp: PlacedComponent;
   isSelected: boolean;
   onDragChange: (dragging: boolean) => void;
+  onContextMenu: (e: ThreeEvent<MouseEvent>) => void;
 }) {
   const setSelected = usePanelStore((s) => s.setSelected);
   const moveComponent = usePanelStore((s) => s.moveComponent);
@@ -26,6 +28,7 @@ function ComponentItem3D({
   const hitPoint = useRef(new THREE.Vector3());
 
   const handlePointerDown = (e: ThreeEvent<PointerEvent>) => {
+    if (e.button !== 0) return;
     e.stopPropagation();
     setSelected({ kind: "component", id: comp.id });
     if (e.ray.intersectPlane(BACKPLATE_PLANE, hitPoint.current)) {
@@ -57,12 +60,16 @@ function ComponentItem3D({
     onDragChange(false);
   };
 
+  const rotRad = ((comp.rotationDeg ?? 0) * Math.PI) / 180;
+
   return (
     <group
       position={[comp.xMm, comp.yMm, comp.zMm]}
+      rotation={[0, 0, -rotRad]}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onContextMenu={onContextMenu}
     >
       {/* Main body */}
       <mesh castShadow receiveShadow>
@@ -124,8 +131,10 @@ function ComponentItem3D({
 
 export function Components3D({
   onDragChange,
+  onContextMenu,
 }: {
   onDragChange: (dragging: boolean) => void;
+  onContextMenu?: (e: ThreeEvent<MouseEvent>, target: import("@/components/ui/ContextMenu").ContextMenuTarget) => void;
 }) {
   const components = usePanelStore((s) => s.components);
   const selected = usePanelStore((s) => s.selected);
@@ -140,6 +149,12 @@ export function Components3D({
             selected?.kind === "component" && selected.id === comp.id
           }
           onDragChange={onDragChange}
+          onContextMenu={(e) => {
+            if (onContextMenu) {
+              e.stopPropagation();
+              onContextMenu(e, { kind: "component", id: comp.id });
+            }
+          }}
         />
       ))}
     </group>

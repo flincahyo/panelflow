@@ -2,6 +2,7 @@ export type LengthUnit = "mm" | "cm" | "m";
 export type CadImportUnit = "mm" | "cm" | "m" | "inch";
 export type GridSnapMm = 5 | 10 | 25;
 export type DoorMode = "open" | "transparent" | "hidden";
+export type RotationDeg = 0 | 90 | 180 | 270;
 
 export interface EnclosureConfig {
   widthMm: number;
@@ -68,6 +69,7 @@ export interface PlacedComponent {
   xMm: number;
   yMm: number;
   zMm: number;
+  rotationDeg?: RotationDeg;
   railId: string | null;
   widthMm: number;
   heightMm: number;
@@ -88,6 +90,7 @@ export interface CustomCadAsset {
   xMm: number;
   yMm: number;
   zMm: number;
+  rotationDeg?: RotationDeg;
   boundingBoxMm: { w: number; h: number; d: number };
   pins: PinTerminal[];
   objectUrl?: string;

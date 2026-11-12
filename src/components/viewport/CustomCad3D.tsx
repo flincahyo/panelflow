@@ -11,7 +11,13 @@ import { getCadScaleFactorToMm } from "@/lib/units";
 import { usePanelStore } from "@/store/usePanelStore";
 import type { CustomCadAsset } from "@/types/panel";
 
-function CadAssetItem3D({ asset }: { asset: CustomCadAsset }) {
+function CadAssetItem3D({
+  asset,
+  onContextMenu,
+}: {
+  asset: CustomCadAsset;
+  onContextMenu?: (e: ThreeEvent<MouseEvent>) => void;
+}) {
   const selected = usePanelStore((s) => s.selected);
   const setSelected = usePanelStore((s) => s.setSelected);
   const isPinMarkingMode = usePanelStore((s) => s.isPinMarkingMode);
@@ -128,11 +134,15 @@ function CadAssetItem3D({ asset }: { asset: CustomCadAsset }) {
     setSelected({ kind: "cad", id: asset.id });
   };
 
+  const rotRad = ((asset.rotationDeg ?? 0) * Math.PI) / 180;
+
   return (
     <group
       ref={groupRef}
       position={[asset.xMm, asset.yMm, asset.zMm]}
+      rotation={[0, 0, -rotRad]}
       onClick={handleClick}
+      onContextMenu={onContextMenu}
     >
       {loadedObject && <primitive object={loadedObject} />}
 
@@ -200,12 +210,28 @@ function CadAssetItem3D({ asset }: { asset: CustomCadAsset }) {
   );
 }
 
-export function CustomCad3D() {
+export function CustomCad3D({
+  onContextMenu,
+}: {
+  onContextMenu?: (
+    e: ThreeEvent<MouseEvent>,
+    target: import("@/components/ui/ContextMenu").ContextMenuTarget
+  ) => void;
+}) {
   const cadAssets = usePanelStore((s) => s.cadAssets);
   return (
     <group>
       {cadAssets.map((asset) => (
-        <CadAssetItem3D key={asset.id} asset={asset} />
+        <CadAssetItem3D
+          key={asset.id}
+          asset={asset}
+          onContextMenu={(e) => {
+            if (onContextMenu) {
+              e.stopPropagation();
+              onContextMenu(e, { kind: "cad", id: asset.id });
+            }
+          }}
+        />
       ))}
     </group>
   );

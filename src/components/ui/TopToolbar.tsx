@@ -129,20 +129,8 @@ export function TopToolbar() {
           PANEL PRO
         </div>
 
-        {/* Viewport Mode Switcher: 3D View vs 2D Layout */}
+        {/* Viewport Mode Switcher: 2D Layout (Primary) vs 3D View */}
         <div className="ml-2 flex rounded border border-slate-700 bg-slate-900 p-0.5">
-          <button
-            type="button"
-            onClick={() => setViewportMode("3d")}
-            className={`flex items-center gap-1.5 rounded-xs px-2.5 py-1 font-mono text-[11px] transition-colors ${
-              viewportMode === "3d"
-                ? "bg-sky-600 font-semibold text-white"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <Box className="h-3.5 w-3.5" />
-            3D View
-          </button>
           <button
             type="button"
             onClick={() => setViewportMode("2d")}
@@ -154,6 +142,18 @@ export function TopToolbar() {
           >
             <Layers className="h-3.5 w-3.5" />
             2D Layout
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewportMode("3d")}
+            className={`flex items-center gap-1.5 rounded-xs px-2.5 py-1 font-mono text-[11px] transition-colors ${
+              viewportMode === "3d"
+                ? "bg-sky-600 font-semibold text-white"
+                : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            <Box className="h-3.5 w-3.5" />
+            3D View
           </button>
         </div>
       </div>

@@ -173,7 +173,7 @@ export function LeftSidebar() {
                 </span>
                 <button
                   type="button"
-                  onClick={addRail}
+                  onClick={() => addRail()}
                   className="flex items-center gap-1 rounded bg-sky-600 px-2 py-1 text-[11px] font-medium text-white hover:bg-sky-500"
                 >
                   <Plus className="h-3 w-3" /> Add Rail

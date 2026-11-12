@@ -1,7 +1,31 @@
-import type { DinRail, GridSnapMm } from "@/types/panel";
+import type { DinRail, GridSnapMm, RotationDeg } from "@/types/panel";
 
 export const DIN_RAIL_HEIGHT_MM = 35;
 export const DIN_RAIL_DEPTH_MM = 7.5;
+
+export function rotateLocalPoint(
+  localXMm: number,
+  localYMm: number,
+  rotationDeg: RotationDeg = 0
+): { xMm: number; yMm: number } {
+  const deg = ((rotationDeg % 360) + 360) % 360;
+  if (deg === 90) return { xMm: localYMm, yMm: -localXMm };
+  if (deg === 180) return { xMm: -localXMm, yMm: -localYMm };
+  if (deg === 270) return { xMm: -localYMm, yMm: localXMm };
+  return { xMm: localXMm, yMm: localYMm };
+}
+
+export function getRotatedDimensions(
+  widthMm: number,
+  heightMm: number,
+  rotationDeg: RotationDeg = 0
+): { widthMm: number; heightMm: number } {
+  const deg = ((rotationDeg % 360) + 360) % 360;
+  if (deg === 90 || deg === 270) {
+    return { widthMm: heightMm, heightMm: widthMm };
+  }
+  return { widthMm, heightMm };
+}
 
 export function snapToGrid(valueMm: number, gridMm: GridSnapMm): number {
   if (!Number.isFinite(valueMm) || gridMm <= 0) return 0;

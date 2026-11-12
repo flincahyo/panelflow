@@ -1,6 +1,7 @@
 "use client";
 
 import { MapPin, Trash2 } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { snapToGrid } from "@/lib/snap";
 import { formatDim, fromMm, inputStepForUnit, toMm } from "@/lib/units";
 import { usePanelStore } from "@/store/usePanelStore";
@@ -18,6 +19,15 @@ export function RightInspector() {
   const viewportMode = usePanelStore((s) => s.viewportMode);
   const isPinMarkingMode = usePanelStore((s) => s.isPinMarkingMode);
   const activeMarkingAssetId = usePanelStore((s) => s.activeMarkingAssetId);
+  const inspectorFocusNonce = usePanelStore((s) => s.inspectorFocusNonce);
+  const compNameInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (inspectorFocusNonce > 0 && compNameInputRef.current) {
+      compNameInputRef.current.focus();
+      compNameInputRef.current.select();
+    }
+  }, [inspectorFocusNonce]);
 
   const updateRail = usePanelStore((s) => s.updateRail);
   const removeRail = usePanelStore((s) => s.removeRail);
@@ -325,6 +335,7 @@ export function RightInspector() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <input
+              ref={compNameInputRef}
               type="text"
               value={comp.name}
               onChange={(e) =>
