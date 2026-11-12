@@ -1,0 +1,206 @@
+"use client";
+
+import { Html } from "@react-three/drei";
+import type { ThreeEvent } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
+import { parseDxfToMmSegments } from "@/lib/dxf-parser";
+import { getCadScaleFactorToMm } from "@/lib/units";
+import { usePanelStore } from "@/store/usePanelStore";
+import type { CustomCadAsset } from "@/types/panel";
+
+function CadAssetItem3D({ asset }: { asset: CustomCadAsset }) {
+  const selected = usePanelStore((s) => s.selected);
+  const setSelected = usePanelStore((s) => s.setSelected);
+  const isPinMarkingMode = usePanelStore((s) => s.isPinMarkingMode);
+  const activeMarkingAssetId = usePanelStore((s) => s.activeMarkingAssetId);
+  const updateCadAsset = usePanelStore((s) => s.updateCadAsset);
+  const addPinToAsset = usePanelStore((s) => s.addPinToAsset);
+
+  const groupRef = useRef<THREE.Group>(null);
+  const [loadedObject, setLoadedObject] = useState<THREE.Object3D | null>(null);
+
+  const isSelected = selected?.kind === "cad" && selected.id === asset.id;
+  const isMarkingThis = isPinMarkingMode && activeMarkingAssetId === asset.id;
+
+  // Load GLB / GLTF / OBJ
+  useEffect(() => {
+    let cancelled = false;
+    const scale = getCadScaleFactorToMm(asset.sourceUnit);
+
+    if (asset.format === "glb" || asset.format === "gltf") {
+      if (!asset.objectUrl) return;
+      const loader = new GLTFLoader();
+      loader.load(
+        asset.objectUrl,
+        (gltf) => {
+          if (cancelled) return;
+          const scene = gltf.scene.clone();
+          scene.scale.setScalar(scale);
+          scene.updateMatrixWorld(true);
+          const box = new THREE.Box3().setFromObject(scene);
+          const size = new THREE.Vector3();
+          const center = new THREE.Vector3();
+          box.getSize(size);
+          box.getCenter(center);
+          scene.position.sub(center);
+
+          setLoadedObject(scene);
+          updateCadAsset(asset.id, {
+            boundingBoxMm: {
+              w: Math.max(1, Number(size.x.toFixed(1))),
+              h: Math.max(1, Number(size.y.toFixed(1))),
+              d: Math.max(1, Number(size.z.toFixed(1))),
+            },
+          });
+        },
+        undefined,
+        () => {
+          if (!cancelled) setLoadedObject(null);
+        }
+      );
+    } else if (asset.format === "obj" && asset.rawText) {
+      const loader = new OBJLoader();
+      const obj = loader.parse(asset.rawText);
+      obj.scale.setScalar(scale);
+      obj.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(obj);
+      const size = new THREE.Vector3();
+      const center = new THREE.Vector3();
+      box.getSize(size);
+      box.getCenter(center);
+      obj.position.sub(center);
+
+      setLoadedObject(obj);
+      updateCadAsset(asset.id, {
+        boundingBoxMm: {
+          w: Math.max(1, Number(size.x.toFixed(1))),
+          h: Math.max(1, Number(size.y.toFixed(1))),
+          d: Math.max(1, Number(size.z.toFixed(1))),
+        },
+      });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [asset.id, asset.format, asset.objectUrl, asset.rawText, asset.sourceUnit, updateCadAsset]);
+
+  // Parse DXF
+  const dxfGeometry = useMemo(() => {
+    if (asset.format !== "dxf" || !asset.rawText) return null;
+    const parsed = parseDxfToMmSegments(asset.rawText, asset.sourceUnit);
+    const positions: number[] = [];
+    for (const seg of parsed.segments) {
+      positions.push(seg.x1, seg.y1, seg.z1, seg.x2, seg.y2, seg.z2);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    return { geo, bbox: parsed.boundingBoxMm };
+  }, [asset.format, asset.rawText, asset.sourceUnit]);
+
+  useEffect(() => {
+    if (dxfGeometry) {
+      updateCadAsset(asset.id, { boundingBoxMm: dxfGeometry.bbox });
+    }
+  }, [asset.id, dxfGeometry, updateCadAsset]);
+
+  const handleClick = (e: ThreeEvent<MouseEvent>) => {
+    e.stopPropagation();
+    if (isMarkingThis && groupRef.current) {
+      const localPt = groupRef.current.worldToLocal(e.point.clone());
+      addPinToAsset(asset.id, {
+        label: `P${asset.pins.length + 1}`,
+        localXMm: Number(localPt.x.toFixed(1)),
+        localYMm: Number(localPt.y.toFixed(1)),
+        localZMm: Number(localPt.z.toFixed(1)),
+      });
+      return;
+    }
+    setSelected({ kind: "cad", id: asset.id });
+  };
+
+  return (
+    <group
+      ref={groupRef}
+      position={[asset.xMm, asset.yMm, asset.zMm]}
+      onClick={handleClick}
+    >
+      {loadedObject && <primitive object={loadedObject} />}
+
+      {dxfGeometry && (
+        <>
+          <lineSegments geometry={dxfGeometry.geo}>
+            <lineBasicMaterial color="#38bdf8" />
+          </lineSegments>
+          {/* Hitbox for clicking/pin marking on 2D/3D DXF */}
+          <mesh>
+            <boxGeometry
+              args={[
+                Math.max(10, dxfGeometry.bbox.w),
+                Math.max(10, dxfGeometry.bbox.h),
+                Math.max(4, dxfGeometry.bbox.d),
+              ]}
+            />
+            <meshBasicMaterial transparent opacity={0.06} color="#38bdf8" />
+          </mesh>
+        </>
+      )}
+
+      {(isSelected || isMarkingThis) && (
+        <mesh>
+          <boxGeometry
+            args={[
+              asset.boundingBoxMm.w + 3,
+              asset.boundingBoxMm.h + 3,
+              Math.max(4, asset.boundingBoxMm.d + 3),
+            ]}
+          />
+          <meshBasicMaterial
+            color={isMarkingThis ? "#f59e0b" : "#38bdf8"}
+            wireframe
+          />
+        </mesh>
+      )}
+
+      {asset.pins.map((pin) => (
+        <group
+          key={pin.id}
+          position={[pin.localXMm, pin.localYMm, pin.localZMm]}
+        >
+          <mesh>
+            <sphereGeometry args={[3.5, 14, 14]} />
+            <meshStandardMaterial
+              color="#f59e0b"
+              emissive="#b45309"
+              emissiveIntensity={0.35}
+            />
+          </mesh>
+          <Html
+            center
+            distanceFactor={550}
+            position={[0, 8, 6]}
+            style={{ pointerEvents: "none" }}
+          >
+            <span className="rounded bg-amber-950/90 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-amber-300 border border-amber-500/60 whitespace-nowrap">
+              {pin.label}
+            </span>
+          </Html>
+        </group>
+      ))}
+    </group>
+  );
+}
+
+export function CustomCad3D() {
+  const cadAssets = usePanelStore((s) => s.cadAssets);
+  return (
+    <group>
+      {cadAssets.map((asset) => (
+        <CadAssetItem3D key={asset.id} asset={asset} />
+      ))}
+    </group>
+  );
+}
