@@ -6,6 +6,7 @@ import { getBackplateDimensions } from "@/lib/template-export";
 import { usePanelStore } from "@/store/usePanelStore";
 
 export function Enclosure3D() {
+  const theme = usePanelStore((s) => s.theme);
   const enclosure = usePanelStore((s) => s.enclosure);
   const plateConfig = usePanelStore((s) => s.plateConfig);
   const gridSnapMm = usePanelStore((s) => s.gridSnapMm);
@@ -90,7 +91,11 @@ export function Enclosure3D() {
 
       {/* Snap Grid Overlay on Backplate */}
       <lineSegments geometry={gridGeometry}>
-        <lineBasicMaterial color="#64748b" transparent opacity={0.28} />
+        <lineBasicMaterial
+          color={theme === "light" ? "#94a3b8" : "#64748b"}
+          transparent
+          opacity={theme === "light" ? 0.35 : 0.28}
+        />
       </lineSegments>
 
       {/* Hinged Front Door */}

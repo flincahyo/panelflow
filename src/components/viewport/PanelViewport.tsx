@@ -24,6 +24,7 @@ export function PanelViewport() {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const meshContextHandledRef = useRef(false);
 
+  const theme = usePanelStore((s) => s.theme);
   const displayUnit = usePanelStore((s) => s.displayUnit);
   const gridSnapMm = usePanelStore((s) => s.gridSnapMm);
   const enclosure = usePanelStore((s) => s.enclosure);
@@ -82,7 +83,7 @@ export function PanelViewport() {
 
   return (
     <div
-      className="relative h-full w-full bg-[#090b10] select-none"
+      className="relative h-full w-full bg-[#f8fafc] dark:bg-[#090b10] select-none"
       onContextMenu={(e) => {
         e.preventDefault();
         if (meshContextHandledRef.current) {
@@ -102,8 +103,11 @@ export function PanelViewport() {
         shadows
         camera={{ position: [480, 180, 1180], fov: 38, near: 2, far: 25000 }}
       >
-        <color attach="background" args={["#090b10"]} />
-        <ambientLight intensity={0.65} />
+        <color
+          attach="background"
+          args={[theme === "light" ? "#f1f5f9" : "#090b10"]}
+        />
+        <ambientLight intensity={theme === "light" ? 0.85 : 0.65} />
         <directionalLight
           position={[600, 900, 1000]}
           intensity={1.35}
@@ -133,7 +137,7 @@ export function PanelViewport() {
       </Canvas>
 
       {/* Top Floating Pill Toolbar (3D Controls) */}
-      <div className="absolute top-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-white/10 bg-[#171a21]/95 px-2.5 py-1 shadow-xl backdrop-blur-xl">
+      <div className="absolute top-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#171a21]/95 px-2.5 py-1 shadow-sm dark:shadow-xl backdrop-blur-xl">
         {/* Undo / Redo */}
         <div className="flex items-center gap-0.5">
           <button
@@ -141,7 +145,7 @@ export function PanelViewport() {
             onClick={undo}
             disabled={!canUndo}
             title="Undo (Ctrl+Z)"
-            className="rounded-full p-1.5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30"
+            className="rounded-full p-1.5 text-[#334155] dark:text-slate-300 transition-colors hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white disabled:opacity-30"
           >
             <Undo2 className="h-3.5 w-3.5" />
           </button>
@@ -150,13 +154,13 @@ export function PanelViewport() {
             onClick={redo}
             disabled={!canRedo}
             title="Redo (Ctrl+Y)"
-            className="rounded-full p-1.5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30"
+            className="rounded-full p-1.5 text-[#334155] dark:text-slate-300 transition-colors hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white disabled:opacity-30"
           >
             <Redo2 className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        <div className="h-4 w-px bg-white/10" />
+        <div className="h-4 w-px bg-[#e2e8f0] dark:bg-white/10" />
 
         {/* Door Mode */}
         <div className="flex items-center gap-0.5">
@@ -167,8 +171,8 @@ export function PanelViewport() {
               onClick={() => setDoorMode(dm.value)}
               className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
                 enclosure.doorMode === dm.value
-                  ? "bg-white text-black font-semibold"
-                  : "text-slate-400 hover:text-white"
+                  ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-semibold"
+                  : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-white"
               }`}
             >
               {dm.label}
@@ -176,7 +180,7 @@ export function PanelViewport() {
           ))}
         </div>
 
-        <div className="h-4 w-px bg-white/10" />
+        <div className="h-4 w-px bg-[#e2e8f0] dark:bg-white/10" />
 
         {/* Grid Snap */}
         <div className="flex items-center gap-0.5 font-mono text-[10px]">
@@ -187,8 +191,8 @@ export function PanelViewport() {
               onClick={() => setGridSnapMm(snap)}
               className={`rounded-full px-2 py-0.5 transition-colors ${
                 gridSnapMm === snap
-                  ? "bg-[#343842] text-white font-semibold"
-                  : "text-slate-400 hover:text-white"
+                  ? "bg-[#e2e8f0] text-[#0f172a] dark:bg-[#343842] dark:text-white font-semibold"
+                  : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-white"
               }`}
             >
               {formatDim(snap, displayUnit)}
@@ -198,31 +202,31 @@ export function PanelViewport() {
       </div>
 
       {/* Bottom Left Status Pill */}
-      <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-[#171a21]/95 px-3 py-1 font-mono text-[11px] tabular-nums text-slate-300 shadow-lg backdrop-blur-xl">
+      <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#171a21]/95 px-3 py-1 font-mono text-[11px] tabular-nums text-[#0f172a] dark:text-slate-300 shadow-sm dark:shadow-lg backdrop-blur-xl">
         <span>
           ENCLOSURE: {formatDim(enclosure.widthMm, displayUnit)} ×{" "}
           {formatDim(enclosure.heightMm, displayUnit)} ×{" "}
           {formatDim(enclosure.depthMm, displayUnit)}
         </span>
-        <span className="text-white/20">|</span>
-        <span className="text-slate-400">
+        <span className="text-[#cbd5e1] dark:text-white/20">|</span>
+        <span className="text-[#64748b] dark:text-slate-400">
           Snap: {formatDim(gridSnapMm, displayUnit)}
         </span>
       </div>
 
       {isPinMarkingMode && (
-        <div className="pointer-events-none absolute bottom-12 left-1/2 z-20 -translate-x-1/2 rounded-full border border-amber-500/50 bg-amber-950/90 px-3 py-1 font-mono text-[11px] font-semibold text-amber-300 shadow-lg">
+        <div className="pointer-events-none absolute bottom-12 left-1/2 z-20 -translate-x-1/2 rounded-full border border-amber-500/50 bg-amber-50/95 dark:bg-amber-950/90 px-3 py-1 font-mono text-[11px] font-semibold text-amber-700 dark:text-amber-300 shadow-lg">
           PIN MARKER ACTIVE — CLICK MESH SURFACE TO PLACE PIN
         </div>
       )}
 
       {/* Bottom Right Status Pill */}
-      <div className="pointer-events-none absolute bottom-3 right-3 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-[#171a21]/95 px-3 py-1 font-mono text-[11px] tabular-nums text-slate-300 shadow-lg backdrop-blur-xl">
+      <div className="pointer-events-none absolute bottom-3 right-3 z-20 flex items-center gap-2 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#171a21]/95 px-3 py-1 font-mono text-[11px] tabular-nums text-[#0f172a] dark:text-slate-300 shadow-sm dark:shadow-lg backdrop-blur-xl">
         <span>Parts: {components.length + cadAssets.length}</span>
-        <span className="text-white/20">|</span>
+        <span className="text-[#cbd5e1] dark:text-white/20">|</span>
         <span>Wires: {wires.length}</span>
-        <span className="text-white/20">|</span>
-        <span className={totalCollisions > 0 ? "text-rose-400 font-semibold" : "text-emerald-400"}>
+        <span className="text-[#cbd5e1] dark:text-white/20">|</span>
+        <span className={totalCollisions > 0 ? "text-rose-600 dark:text-rose-400 font-semibold" : "text-emerald-600 dark:text-emerald-400"}>
           Collisions: {totalCollisions}
         </span>
       </div>

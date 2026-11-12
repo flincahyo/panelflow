@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { LeftSidebar } from "@/components/ui/LeftSidebar";
 import { RightInspector } from "@/components/ui/RightInspector";
 import { SheetTabs } from "@/components/ui/SheetTabs";
@@ -17,7 +17,7 @@ const PanelViewport = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-full w-full items-center justify-center bg-[#090b10] font-mono text-xs text-slate-400">
+      <div className="flex h-full w-full items-center justify-center bg-[#f1f5f9] dark:bg-[#090b10] font-mono text-xs text-[#64748b] dark:text-slate-400">
         INITIALIZING 3D CAD ENGINE...
       </div>
     ),
@@ -26,17 +26,30 @@ const PanelViewport = dynamic(
 
 export function PanelWorkbench() {
   const viewportMode = usePanelStore((s) => s.viewportMode);
+  const setTheme = usePanelStore((s) => s.setTheme);
   const [inspectorOpen, setInspectorOpen] = useState(true);
 
+  // Sync theme from localStorage on initial client mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("panelflow_saved_theme");
+      if (saved === "light" || saved === "dark") {
+        setTheme(saved);
+      }
+    } catch {
+      // storage unavailable
+    }
+  }, [setTheme]);
+
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#090b10] text-slate-100 antialiased select-none">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#f8fafc] dark:bg-[#090b10] text-[#0f172a] dark:text-slate-100 antialiased select-none">
       <TopToolbar
         inspectorOpen={inspectorOpen}
         onToggleInspector={() => setInspectorOpen((v) => !v)}
       />
       <main className="flex min-h-0 flex-1 overflow-hidden">
         <LeftSidebar />
-        <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#090b10]">
+        <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-white dark:bg-[#090b10]">
           <div className="relative min-h-0 flex-1 overflow-hidden">
             {viewportMode === "3d" ? <PanelViewport /> : <Panel2DCanvas />}
           </div>

@@ -56,6 +56,32 @@ function makeUid(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
+function applyThemeToDom(theme: "dark" | "light") {
+  if (typeof document !== "undefined") {
+    const root = document.documentElement;
+    if (theme === "light") {
+      root.classList.remove("dark");
+      root.classList.add("light");
+      root.style.backgroundColor = "#f8fafc";
+      root.style.colorScheme = "light";
+    } else {
+      root.classList.add("dark");
+      root.classList.remove("light");
+      root.style.backgroundColor = "#090b10";
+      root.style.colorScheme = "dark";
+    }
+  }
+  if (typeof window !== "undefined") {
+    try {
+      window.localStorage.setItem("panelflow_saved_theme", theme);
+    } catch {
+      // ignore storage errors
+    }
+  }
+}
+
+export type ThemeMode = "dark" | "light";
+
 export type SheetSnapshot = PanelSheet;
 
 function cloneSheet(sheet: PanelSheet): PanelSheet {
@@ -272,6 +298,7 @@ interface PanelStore {
   titleBlock: TitleBlockMeta;
 
   // Global Workspace State
+  theme: ThemeMode;
   viewportMode: ViewportMode;
   canvasTool2D: CanvasTool2D;
   displayUnit: LengthUnit;
@@ -298,6 +325,8 @@ interface PanelStore {
   deleteSheet: (sheetId: string) => boolean;
 
   // Inspector & Toolbar Focus
+  setTheme: (theme: ThemeMode) => void;
+  toggleTheme: () => void;
   requestInspectorFocus: () => void;
   setViewportMode: (mode: ViewportMode) => void;
   setCanvasTool2D: (tool: CanvasTool2D) => void;
@@ -399,6 +428,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   wires: defaultInitialSheet.wires,
   titleBlock: defaultInitialSheet.titleBlock,
 
+  theme: "dark",
   viewportMode: "2d",
   canvasTool2D: "select",
   displayUnit: "mm",
@@ -594,6 +624,15 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     return true;
   },
 
+  setTheme: (theme) => {
+    applyThemeToDom(theme);
+    set({ theme });
+  },
+  toggleTheme: () => {
+    const next = get().theme === "dark" ? "light" : "dark";
+    applyThemeToDom(next);
+    set({ theme: next });
+  },
   requestInspectorFocus: () =>
     set((state) => ({ inspectorFocusNonce: state.inspectorFocusNonce + 1 })),
   setViewportMode: (mode) => set({ viewportMode: mode }),

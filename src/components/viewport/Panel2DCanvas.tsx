@@ -504,6 +504,7 @@ function CadAsset2DSymbol({
 export function Panel2DCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const theme = usePanelStore((s) => s.theme);
   const enclosure = usePanelStore((s) => s.enclosure);
   const plateConfig = usePanelStore((s) => s.plateConfig);
   const displayUnit = usePanelStore((s) => s.displayUnit);
@@ -881,7 +882,7 @@ export function Panel2DCanvas() {
   return (
     <div
       ref={containerRef}
-      className="relative h-full w-full overflow-hidden bg-[#090b10] select-none"
+      className="relative h-full w-full overflow-hidden bg-white dark:bg-[#090b10] select-none"
       onWheel={handleWheel}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -897,14 +898,14 @@ export function Panel2DCanvas() {
       }}
     >
       {/* Top Engineering Ruler */}
-      <div className="pointer-events-none absolute top-0 right-0 left-6 z-20 h-6 overflow-hidden border-b border-white/10 bg-[#0c0e14]/90 font-mono text-[9px] text-slate-400 backdrop-blur-md">
+      <div className="pointer-events-none absolute top-0 right-0 left-6 z-20 h-6 overflow-hidden border-b border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#0c0e14]/90 font-mono text-[9px] text-[#64748b] dark:text-slate-400 backdrop-blur-md">
         {xTicks.map((xMm) => {
           const left = pan.x + xMm * zoom - 24;
           return (
             <div
               key={xMm}
               style={{ transform: `translateX(${left}px)` }}
-              className="absolute top-0 bottom-0 border-l border-white/10 pl-1"
+              className="absolute top-0 bottom-0 border-l border-[#e2e8f0] dark:border-white/10 pl-1"
             >
               {xMm}
             </div>
@@ -913,14 +914,14 @@ export function Panel2DCanvas() {
       </div>
 
       {/* Left Engineering Ruler */}
-      <div className="pointer-events-none absolute top-6 bottom-0 left-0 z-20 w-6 overflow-hidden border-r border-white/10 bg-[#0c0e14]/90 font-mono text-[9px] text-slate-400 backdrop-blur-md">
+      <div className="pointer-events-none absolute top-6 bottom-0 left-0 z-20 w-6 overflow-hidden border-r border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#0c0e14]/90 font-mono text-[9px] text-[#64748b] dark:text-slate-400 backdrop-blur-md">
         {yTicks.map((yMm) => {
           const top = pan.y - yMm * zoom - 24;
           return (
             <div
               key={yMm}
               style={{ transform: `translateY(${top}px)` }}
-              className="absolute right-0 left-0 border-t border-white/10 pt-0.5 text-center"
+              className="absolute right-0 left-0 border-t border-[#e2e8f0] dark:border-white/10 pt-0.5 text-center"
             >
               {yMm}
             </div>
@@ -929,20 +930,20 @@ export function Panel2DCanvas() {
       </div>
 
       {/* Corner Origin Badge */}
-      <div className="pointer-events-none absolute top-0 left-0 z-30 flex h-6 w-6 items-center justify-center border-r border-b border-white/10 bg-[#111318] font-mono text-[8px] font-bold text-slate-300">
+      <div className="pointer-events-none absolute top-0 left-0 z-30 flex h-6 w-6 items-center justify-center border-r border-b border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#111318] font-mono text-[8px] font-bold text-[#0f172a] dark:text-slate-300">
         mm
       </div>
 
       {/* Top Floating Pill Toolbar (Centered ala RelayFlow) */}
-      <div className="absolute top-9 left-1/2 -translate-x-1/2 z-20 flex max-w-[94%] flex-wrap items-center gap-2 rounded-full border border-white/10 bg-[#171a21]/95 px-3 py-1.5 shadow-2xl backdrop-blur-xl">
-        <div className="flex items-center rounded-full border border-white/10 bg-[#0c0e14] p-0.5">
+      <div className="absolute top-9 left-1/2 -translate-x-1/2 z-20 flex max-w-[94%] flex-wrap items-center gap-2 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#171a21]/95 px-3 py-1.5 shadow-sm dark:shadow-2xl backdrop-blur-xl">
+        <div className="flex items-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#0c0e14] p-0.5">
           <button
             type="button"
             onClick={() => setCanvasTool2D("select")}
             className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
               canvasTool2D === "select"
-                ? "bg-white text-black font-semibold shadow-xs"
-                : "text-slate-400 hover:text-slate-200"
+                ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-semibold shadow-xs"
+                : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
             }`}
             title="Select & Move (Click & Drag)"
           >
@@ -954,8 +955,8 @@ export function Panel2DCanvas() {
             onClick={() => setCanvasTool2D("wire")}
             className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
               canvasTool2D === "wire"
-                ? "bg-white text-black font-semibold shadow-xs"
-                : "text-slate-400 hover:text-slate-200"
+                ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-semibold shadow-xs"
+                : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
             }`}
             title="Wire Connection Tool (Click Pin A -> Pin B)"
           >
@@ -967,8 +968,8 @@ export function Panel2DCanvas() {
             onClick={() => setCanvasTool2D("measure")}
             className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
               canvasTool2D === "measure"
-                ? "bg-white text-black font-semibold shadow-xs"
-                : "text-slate-400 hover:text-slate-200"
+                ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-semibold shadow-xs"
+                : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
             }`}
             title="Measure Dimension Tool (Click Point A -> Point B, Esc to clear)"
           >
@@ -980,8 +981,8 @@ export function Panel2DCanvas() {
             onClick={() => setCanvasTool2D("pan")}
             className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
               canvasTool2D === "pan"
-                ? "bg-white text-black font-semibold shadow-xs"
-                : "text-slate-400 hover:text-slate-200"
+                ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-semibold shadow-xs"
+                : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
             }`}
             title="Pan Canvas (or Space + Drag)"
           >
@@ -991,13 +992,13 @@ export function Panel2DCanvas() {
         </div>
 
         {/* Undo / Redo in Toolbar */}
-        <div className="flex items-center rounded-full border border-white/10 bg-[#0c0e14] p-0.5">
+        <div className="flex items-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#0c0e14] p-0.5">
           <button
             type="button"
             onClick={undo}
             disabled={!canUndo}
             title="Undo (Ctrl+Z)"
-            className="flex items-center rounded-full p-1 text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent"
+            className="flex items-center rounded-full p-1 text-[#334155] dark:text-slate-300 hover:bg-[#e2e8f0] dark:hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent"
           >
             <Undo2 className="h-3.5 w-3.5" />
           </button>
@@ -1006,14 +1007,14 @@ export function Panel2DCanvas() {
             onClick={redo}
             disabled={!canRedo}
             title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
-            className="flex items-center rounded-full p-1 text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent"
+            className="flex items-center rounded-full p-1 text-[#334155] dark:text-slate-300 hover:bg-[#e2e8f0] dark:hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent"
           >
             <Redo2 className="h-3.5 w-3.5" />
           </button>
         </div>
 
         {/* Grid Snap Selector Pill */}
-        <div className="flex items-center rounded-full border border-white/10 bg-[#0c0e14] p-0.5">
+        <div className="flex items-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#0c0e14] p-0.5">
           {([5, 10, 25] as GridSnapMm[]).map((snap) => (
             <button
               key={snap}
@@ -1021,8 +1022,8 @@ export function Panel2DCanvas() {
               onClick={() => setGridSnapMm(snap)}
               className={`rounded-full px-2 py-0.5 font-mono text-[10px] transition-all ${
                 gridSnapMm === snap
-                  ? "bg-white font-bold text-black shadow-xs"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-bold shadow-xs"
+                  : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
               }`}
             >
               {snap}mm
@@ -1032,7 +1033,7 @@ export function Panel2DCanvas() {
 
         {/* Wire Options when Wire Tool Active */}
         {canvasTool2D === "wire" && (
-          <div className="flex items-center gap-1.5 border-l border-white/10 pl-2">
+          <div className="flex items-center gap-1.5 border-l border-[#e2e8f0] dark:border-white/10 pl-2">
             <div className="flex items-center gap-1">
               {WIRE_COLORS.map((wc) => (
                 <button
@@ -1041,8 +1042,8 @@ export function Panel2DCanvas() {
                   onClick={() => setActiveWireColor(wc.code)}
                   className={`flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] transition-all ${
                     activeWireColor === wc.code
-                      ? "border-white bg-white/20 text-white font-bold"
-                      : "border-white/10 bg-[#0c0e14] text-slate-400 hover:text-slate-200"
+                      ? "border-[#0f172a] dark:border-white bg-slate-200 dark:bg-white/20 text-[#0f172a] dark:text-white font-bold"
+                      : "border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14] text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
                   }`}
                 >
                   <span
@@ -1056,7 +1057,7 @@ export function Panel2DCanvas() {
             <select
               value={activeWireGauge}
               onChange={(e) => setActiveWireGauge(e.target.value)}
-              className="rounded-full border border-white/10 bg-[#0c0e14] px-2 py-0.5 font-mono text-[10px] text-slate-200 outline-none"
+              className="rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14] px-2 py-0.5 font-mono text-[10px] text-[#0f172a] dark:text-slate-200 outline-none"
             >
               <option value="0.75">0.75 mm² (Ø2.4)</option>
               <option value="1.0">1.0 mm² (Ø2.7)</option>
@@ -1068,7 +1069,7 @@ export function Panel2DCanvas() {
               <option value="16.0">16.0 mm² (Ø8.0)</option>
             </select>
             {activeWireStartPin && (
-              <span className="font-mono text-[10px] font-semibold text-amber-400 animate-pulse">
+              <span className="font-mono text-[10px] font-semibold text-amber-500 animate-pulse">
                 Click target pin...
               </span>
             )}
@@ -1076,8 +1077,8 @@ export function Panel2DCanvas() {
         )}
 
         {canvasTool2D === "measure" && (
-          <div className="flex items-center gap-2 border-l border-white/10 pl-2">
-            <span className="font-mono text-[10px] font-semibold text-sky-400">
+          <div className="flex items-center gap-2 border-l border-[#e2e8f0] dark:border-white/10 pl-2">
+            <span className="font-mono text-[10px] font-semibold text-sky-600 dark:text-sky-400">
               {!measureStart
                 ? "Click point A"
                 : !measureEnd
@@ -1089,8 +1090,8 @@ export function Panel2DCanvas() {
 
         {(collisionReport.overlappingIds.size > 0 ||
           collisionReport.outOfBoundsIds.size > 0) && (
-          <div className="flex items-center gap-1.5 border-l border-white/10 pl-2">
-            <span className="rounded-full border border-rose-500/40 bg-rose-950/80 px-2 py-0.5 font-mono text-[10px] font-semibold text-rose-300">
+          <div className="flex items-center gap-1.5 border-l border-[#e2e8f0] dark:border-white/10 pl-2">
+            <span className="rounded-full border border-rose-500/40 bg-rose-50 dark:bg-rose-950/80 px-2 py-0.5 font-mono text-[10px] font-semibold text-rose-700 dark:text-rose-300">
               {collisionReport.overlappingIds.size > 0 &&
                 `${collisionReport.overlapPairs.length} overlap`}
               {collisionReport.overlappingIds.size > 0 &&
@@ -1106,7 +1107,7 @@ export function Panel2DCanvas() {
       {/* Bottom Floating Status Pills (Senada RelayFlow) */}
       {/* Bottom Left / Center: Cursor & Snap Coordinates + Zoom Controls */}
       <div className="absolute bottom-3 left-9 z-20 flex flex-wrap items-center gap-2">
-        <div className="rounded-full border border-white/10 bg-[#171a21]/95 px-3 py-1 font-mono text-[11px] tabular-nums text-slate-300 shadow-xl backdrop-blur-xl">
+        <div className="rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#171a21]/95 px-3 py-1 font-mono text-[11px] tabular-nums text-[#0f172a] dark:text-slate-300 shadow-sm dark:shadow-xl backdrop-blur-xl">
           {cursorWorld
             ? `X: ${Math.round(cursorWorld.xMm)}mm | Y: ${Math.round(
                 cursorWorld.yMm
@@ -1114,22 +1115,22 @@ export function Panel2DCanvas() {
             : `Snap: ${gridSnapMm}mm`}
         </div>
 
-        <div className="flex items-center gap-1 rounded-full border border-white/10 bg-[#171a21]/95 p-0.5 shadow-xl backdrop-blur-xl">
+        <div className="flex items-center gap-1 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#171a21]/95 p-0.5 shadow-sm dark:shadow-xl backdrop-blur-xl">
           <button
             type="button"
             onClick={() => setZoom((z) => Math.max(0.2, z / 1.2))}
-            className="rounded-full p-1 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+            className="rounded-full p-1 text-[#64748b] dark:text-slate-400 hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white transition-colors"
             title="Zoom Out"
           >
             <ZoomOut className="h-3.5 w-3.5" />
           </button>
-          <span className="min-w-[42px] text-center font-mono text-[11px] font-medium tabular-nums text-slate-200">
+          <span className="min-w-[42px] text-center font-mono text-[11px] font-medium tabular-nums text-[#0f172a] dark:text-slate-200">
             {Math.round(zoom * 100)}%
           </span>
           <button
             type="button"
             onClick={() => setZoom((z) => Math.min(8, z * 1.2))}
-            className="rounded-full p-1 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+            className="rounded-full p-1 text-[#64748b] dark:text-slate-400 hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white transition-colors"
             title="Zoom In"
           >
             <ZoomIn className="h-3.5 w-3.5" />
@@ -1137,7 +1138,7 @@ export function Panel2DCanvas() {
           <button
             type="button"
             onClick={fitToView}
-            className="flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+            className="flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] text-[#64748b] dark:text-slate-400 hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white transition-colors"
             title="Fit Sheet to View"
           >
             <Maximize2 className="h-3 w-3" />
@@ -1147,14 +1148,14 @@ export function Panel2DCanvas() {
       </div>
 
       {/* Bottom Right: Parts & Wires Count & Collisions Pill */}
-      <div className="pointer-events-none absolute right-4 bottom-3 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-[#171a21]/95 px-3 py-1 font-mono text-[11px] text-slate-300 shadow-xl backdrop-blur-xl">
+      <div className="pointer-events-none absolute right-4 bottom-3 z-20 flex items-center gap-2 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#171a21]/95 px-3 py-1 font-mono text-[11px] text-[#0f172a] dark:text-slate-300 shadow-sm dark:shadow-xl backdrop-blur-xl">
         <span>Parts: {components.length + cadAssets.length}</span>
-        <span className="text-white/20">|</span>
+        <span className="text-[#cbd5e1] dark:text-white/20">|</span>
         <span>Wires: {wires.length}</span>
         {collisionReport.overlappingIds.size > 0 && (
           <>
-            <span className="text-white/20">|</span>
-            <span className="text-rose-400 font-semibold">
+            <span className="text-[#cbd5e1] dark:text-white/20">|</span>
+            <span className="text-rose-600 dark:text-rose-400 font-semibold">
               {collisionReport.overlapPairs.length} Overlaps
             </span>
           </>
@@ -1179,7 +1180,12 @@ export function Panel2DCanvas() {
             height={gridSnapMm}
             patternUnits="userSpaceOnUse"
           >
-            <circle cx={0} cy={0} r={0.7} fill="#161920" />
+            <circle
+              cx={0}
+              cy={0}
+              r={0.7}
+              fill={theme === "light" ? "#cbd5e1" : "#161920"}
+            />
           </pattern>
           <pattern
             id="duct-hatch"
@@ -1188,7 +1194,14 @@ export function Panel2DCanvas() {
             patternTransform="rotate(45 0 0)"
             patternUnits="userSpaceOnUse"
           >
-            <line x1="0" y1="0" x2="0" y2="6" stroke="#252932" strokeWidth="1" />
+            <line
+              x1="0"
+              y1="0"
+              x2="0"
+              y2="6"
+              stroke={theme === "light" ? "#cbd5e1" : "#252932"}
+              strokeWidth="1"
+            />
           </pattern>
           <marker
             id="measure-arrow"
@@ -1199,22 +1212,29 @@ export function Panel2DCanvas() {
             markerHeight="5"
             orient="auto-start-reverse"
           >
-            <path d="M 0 1 L 10 5 L 0 9 z" fill="#ffffff" />
+            <path
+              d="M 0 1 L 10 5 L 0 9 z"
+              fill={theme === "light" ? "#0f172a" : "#ffffff"}
+            />
           </marker>
         </defs>
 
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-          {/* Technical Drawing Sheet Outline (Deep Obsidian Dark CAD) */}
+          {/* Technical Drawing Sheet Outline (Dark Obsidian / Light Clean White) */}
           <g>
             <rect
               x={-sheetW / 2}
               y={-sheetH / 2}
               width={sheetW}
               height={sheetH}
-              fill="#090b10"
-              stroke="#1a1e27"
+              fill={theme === "light" ? "#ffffff" : "#090b10"}
+              stroke={theme === "light" ? "#e2e8f0" : "#1a1e27"}
               strokeWidth={1.2}
-              filter="drop-shadow(0 8px 24px rgba(0,0,0,0.6))"
+              filter={
+                theme === "light"
+                  ? "drop-shadow(0 6px 20px rgba(15,23,42,0.08))"
+                  : "drop-shadow(0 8px 24px rgba(0,0,0,0.6))"
+              }
             />
             <rect
               x={-sheetW / 2 + 8}
@@ -1222,7 +1242,7 @@ export function Panel2DCanvas() {
               width={sheetW - 16}
               height={sheetH - 16}
               fill="none"
-              stroke="#161920"
+              stroke={theme === "light" ? "#edf2f7" : "#161920"}
               strokeWidth={0.5}
             />
           </g>
@@ -1235,7 +1255,7 @@ export function Panel2DCanvas() {
               width={plateW}
               height={plateH}
               fill="url(#grid-dots)"
-              stroke="#252932"
+              stroke={theme === "light" ? "#94a3b8" : "#252932"}
               strokeWidth={1.4}
             />
             {/* Backplate Dimension Annotations */}
@@ -1244,7 +1264,7 @@ export function Panel2DCanvas() {
               y={-plateH / 2 - 8}
               fontSize={8}
               fontFamily="monospace"
-              fill="#64748b"
+              fill={theme === "light" ? "#334155" : "#64748b"}
               textAnchor="middle"
             >
               MOUNTING PLATE: {plateW} x {plateH} mm
@@ -1805,8 +1825,8 @@ export function Panel2DCanvas() {
               y={tbY}
               width={tbW}
               height={tbH}
-              fill="#0c0e14"
-              stroke="#252932"
+              fill={theme === "light" ? "#f8fafc" : "#0c0e14"}
+              stroke={theme === "light" ? "#cbd5e1" : "#252932"}
               strokeWidth={0.9}
             />
             <line
@@ -1814,7 +1834,7 @@ export function Panel2DCanvas() {
               y1={tbY + 15}
               x2={tbX + tbW}
               y2={tbY + 15}
-              stroke="#252932"
+              stroke={theme === "light" ? "#cbd5e1" : "#252932"}
               strokeWidth={0.5}
             />
             <line
@@ -1822,7 +1842,7 @@ export function Panel2DCanvas() {
               y1={tbY + 30}
               x2={tbX + tbW}
               y2={tbY + 30}
-              stroke="#252932"
+              stroke={theme === "light" ? "#cbd5e1" : "#252932"}
               strokeWidth={0.5}
             />
             <line
@@ -1830,7 +1850,7 @@ export function Panel2DCanvas() {
               y1={tbY}
               x2={tbX + 135}
               y2={tbY + tbH}
-              stroke="#252932"
+              stroke={theme === "light" ? "#cbd5e1" : "#252932"}
               strokeWidth={0.5}
             />
             <line
@@ -1838,7 +1858,7 @@ export function Panel2DCanvas() {
               y1={tbY + 15}
               x2={tbX + 190}
               y2={tbY + tbH}
-              stroke="#252932"
+              stroke={theme === "light" ? "#cbd5e1" : "#252932"}
               strokeWidth={0.5}
             />
             <text
@@ -1847,7 +1867,7 @@ export function Panel2DCanvas() {
               fontSize={6}
               fontFamily="sans-serif"
               fontWeight="bold"
-              fill="#f1f5f9"
+              fill={theme === "light" ? "#0f172a" : "#f1f5f9"}
             >
               PROJECT: {titleBlock.projectName}
             </text>
@@ -1856,7 +1876,7 @@ export function Panel2DCanvas() {
               y={tbY + 24}
               fontSize={5.5}
               fontFamily="sans-serif"
-              fill="#94a3b8"
+              fill={theme === "light" ? "#475569" : "#94a3b8"}
             >
               DRAWER: {titleBlock.drawer}
             </text>
@@ -1874,7 +1894,7 @@ export function Panel2DCanvas() {
               y={tbY + 10}
               fontSize={5.5}
               fontFamily="sans-serif"
-              fill="#94a3b8"
+              fill={theme === "light" ? "#475569" : "#94a3b8"}
             >
               DATE: {titleBlock.date}
             </text>
@@ -1883,7 +1903,7 @@ export function Panel2DCanvas() {
               y={tbY + 24}
               fontSize={5.5}
               fontFamily="sans-serif"
-              fill="#94a3b8"
+              fill={theme === "light" ? "#475569" : "#94a3b8"}
             >
               SCALE: {titleBlock.scale}
             </text>
@@ -1892,7 +1912,7 @@ export function Panel2DCanvas() {
               y={tbY + 39}
               fontSize={5.5}
               fontFamily="sans-serif"
-              fill="#94a3b8"
+              fill={theme === "light" ? "#475569" : "#94a3b8"}
             >
               REV: {titleBlock.rev}
             </text>
@@ -1902,7 +1922,7 @@ export function Panel2DCanvas() {
               fontSize={5.5}
               fontFamily="sans-serif"
               fontWeight="bold"
-              fill="#cbd5e1"
+              fill={theme === "light" ? "#334155" : "#cbd5e1"}
             >
               SHEET:
             </text>
@@ -1912,7 +1932,7 @@ export function Panel2DCanvas() {
               fontSize={6.5}
               fontFamily="monospace"
               fontWeight="bold"
-              fill="#ffffff"
+              fill={theme === "light" ? "#0f172a" : "#ffffff"}
             >
               {titleBlock.sheetNo}
             </text>

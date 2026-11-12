@@ -112,6 +112,7 @@ export interface CustomCadAsset {
 }
 
 export type ViewportMode = "3d" | "2d";
+export type ThemeMode = "dark" | "light";
 export type CanvasTool2D = "select" | "wire" | "pan" | "measure";
 export type WireColorCode = "R" | "S" | "T" | "N" | "PE" | "DC+" | "DC-";
 

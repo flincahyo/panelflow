@@ -265,23 +265,23 @@ export function LeftSidebar() {
   ];
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-r border-white/10 bg-[#0c0e14]/90 text-slate-200 backdrop-blur-xl">
+    <aside className="flex w-72 shrink-0 flex-col border-r border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14]/90 text-[#0f172a] dark:text-slate-200 backdrop-blur-xl">
       {/* Search Bar Pill */}
       <div className="p-2.5 pb-2">
-        <div className="flex items-center gap-2 rounded-full border border-white/10 bg-[#171a21] px-3 py-1.5 focus-within:border-white/25 transition-colors">
-          <Search className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+        <div className="flex items-center gap-2 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#171a21] px-3 py-1.5 focus-within:border-[#cbd5e1] dark:focus-within:border-white/25 transition-colors shadow-xs">
+          <Search className="h-3.5 w-3.5 shrink-0 text-[#64748b] dark:text-slate-500" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search parts, rails, symbols..."
-            className="w-full bg-transparent text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none"
+            className="w-full bg-transparent text-xs text-[#0f172a] dark:text-slate-100 placeholder:text-[#94a3b8] dark:placeholder:text-slate-500 focus:outline-none"
           />
           {searchQuery && (
             <button
               type="button"
               onClick={() => setSearchQuery("")}
-              className="text-slate-500 hover:text-white"
+              className="text-[#64748b] dark:text-slate-500 hover:text-[#0f172a] dark:hover:text-white"
             >
               <X className="h-3 w-3" />
             </button>
@@ -291,7 +291,7 @@ export function LeftSidebar() {
 
       {/* Category Pill Switcher */}
       <div className="px-2.5 pb-2">
-        <div className="grid grid-cols-4 gap-1 rounded-xl border border-white/10 bg-[#131620]/70 p-1">
+        <div className="grid grid-cols-4 gap-1 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#131620]/70 p-1">
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const active = activeTab === tab.id;
@@ -302,8 +302,8 @@ export function LeftSidebar() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex flex-col items-center gap-0.5 rounded-lg py-1.5 text-[10px] font-medium transition-all ${
                   active
-                    ? "bg-white text-black font-semibold shadow-xs"
-                    : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+                    ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-semibold shadow-xs"
+                    : "text-[#64748b] dark:text-slate-400 hover:bg-[#e2e8f0] dark:hover:bg-white/5 hover:text-[#0f172a] dark:hover:text-slate-200"
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" />
@@ -317,18 +317,18 @@ export function LeftSidebar() {
       {/* Tab Body */}
       <div className="flex-1 overflow-y-auto px-2.5 pb-3 space-y-3 text-xs">
         {activeTab === "components" && (
-          <div className="rounded-xl border border-white/10 bg-[#131620]/70 p-2.5 space-y-2.5">
+          <div className="rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#131620]/70 p-2.5 space-y-2.5 shadow-xs">
             <div className="flex items-center justify-between">
-              <span className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
+              <span className="font-mono text-[10px] uppercase tracking-wider text-[#64748b] dark:text-slate-400">
                 Parts Library
               </span>
-              <span className="font-mono text-[10px] text-slate-500">
+              <span className="font-mono text-[10px] text-[#94a3b8] dark:text-slate-500">
                 DIN Auto-Snap
               </span>
             </div>
 
             {filteredComponents.length === 0 ? (
-              <div className="py-6 text-center text-[11px] text-slate-500">
+              <div className="py-6 text-center text-[11px] text-[#94a3b8] dark:text-slate-500">
                 No matching parts
               </div>
             ) : (
@@ -339,7 +339,7 @@ export function LeftSidebar() {
                     type="button"
                     onClick={() => addComponent(tpl.id)}
                     title={`Add ${tpl.name} (${tpl.widthMm}×${tpl.heightMm}mm)`}
-                    className="group relative flex flex-col items-center justify-between rounded-xl border border-white/10 bg-[#171a21] p-2.5 text-center transition-all hover:border-white/25 hover:bg-[#1d212b] active:scale-[0.98]"
+                    className="group relative flex flex-col items-center justify-between rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] p-2.5 text-center transition-all hover:border-[#cbd5e1] dark:hover:border-white/25 hover:bg-[#f1f5f9] dark:hover:bg-[#1d212b] active:scale-[0.98]"
                   >
                     <div className="flex h-10 w-full items-center justify-center">
                       <PartVectorIcon
@@ -348,15 +348,15 @@ export function LeftSidebar() {
                       />
                     </div>
                     <div className="mt-1.5 w-full">
-                      <div className="truncate text-[11px] font-medium text-slate-100 group-hover:text-white">
+                      <div className="truncate text-[11px] font-medium text-[#0f172a] dark:text-slate-100 group-hover:text-[#0f172a] dark:group-hover:text-white">
                         {tpl.shortName}
                       </div>
-                      <div className="mt-0.5 font-mono text-[9px] tabular-nums text-slate-500">
+                      <div className="mt-0.5 font-mono text-[9px] tabular-nums text-[#64748b] dark:text-slate-500">
                         {formatDim(tpl.widthMm, displayUnit)} ×{" "}
                         {formatDim(tpl.heightMm, displayUnit)}
                       </div>
                     </div>
-                    <span className="absolute top-1.5 right-1.5 rounded-full bg-white/5 p-0.5 text-slate-500 opacity-0 transition-opacity group-hover:opacity-100 group-hover:text-white">
+                    <span className="absolute top-1.5 right-1.5 rounded-full bg-[#e2e8f0] dark:bg-white/5 p-0.5 text-[#64748b] dark:text-slate-500 opacity-0 transition-opacity group-hover:opacity-100 group-hover:text-[#0f172a] dark:group-hover:text-white">
                       <Plus className="h-2.5 w-2.5" />
                     </span>
                   </button>
@@ -369,12 +369,12 @@ export function LeftSidebar() {
         {activeTab === "rails" && (
           <div className="space-y-2.5">
             {/* DIN Rails Accordion Card */}
-            <div className="rounded-xl border border-white/10 bg-[#131620]/70 p-2.5 space-y-2">
+            <div className="rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#131620]/70 p-2.5 space-y-2 shadow-xs">
               <div className="flex items-center justify-between">
                 <button
                   type="button"
                   onClick={() => setRailsOpen((v) => !v)}
-                  className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-300"
+                  className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-[#334155] dark:text-slate-300"
                 >
                   <ChevronDown
                     className={`h-3 w-3 transition-transform ${
@@ -386,7 +386,7 @@ export function LeftSidebar() {
                 <button
                   type="button"
                   onClick={() => addRail()}
-                  className="flex items-center gap-1 rounded-full bg-white px-2.5 py-0.5 text-[10px] font-semibold text-black hover:bg-slate-200 transition-colors"
+                  className="flex items-center gap-1 rounded-full bg-[#0f172a] dark:bg-white px-2.5 py-0.5 text-[10px] font-semibold text-white dark:text-black hover:bg-[#334155] dark:hover:bg-slate-200 transition-colors"
                 >
                   <Plus className="h-3 w-3" /> Add
                 </button>
@@ -400,15 +400,15 @@ export function LeftSidebar() {
                       onClick={() => setSelected({ kind: "rail", id: rail.id })}
                       className={`flex cursor-pointer items-center justify-between rounded-lg border px-2.5 py-1.5 transition-colors ${
                         selected?.kind === "rail" && selected.id === rail.id
-                          ? "border-white/35 bg-[#343842]/70"
-                          : "border-white/10 bg-[#171a21] hover:border-white/20"
+                          ? "border-[#0284c7] bg-[#e0f2fe] text-[#0369a1] dark:border-white/35 dark:bg-[#343842]/70 dark:text-slate-200"
+                          : "border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] hover:border-[#cbd5e1] dark:hover:border-white/20"
                       }`}
                     >
                       <div className="min-w-0">
-                        <div className="truncate font-medium text-slate-200">
+                        <div className="truncate font-medium text-[#0f172a] dark:text-slate-200">
                           {rail.name}
                         </div>
-                        <div className="font-mono text-[10px] tabular-nums text-slate-400">
+                        <div className="font-mono text-[10px] tabular-nums text-[#64748b] dark:text-slate-400">
                           L={formatDim(rail.lengthMm, displayUnit)} · Y=
                           {formatDim(rail.yMm, displayUnit)}
                         </div>
@@ -419,7 +419,7 @@ export function LeftSidebar() {
                           e.stopPropagation();
                           removeRail(rail.id);
                         }}
-                        className="p-1 text-slate-500 hover:text-rose-400"
+                        className="p-1 text-[#94a3b8] dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -430,12 +430,12 @@ export function LeftSidebar() {
             </div>
 
             {/* Wire Ducts Accordion Card */}
-            <div className="rounded-xl border border-white/10 bg-[#131620]/70 p-2.5 space-y-2">
+            <div className="rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#131620]/70 p-2.5 space-y-2 shadow-xs">
               <div className="flex items-center justify-between">
                 <button
                   type="button"
                   onClick={() => setDuctsOpen((v) => !v)}
-                  className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-slate-300"
+                  className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-wider text-[#334155] dark:text-slate-300"
                 >
                   <ChevronDown
                     className={`h-3 w-3 transition-transform ${
@@ -448,14 +448,14 @@ export function LeftSidebar() {
                   <button
                     type="button"
                     onClick={() => addDuct("horizontal")}
-                    className="rounded-full border border-white/10 bg-[#171a21] px-2 py-0.5 text-[10px] text-slate-200 hover:border-white/25 hover:bg-white/10"
+                    className="rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] px-2 py-0.5 text-[10px] text-[#0f172a] dark:text-slate-200 hover:border-[#cbd5e1] dark:hover:border-white/25 hover:bg-[#f1f5f9] dark:hover:bg-white/10"
                   >
                     + H
                   </button>
                   <button
                     type="button"
                     onClick={() => addDuct("vertical")}
-                    className="rounded-full border border-white/10 bg-[#171a21] px-2 py-0.5 text-[10px] text-slate-200 hover:border-white/25 hover:bg-white/10"
+                    className="rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] px-2 py-0.5 text-[10px] text-[#0f172a] dark:text-slate-200 hover:border-[#cbd5e1] dark:hover:border-white/25 hover:bg-[#f1f5f9] dark:hover:bg-white/10"
                   >
                     + V
                   </button>
@@ -470,15 +470,15 @@ export function LeftSidebar() {
                       onClick={() => setSelected({ kind: "duct", id: duct.id })}
                       className={`flex cursor-pointer items-center justify-between rounded-lg border px-2.5 py-1.5 transition-colors ${
                         selected?.kind === "duct" && selected.id === duct.id
-                          ? "border-white/35 bg-[#343842]/70"
-                          : "border-white/10 bg-[#171a21] hover:border-white/20"
+                          ? "border-[#0284c7] bg-[#e0f2fe] text-[#0369a1] dark:border-white/35 dark:bg-[#343842]/70 dark:text-slate-200"
+                          : "border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] hover:border-[#cbd5e1] dark:hover:border-white/20"
                       }`}
                     >
                       <div className="min-w-0">
-                        <div className="truncate font-medium text-slate-200">
+                        <div className="truncate font-medium text-[#0f172a] dark:text-slate-200">
                           {duct.name}
                         </div>
-                        <div className="font-mono text-[10px] tabular-nums text-slate-400">
+                        <div className="font-mono text-[10px] tabular-nums text-[#64748b] dark:text-slate-400">
                           {formatDim(duct.widthMm, displayUnit)} ×{" "}
                           {formatDim(duct.heightMm, displayUnit)}
                         </div>
@@ -489,7 +489,7 @@ export function LeftSidebar() {
                           e.stopPropagation();
                           removeDuct(duct.id);
                         }}
-                        className="p-1 text-slate-500 hover:text-rose-400"
+                        className="p-1 text-[#94a3b8] dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -503,8 +503,8 @@ export function LeftSidebar() {
 
         {activeTab === "enclosure" && (
           <div className="space-y-3">
-            <div className="rounded-xl border border-white/10 bg-[#131620]/70 p-3 space-y-2.5">
-              <div className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
+            <div className="rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#131620]/70 p-3 space-y-2.5 shadow-xs">
+              <div className="font-mono text-[10px] uppercase tracking-wider text-[#64748b] dark:text-slate-400">
                 Enclosure Dimensions ({displayUnit})
               </div>
 
@@ -518,7 +518,7 @@ export function LeftSidebar() {
                   ] as const
                 ).map(([label, key]) => (
                   <label key={key} className="block space-y-1">
-                    <span className="text-[10px] text-slate-400">{label}</span>
+                    <span className="text-[10px] text-[#64748b] dark:text-slate-400">{label}</span>
                     <input
                       type="number"
                       step={step}
@@ -532,26 +532,26 @@ export function LeftSidebar() {
                         );
                         updateEnclosure({ [key]: Math.max(20, mm) });
                       }}
-                      className="w-full rounded-lg border border-white/10 bg-[#171a21] px-2.5 py-1.5 font-mono text-xs tabular-nums text-slate-100 focus:border-white/30 focus:outline-none"
+                      className="w-full rounded-lg border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] px-2.5 py-1.5 font-mono text-xs tabular-nums text-[#0f172a] dark:text-slate-100 focus:border-[#0284c7] dark:focus:border-white/30 focus:outline-none"
                     />
                   </label>
                 ))}
               </div>
             </div>
 
-            <div className="rounded-xl border border-white/10 bg-[#131620]/70 p-3 space-y-2.5">
+            <div className="rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#131620]/70 p-3 space-y-2.5 shadow-xs">
               <div className="flex items-center justify-between">
-                <span className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
+                <span className="font-mono text-[10px] uppercase tracking-wider text-[#64748b] dark:text-slate-400">
                   Mounting Plate
                 </span>
-                <div className="flex rounded-full border border-white/10 bg-[#171a21] p-0.5 text-[10px] font-mono">
+                <div className="flex rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#171a21] p-0.5 text-[10px] font-mono">
                   <button
                     type="button"
                     onClick={() => updatePlateConfig({ mode: "auto" })}
                     className={`rounded-full px-2.5 py-0.5 transition-colors ${
                       plateConfig.mode === "auto"
-                        ? "bg-white font-semibold text-black"
-                        : "text-slate-400 hover:text-slate-200"
+                        ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-semibold shadow-xs"
+                        : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
                     }`}
                   >
                     Auto
@@ -581,8 +581,8 @@ export function LeftSidebar() {
                     }
                     className={`rounded-full px-2.5 py-0.5 transition-colors ${
                       plateConfig.mode === "manual"
-                        ? "bg-white font-semibold text-black"
-                        : "text-slate-400 hover:text-slate-200"
+                        ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-semibold shadow-xs"
+                        : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
                     }`}
                   >
                     Manual
@@ -593,7 +593,7 @@ export function LeftSidebar() {
               {plateConfig.mode === "manual" ? (
                 <div className="grid grid-cols-2 gap-2">
                   <label className="block space-y-1">
-                    <span className="text-[10px] text-slate-400">
+                    <span className="text-[10px] text-[#64748b] dark:text-slate-400">
                       Plate W ({displayUnit})
                     </span>
                     <input
@@ -611,11 +611,11 @@ export function LeftSidebar() {
                         );
                         updatePlateConfig({ manualWidthMm: Math.max(100, mm) });
                       }}
-                      className="w-full rounded-lg border border-white/10 bg-[#171a21] px-2 py-1 font-mono text-xs tabular-nums text-slate-100 focus:border-white/30 focus:outline-none"
+                      className="w-full rounded-lg border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] px-2 py-1 font-mono text-xs tabular-nums text-[#0f172a] dark:text-slate-100 focus:border-[#0284c7] dark:focus:border-white/30 focus:outline-none"
                     />
                   </label>
                   <label className="block space-y-1">
-                    <span className="text-[10px] text-slate-400">
+                    <span className="text-[10px] text-[#64748b] dark:text-slate-400">
                       Plate H ({displayUnit})
                     </span>
                     <input
@@ -635,12 +635,12 @@ export function LeftSidebar() {
                           manualHeightMm: Math.max(100, mm),
                         });
                       }}
-                      className="w-full rounded-lg border border-white/10 bg-[#171a21] px-2 py-1 font-mono text-xs tabular-nums text-slate-100 focus:border-white/30 focus:outline-none"
+                      className="w-full rounded-lg border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] px-2 py-1 font-mono text-xs tabular-nums text-[#0f172a] dark:text-slate-100 focus:border-[#0284c7] dark:focus:border-white/30 focus:outline-none"
                     />
                   </label>
                 </div>
               ) : (
-                <div className="rounded-lg border border-white/5 bg-[#171a21] px-2.5 py-1.5 font-mono text-[11px] tabular-nums text-slate-300">
+                <div className="rounded-lg border border-[#e2e8f0] dark:border-white/5 bg-[#f8fafc] dark:bg-[#171a21] px-2.5 py-1.5 font-mono text-[11px] tabular-nums text-[#334155] dark:text-slate-300">
                   {formatDim(plateW, displayUnit)} ×{" "}
                   {formatDim(plateH, displayUnit)}
                 </div>
@@ -651,13 +651,13 @@ export function LeftSidebar() {
 
         {activeTab === "cad" && (
           <div className="space-y-3">
-            <div className="rounded-xl border border-white/10 bg-[#131620]/70 p-3 space-y-2.5">
-              <div className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
+            <div className="rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#131620]/70 p-3 space-y-2.5 shadow-xs">
+              <div className="font-mono text-[10px] uppercase tracking-wider text-[#64748b] dark:text-slate-400">
                 Custom CAD Importer
               </div>
 
               <label className="block space-y-1">
-                <span className="text-[10px] text-slate-400">
+                <span className="text-[10px] text-[#64748b] dark:text-slate-400">
                   Source File Native Unit
                 </span>
                 <select
@@ -665,7 +665,7 @@ export function LeftSidebar() {
                   onChange={(e) =>
                     setCadImportUnit(e.target.value as CadImportUnit)
                   }
-                  className="w-full rounded-lg border border-white/10 bg-[#171a21] px-2.5 py-1.5 font-mono text-xs text-slate-100 focus:border-white/30 focus:outline-none"
+                  className="w-full rounded-lg border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] px-2.5 py-1.5 font-mono text-xs text-[#0f172a] dark:text-slate-100 focus:border-[#0284c7] dark:focus:border-white/30 focus:outline-none"
                 >
                   <option value="mm">Millimeters (mm)</option>
                   <option value="cm">Centimeters (cm)</option>
@@ -674,12 +674,12 @@ export function LeftSidebar() {
                 </select>
               </label>
 
-              <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/15 bg-[#171a21] p-4 text-center transition-colors hover:border-white/35">
-                <FileUp className="h-5 w-5 text-slate-300" />
-                <span className="text-xs font-medium text-slate-200">
+              <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-[#cbd5e1] dark:border-white/15 bg-[#f8fafc] dark:bg-[#171a21] p-4 text-center transition-colors hover:border-[#0284c7] dark:hover:border-white/35">
+                <FileUp className="h-5 w-5 text-[#64748b] dark:text-slate-300" />
+                <span className="text-xs font-medium text-[#0f172a] dark:text-slate-200">
                   Upload .GLB / .GLTF / .OBJ / .DXF
                 </span>
-                <span className="font-mono text-[10px] text-slate-500">
+                <span className="font-mono text-[10px] text-[#94a3b8] dark:text-slate-500">
                   Auto-normalized to canonical mm
                 </span>
                 <input
@@ -699,34 +699,21 @@ export function LeftSidebar() {
                   <div
                     key={asset.id}
                     onClick={() => setSelected({ kind: "cad", id: asset.id })}
-                    className={`cursor-pointer rounded-xl border p-2.5 space-y-2 transition-colors ${
+                    className={`rounded-lg border p-2 transition-colors cursor-pointer ${
                       selected?.kind === "cad" && selected.id === asset.id
-                        ? "border-white/35 bg-[#343842]/50"
-                        : "border-white/10 bg-[#171a21] hover:border-white/20"
+                        ? "border-[#0284c7] bg-[#e0f2fe] text-[#0369a1] dark:border-white/35 dark:bg-[#343842]/50 dark:text-slate-200"
+                        : "border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#171a21] hover:border-[#cbd5e1] dark:hover:border-white/20"
                     }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div
-                          className="truncate font-medium text-slate-200"
-                          title={asset.fileName}
-                        >
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0">
+                        <div className="truncate font-medium text-[#0f172a] dark:text-slate-200">
                           {asset.name}
                         </div>
-                        <div className="font-mono text-[10px] tabular-nums text-slate-400">
-                          {asset.format.toUpperCase()} ({asset.sourceUnit}) ·{" "}
-                          {Math.round(asset.boundingBoxMm.w)}×
-                          {Math.round(asset.boundingBoxMm.h)}mm ·{" "}
-                          {asset.pins.length} pins
-                          {typeof asset.entityCount === "number"
-                            ? ` · ${asset.entityCount} ent`
-                            : ""}
+                        <div className="font-mono text-[10px] text-[#64748b] dark:text-slate-400">
+                          [{asset.format.toUpperCase()}] · {asset.pins.length}{" "}
+                          pins
                         </div>
-                        {asset.parseWarning && (
-                          <div className="mt-1 rounded-lg border border-amber-500/40 bg-amber-950/50 px-2 py-1 font-mono text-[10px] text-amber-300">
-                            {asset.parseWarning}
-                          </div>
-                        )}
                       </div>
                       <button
                         type="button"
@@ -734,26 +721,30 @@ export function LeftSidebar() {
                           e.stopPropagation();
                           removeCadAsset(asset.id);
                         }}
-                        className="shrink-0 p-1 text-slate-500 hover:text-rose-400"
+                        className="p-1 text-[#94a3b8] dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPinMarkingMode(!markingThis, asset.id);
-                      }}
-                      className={`flex w-full items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 font-mono text-[11px] font-medium transition-colors ${
-                        markingThis
-                          ? "bg-amber-500 text-black font-semibold"
-                          : "border border-white/10 bg-[#0c0e14] text-slate-300 hover:border-white/25"
-                      }`}
-                    >
-                      <MapPin className="h-3 w-3" />
-                      {markingThis ? "Done Marking Pins" : "Mark Pins on Mesh"}
-                    </button>
+
+                    <div className="mt-2 flex gap-1">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelected({ kind: "cad", id: asset.id });
+                          setPinMarkingMode(!markingThis, asset.id);
+                        }}
+                        className={`flex-1 rounded-md py-1 font-mono text-[10px] font-semibold transition-colors ${
+                          markingThis
+                            ? "bg-amber-500 text-black font-bold"
+                            : "border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#0c0e14] text-[#334155] dark:text-slate-300 hover:border-[#cbd5e1] dark:hover:border-white/25"
+                        }`}
+                      >
+                        <MapPin className="mr-1 inline h-3 w-3" />
+                        {markingThis ? "Done Marking" : "Mark Pins"}
+                      </button>
+                    </div>
                   </div>
                 );
               })}

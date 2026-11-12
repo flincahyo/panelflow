@@ -225,4 +225,15 @@ describe("usePanelStore - Default 2D & Context Menu Actions", () => {
     expect(undoCount).toBe(30);
     expect(usePanelStore.getState().canUndo).toBe(false);
   });
+
+  it("switches theme between dark and light", () => {
+    const store = usePanelStore.getState();
+    expect(store.theme).toBe("dark");
+
+    store.setTheme("light");
+    expect(usePanelStore.getState().theme).toBe("light");
+
+    store.toggleTheme();
+    expect(usePanelStore.getState().theme).toBe("dark");
+  });
 });
