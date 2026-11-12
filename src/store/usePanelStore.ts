@@ -399,10 +399,19 @@ interface PanelStore {
   toggleSelectId: (target: SelectedTarget) => void;
   clearSelection: () => void;
   moveSelectedItems: (dxMm: number, dyMm: number) => void;
+  nudgeSelectedItems: (dxMm: number, dyMm: number) => void;
   deleteSelectedItems: () => void;
   alignSelectedItems: (mode: "left" | "center" | "top") => void;
   pushUndoSnapshot: () => void;
   setPinMarkingMode: (enabled: boolean, assetId?: string | null) => void;
+
+  // Clipboard & Grouping / Locking
+  clipboardItems: Array<PlacedComponent | CustomCadAsset>;
+  copySelectedToClipboard: () => number;
+  pasteFromClipboard: (offsetMm?: { x: number; y: number }) => SelectedTarget[];
+  groupSelectedItems: () => string | null;
+  ungroupSelectedItems: () => void;
+  toggleLockSelectedItems: (forceLocked?: boolean) => void;
 
   // Rails & Ducts
   addRail: (customPos?: { xMm: number; yMm: number }) => void;
@@ -422,7 +431,12 @@ interface PanelStore {
   // Component Actions
   addComponent: (templateId: ComponentTemplateId, nearYMm?: number, customPos?: { xMm: number; yMm: number }) => void;
   updateComponent: (id: string, partial: Partial<PlacedComponent>) => void;
-  moveComponent: (id: string, targetXMm: number, targetYMm: number) => void;
+  moveComponent: (
+    id: string,
+    targetXMm: number,
+    targetYMm: number,
+    options?: { skipGridSnapX?: boolean; skipGridSnapY?: boolean }
+  ) => void;
   removeComponent: (id: string) => void;
   rotateComponent: (id: string, deltaDeg?: 90 | 180 | 270) => void;
   duplicateComponent: (id: string, offsetMm?: { x: number; y: number }) => string | null;
@@ -442,7 +456,12 @@ interface PanelStore {
   // CAD Asset Actions
   addCadAsset: (asset: CustomCadAsset) => void;
   updateCadAsset: (id: string, partial: Partial<CustomCadAsset>) => void;
-  moveCadAsset: (id: string, targetXMm: number, targetYMm: number) => void;
+  moveCadAsset: (
+    id: string,
+    targetXMm: number,
+    targetYMm: number,
+    options?: { skipGridSnapX?: boolean; skipGridSnapY?: boolean }
+  ) => void;
   removeCadAsset: (id: string) => void;
   rotateCadAsset: (id: string, deltaDeg?: 90 | 180 | 270) => void;
   duplicateCadAsset: (id: string, offsetMm?: { x: number; y: number }) => string | null;
@@ -515,6 +534,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   setAutoRouteDuctsEnabled: (enabled) => set({ autoRouteDuctsEnabled: enabled }),
   selected: null,
   selectedIds: [],
+  clipboardItems: [],
   isPinMarkingMode: false,
   activeMarkingAssetId: null,
   inspectorFocusNonce: 0,
@@ -833,7 +853,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     const ductIds = new Set(selectedIds.filter((s) => s.kind === "duct").map((s) => s.id));
 
     const nextComponents = activeSheet.components.map((c) => {
-      if (!compIds.has(c.id)) return c;
+      if (!compIds.has(c.id) || c.locked) return c;
       const dims = getRotatedDimensions(c.widthMm, c.heightMm, c.rotationDeg ?? 0);
       const targetX = c.xMm + dxMm;
       const targetY = c.yMm + dyMm;
@@ -846,7 +866,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     });
 
     const nextCadAssets = activeSheet.cadAssets.map((a) => {
-      if (!cadIds.has(a.id)) return a;
+      if (!cadIds.has(a.id) || a.locked) return a;
       const eff = getEffectiveCadBounds(a);
       const rot = a.rotationDeg ?? 0;
       const dims = getRotatedDimensions(eff.widthMm, eff.heightMm, rot);
@@ -896,6 +916,325 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     const active = updated.find((s) => s.id === activeSheetId)!;
     set({
       sheets: updated,
+      ...syncActiveSheetProjection(active),
+    });
+  },
+
+  nudgeSelectedItems: (dxMm, dyMm) => {
+    const { sheets, activeSheetId, selectedIds, selected } = get();
+    const effectiveIds = selectedIds.length > 0 ? selectedIds : selected ? [selected] : [];
+    if (effectiveIds.length === 0 || (dxMm === 0 && dyMm === 0)) return;
+    const activeSheet = sheets.find((s) => s.id === activeSheetId);
+    if (!activeSheet) return;
+
+    const hasMovable = effectiveIds.some((t) => {
+      if (t.kind === "component") {
+        const c = activeSheet.components.find((item) => item.id === t.id);
+        return Boolean(c && !c.locked);
+      }
+      if (t.kind === "cad") {
+        const a = activeSheet.cadAssets.find((item) => item.id === t.id);
+        return Boolean(a && !a.locked);
+      }
+      return t.kind === "rail" || t.kind === "duct";
+    });
+    if (!hasMovable) return;
+
+    pushHistory(sheets);
+    if (selectedIds.length === 0 && selected) {
+      set({ selectedIds: [selected] });
+    }
+    get().moveSelectedItems(dxMm, dyMm);
+    set({ canUndo: true, canRedo: false });
+  },
+
+  copySelectedToClipboard: () => {
+    const { sheets, activeSheetId, selectedIds, selected } = get();
+    const activeSheet = sheets.find((s) => s.id === activeSheetId);
+    if (!activeSheet) return 0;
+
+    const effectiveIds = selectedIds.length > 0 ? selectedIds : selected ? [selected] : [];
+    if (effectiveIds.length === 0) return 0;
+
+    const copied: Array<PlacedComponent | CustomCadAsset> = [];
+    const seen = new Set<string>();
+
+    for (const sel of effectiveIds) {
+      if (sel.kind === "component" && !seen.has(`comp:${sel.id}`)) {
+        const comp = activeSheet.components.find((c) => c.id === sel.id);
+        if (comp) {
+          seen.add(`comp:${sel.id}`);
+          copied.push({
+            ...comp,
+            pins: comp.pins.map((p) => ({ ...p })),
+          });
+        }
+      } else if (sel.kind === "cad" && !seen.has(`cad:${sel.id}`)) {
+        const asset = activeSheet.cadAssets.find((a) => a.id === sel.id);
+        if (asset) {
+          seen.add(`cad:${sel.id}`);
+          copied.push({
+            ...asset,
+            boundingBoxMm: { ...asset.boundingBoxMm },
+            cropMm: asset.cropMm ? { ...asset.cropMm } : undefined,
+            pins: asset.pins.map((p) => ({ ...p })),
+          });
+        }
+      }
+    }
+
+    if (copied.length > 0) {
+      set({ clipboardItems: copied });
+    }
+    return copied.length;
+  },
+
+  pasteFromClipboard: (offsetMm = { x: 15, y: -15 }) => {
+    const { sheets, activeSheetId, clipboardItems, enclosure, plateConfig } = get();
+    if (clipboardItems.length === 0) return [];
+    const activeSheet = sheets.find((s) => s.id === activeSheetId);
+    if (!activeSheet) return [];
+
+    pushHistory(sheets);
+
+    const { widthMm: plateW, heightMm: plateH } = getBackplateDimensions(
+      enclosure,
+      plateConfig
+    );
+
+    const existingCompNames = activeSheet.components.map((c) => c.name);
+    const existingCadNames = activeSheet.cadAssets.map((a) => a.name);
+    const groupMap = new Map<string, string>();
+    const mapGroupId = (gid?: string) => {
+      if (!gid) return undefined;
+      if (!groupMap.has(gid)) {
+        groupMap.set(gid, makeUid("grp"));
+      }
+      return groupMap.get(gid);
+    };
+
+    const newComponents: PlacedComponent[] = [];
+    const newCadAssets: CustomCadAsset[] = [];
+    const pastedTargets: SelectedTarget[] = [];
+
+    for (const item of clipboardItems) {
+      if ("templateId" in item) {
+        const newId = makeUid("comp");
+        const nextName = nextIncrementedName(item.name, existingCompNames);
+        existingCompNames.push(nextName);
+        const dims = getRotatedDimensions(
+          item.widthMm,
+          item.heightMm,
+          item.rotationDeg ?? 0
+        );
+        const clamped = clampToBackplate(
+          item.xMm + offsetMm.x,
+          item.yMm + offsetMm.y,
+          dims.widthMm,
+          dims.heightMm,
+          plateW,
+          plateH
+        );
+        const pastedComp: PlacedComponent = {
+          ...item,
+          id: newId,
+          name: nextName,
+          xMm: clamped.xMm,
+          yMm: clamped.yMm,
+          groupId: mapGroupId(item.groupId),
+          locked: false,
+          pins: item.pins.map((p, idx) => ({
+            ...p,
+            id: `${newId}-pin-${idx + 1}`,
+          })),
+        };
+        newComponents.push(pastedComp);
+        pastedTargets.push({ kind: "component", id: newId });
+      } else {
+        const newId = makeUid("cad");
+        const nextName = nextIncrementedName(item.name, existingCadNames);
+        existingCadNames.push(nextName);
+        const eff = getEffectiveCadBounds(item);
+        const rot = item.rotationDeg ?? 0;
+        const dims = getRotatedDimensions(eff.widthMm, eff.heightMm, rot);
+        const rotOffset = rotateLocalPoint(eff.offsetX, eff.offsetY, rot);
+        const clamped = clampToBackplate(
+          item.xMm + rotOffset.xMm + offsetMm.x,
+          item.yMm + rotOffset.yMm + offsetMm.y,
+          dims.widthMm,
+          dims.heightMm,
+          plateW,
+          plateH
+        );
+        const pastedCad: CustomCadAsset = {
+          ...item,
+          id: newId,
+          name: nextName,
+          xMm: clamped.xMm - rotOffset.xMm,
+          yMm: clamped.yMm - rotOffset.yMm,
+          boundingBoxMm: { ...item.boundingBoxMm },
+          cropMm: item.cropMm ? { ...item.cropMm } : undefined,
+          groupId: mapGroupId(item.groupId),
+          locked: false,
+          pins: item.pins.map((p, idx) => ({
+            ...p,
+            id: `${newId}-pin-${idx + 1}`,
+          })),
+        };
+        newCadAssets.push(pastedCad);
+        pastedTargets.push({ kind: "cad", id: newId });
+      }
+    }
+
+    const updated = sheets.map((s) =>
+      s.id === activeSheetId
+        ? {
+            ...s,
+            components: [...s.components, ...newComponents],
+            cadAssets: [...s.cadAssets, ...newCadAssets],
+          }
+        : s
+    );
+    const active = updated.find((s) => s.id === activeSheetId)!;
+    set({
+      sheets: updated,
+      selected: pastedTargets[0] ?? null,
+      selectedIds: pastedTargets,
+      canUndo: true,
+      canRedo: false,
+      ...syncActiveSheetProjection(active),
+    });
+    return pastedTargets;
+  },
+
+  groupSelectedItems: () => {
+    const { sheets, activeSheetId, selectedIds } = get();
+    const groupable = selectedIds.filter(
+      (s) => s.kind === "component" || s.kind === "cad"
+    );
+    if (groupable.length < 2) return null;
+
+    const compIds = new Set(
+      groupable.filter((s) => s.kind === "component").map((s) => s.id)
+    );
+    const cadIds = new Set(
+      groupable.filter((s) => s.kind === "cad").map((s) => s.id)
+    );
+    const groupId = makeUid("grp");
+
+    pushHistory(sheets);
+    const updated = sheets.map((s) =>
+      s.id === activeSheetId
+        ? {
+            ...s,
+            components: s.components.map((c) =>
+              compIds.has(c.id) ? { ...c, groupId } : c
+            ),
+            cadAssets: s.cadAssets.map((a) =>
+              cadIds.has(a.id) ? { ...a, groupId } : a
+            ),
+          }
+        : s
+    );
+    const active = updated.find((s) => s.id === activeSheetId)!;
+    set({
+      sheets: updated,
+      canUndo: true,
+      canRedo: false,
+      ...syncActiveSheetProjection(active),
+    });
+    return groupId;
+  },
+
+  ungroupSelectedItems: () => {
+    const { sheets, activeSheetId, selectedIds, selected } = get();
+    const activeSheet = sheets.find((s) => s.id === activeSheetId);
+    if (!activeSheet) return;
+
+    const effectiveIds = selectedIds.length > 0 ? selectedIds : selected ? [selected] : [];
+    const compIds = new Set(
+      effectiveIds.filter((s) => s.kind === "component").map((s) => s.id)
+    );
+    const cadIds = new Set(
+      effectiveIds.filter((s) => s.kind === "cad").map((s) => s.id)
+    );
+
+    const targetGroupIds = new Set<string>();
+    for (const c of activeSheet.components) {
+      if (compIds.has(c.id) && c.groupId) targetGroupIds.add(c.groupId);
+    }
+    for (const a of activeSheet.cadAssets) {
+      if (cadIds.has(a.id) && a.groupId) targetGroupIds.add(a.groupId);
+    }
+    if (targetGroupIds.size === 0) return;
+
+    pushHistory(sheets);
+    const updated = sheets.map((s) =>
+      s.id === activeSheetId
+        ? {
+            ...s,
+            components: s.components.map((c) =>
+              c.groupId && targetGroupIds.has(c.groupId)
+                ? { ...c, groupId: undefined }
+                : c
+            ),
+            cadAssets: s.cadAssets.map((a) =>
+              a.groupId && targetGroupIds.has(a.groupId)
+                ? { ...a, groupId: undefined }
+                : a
+            ),
+          }
+        : s
+    );
+    const active = updated.find((s) => s.id === activeSheetId)!;
+    set({
+      sheets: updated,
+      canUndo: true,
+      canRedo: false,
+      ...syncActiveSheetProjection(active),
+    });
+  },
+
+  toggleLockSelectedItems: (forceLocked) => {
+    const { sheets, activeSheetId, selectedIds, selected } = get();
+    const activeSheet = sheets.find((s) => s.id === activeSheetId);
+    if (!activeSheet) return;
+
+    const effectiveIds = selectedIds.length > 0 ? selectedIds : selected ? [selected] : [];
+    const compIds = new Set(
+      effectiveIds.filter((s) => s.kind === "component").map((s) => s.id)
+    );
+    const cadIds = new Set(
+      effectiveIds.filter((s) => s.kind === "cad").map((s) => s.id)
+    );
+    if (compIds.size === 0 && cadIds.size === 0) return;
+
+    const selectedComps = activeSheet.components.filter((c) => compIds.has(c.id));
+    const selectedCads = activeSheet.cadAssets.filter((a) => cadIds.has(a.id));
+    const allCurrentlyLocked =
+      selectedComps.every((c) => Boolean(c.locked)) &&
+      selectedCads.every((a) => Boolean(a.locked));
+    const nextLocked = forceLocked !== undefined ? forceLocked : !allCurrentlyLocked;
+
+    pushHistory(sheets);
+    const updated = sheets.map((s) =>
+      s.id === activeSheetId
+        ? {
+            ...s,
+            components: s.components.map((c) =>
+              compIds.has(c.id) ? { ...c, locked: nextLocked } : c
+            ),
+            cadAssets: s.cadAssets.map((a) =>
+              cadIds.has(a.id) ? { ...a, locked: nextLocked } : a
+            ),
+          }
+        : s
+    );
+    const active = updated.find((s) => s.id === activeSheetId)!;
+    set({
+      sheets: updated,
+      canUndo: true,
+      canRedo: false,
       ...syncActiveSheetProjection(active),
     });
   },
@@ -1894,11 +2233,11 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     });
   },
 
-  moveComponent: (id, targetXMm, targetYMm) => {
+  moveComponent: (id, targetXMm, targetYMm, options) => {
     const { sheets, activeSheetId, gridSnapMm, enclosure, plateConfig } = get();
     const activeSheet = sheets.find((s) => s.id === activeSheetId)!;
     const comp = activeSheet.components.find((c) => c.id === id);
-    if (!comp) return;
+    if (!comp || comp.locked) return;
 
     const snapResult = snapComponentToNearestRail(
       targetXMm,
@@ -1909,34 +2248,74 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
       gridSnapMm
     );
 
+    const effectiveX = options?.skipGridSnapX ? targetXMm : snapResult.xMm;
+    const effectiveY = options?.skipGridSnapY ? targetYMm : snapResult.yMm;
+
     const { widthMm: plateW, heightMm: plateH } = getBackplateDimensions(
       enclosure,
       plateConfig
     );
     const clamped = clampToBackplate(
-      snapResult.xMm,
-      snapResult.yMm,
+      effectiveX,
+      effectiveY,
       comp.widthMm,
       comp.heightMm,
       plateW,
       plateH
     );
 
+    const deltaX = clamped.xMm - comp.xMm;
+    const deltaY = clamped.yMm - comp.yMm;
+
     const updated = sheets.map((s) =>
       s.id === activeSheetId
         ? {
             ...s,
-            components: s.components.map((c) =>
-              c.id === id
-                ? {
-                    ...c,
-                    xMm: clamped.xMm,
-                    yMm: clamped.yMm,
-                    zMm: snapResult.zMm,
-                    railId: snapResult.railId,
-                  }
-                : c
-            ),
+            components: s.components.map((c) => {
+              if (c.id === id) {
+                return {
+                  ...c,
+                  xMm: clamped.xMm,
+                  yMm: clamped.yMm,
+                  zMm: snapResult.zMm,
+                  railId: snapResult.railId,
+                };
+              }
+              if (comp.groupId && c.groupId === comp.groupId && !c.locked) {
+                const subClamped = clampToBackplate(
+                  c.xMm + deltaX,
+                  c.yMm + deltaY,
+                  c.widthMm,
+                  c.heightMm,
+                  plateW,
+                  plateH
+                );
+                return {
+                  ...c,
+                  xMm: subClamped.xMm,
+                  yMm: subClamped.yMm,
+                };
+              }
+              return c;
+            }),
+            cadAssets: s.cadAssets.map((a) => {
+              if (comp.groupId && a.groupId === comp.groupId && !a.locked) {
+                const subClamped = clampToBackplate(
+                  a.xMm + deltaX,
+                  a.yMm + deltaY,
+                  a.boundingBoxMm.w,
+                  a.boundingBoxMm.h,
+                  plateW,
+                  plateH
+                );
+                return {
+                  ...a,
+                  xMm: subClamped.xMm,
+                  yMm: subClamped.yMm,
+                };
+              }
+              return a;
+            }),
           }
         : s
     );
@@ -2082,11 +2461,11 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     });
   },
 
-  moveCadAsset: (id, targetXMm, targetYMm) => {
+  moveCadAsset: (id, targetXMm, targetYMm, options) => {
     const { sheets, activeSheetId, gridSnapMm, enclosure, plateConfig } = get();
     const activeSheet = sheets.find((s) => s.id === activeSheetId)!;
     const asset = activeSheet.cadAssets.find((a) => a.id === id);
-    if (!asset) return;
+    if (!asset || asset.locked) return;
 
     const snapResult = snapComponentToNearestRail(
       targetXMm,
@@ -2097,33 +2476,74 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
       gridSnapMm,
       25
     );
+
+    const effectiveX = options?.skipGridSnapX ? targetXMm : snapResult.xMm;
+    const effectiveY = options?.skipGridSnapY ? targetYMm : snapResult.yMm;
+
     const { widthMm: plateW, heightMm: plateH } = getBackplateDimensions(
       enclosure,
       plateConfig
     );
     const clamped = clampToBackplate(
-      snapResult.xMm,
-      snapResult.yMm,
+      effectiveX,
+      effectiveY,
       asset.boundingBoxMm.w,
       asset.boundingBoxMm.h,
       plateW,
       plateH
     );
 
+    const deltaX = clamped.xMm - asset.xMm;
+    const deltaY = clamped.yMm - asset.yMm;
+
     const updated = sheets.map((s) =>
       s.id === activeSheetId
         ? {
             ...s,
-            cadAssets: s.cadAssets.map((a) =>
-              a.id === id
-                ? {
-                    ...a,
-                    xMm: clamped.xMm,
-                    yMm: clamped.yMm,
-                    zMm: snapResult.snappedToRail ? snapResult.zMm : a.zMm,
-                  }
-                : a
-            ),
+            cadAssets: s.cadAssets.map((a) => {
+              if (a.id === id) {
+                return {
+                  ...a,
+                  xMm: clamped.xMm,
+                  yMm: clamped.yMm,
+                  zMm: snapResult.snappedToRail ? snapResult.zMm : a.zMm,
+                };
+              }
+              if (asset.groupId && a.groupId === asset.groupId && !a.locked) {
+                const subClamped = clampToBackplate(
+                  a.xMm + deltaX,
+                  a.yMm + deltaY,
+                  a.boundingBoxMm.w,
+                  a.boundingBoxMm.h,
+                  plateW,
+                  plateH
+                );
+                return {
+                  ...a,
+                  xMm: subClamped.xMm,
+                  yMm: subClamped.yMm,
+                };
+              }
+              return a;
+            }),
+            components: s.components.map((c) => {
+              if (asset.groupId && c.groupId === asset.groupId && !c.locked) {
+                const subClamped = clampToBackplate(
+                  c.xMm + deltaX,
+                  c.yMm + deltaY,
+                  c.widthMm,
+                  c.heightMm,
+                  plateW,
+                  plateH
+                );
+                return {
+                  ...c,
+                  xMm: subClamped.xMm,
+                  yMm: subClamped.yMm,
+                };
+              }
+              return c;
+            }),
           }
         : s
     );

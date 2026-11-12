@@ -5,6 +5,7 @@ import {
   Box,
   ChevronDown,
   ClipboardList,
+  Copy,
   Cpu,
   Download,
   Eye,
@@ -96,6 +97,11 @@ export function TopToolbar({
   const canUndo = usePanelStore((s) => s.canUndo);
   const canRedo = usePanelStore((s) => s.canRedo);
   const autoRouteAllWires = usePanelStore((s) => s.autoRouteAllWires);
+  const selected = usePanelStore((s) => s.selected);
+  const selectedIds = usePanelStore((s) => s.selectedIds);
+  const clipboardItems = usePanelStore((s) => s.clipboardItems);
+  const copySelectedToClipboard = usePanelStore((s) => s.copySelectedToClipboard);
+  const pasteFromClipboard = usePanelStore((s) => s.pasteFromClipboard);
 
   const setViewportMode = usePanelStore((s) => s.setViewportMode);
   const setDisplayUnit = usePanelStore((s) => s.setDisplayUnit);
@@ -441,6 +447,30 @@ export function TopToolbar({
               <div className={dropdownSectionLabelClass}>Edit &amp; History</div>
               <button
                 type="button"
+                disabled={selectedIds.length === 0 && !selected}
+                onClick={() => {
+                  copySelectedToClipboard();
+                  setActiveMenu(null);
+                }}
+                className={dropdownItemClass}
+              >
+                <Copy className="h-4 w-4 text-cyan-500" />
+                Copy
+              </button>
+              <button
+                type="button"
+                disabled={clipboardItems.length === 0}
+                onClick={() => {
+                  pasteFromClipboard();
+                  setActiveMenu(null);
+                }}
+                className={dropdownItemClass}
+              >
+                <Copy className="h-4 w-4 text-emerald-500" />
+                Paste
+              </button>
+              <button
+                type="button"
                 disabled={!canUndo}
                 onClick={() => {
                   undo();
@@ -743,6 +773,41 @@ export function TopToolbar({
 
             {activeMenu === "edit" && (
               <div className={`${dropdownPanelClass} w-64`}>
+                <button
+                  type="button"
+                  disabled={selectedIds.length === 0 && !selected}
+                  onClick={() => {
+                    copySelectedToClipboard();
+                    setActiveMenu(null);
+                  }}
+                  className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white disabled:opacity-40"
+                >
+                  <span className="flex items-center gap-2">
+                    <Copy className="h-3.5 w-3.5 text-cyan-500" />
+                    Copy
+                  </span>
+                  <span className="font-mono text-[11px] text-[#64748b] dark:text-slate-500">
+                    Ctrl+C
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  disabled={clipboardItems.length === 0}
+                  onClick={() => {
+                    pasteFromClipboard();
+                    setActiveMenu(null);
+                  }}
+                  className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white disabled:opacity-40"
+                >
+                  <span className="flex items-center gap-2">
+                    <Copy className="h-3.5 w-3.5 text-emerald-500" />
+                    Paste
+                  </span>
+                  <span className="font-mono text-[11px] text-[#64748b] dark:text-slate-500">
+                    Ctrl+V
+                  </span>
+                </button>
+                <div className="my-1 border-t border-[#e2e8f0] dark:border-white/10" />
                 <button
                   type="button"
                   disabled={!canUndo}

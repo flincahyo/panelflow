@@ -430,6 +430,22 @@ export function RightInspector({ onClose }: RightInspectorProps) {
               {formatDim(comp.depthMm, displayUnit)}
               <br />
               Rail: {rails.find((r) => r.id === comp.railId)?.name ?? "Unmounted"}
+              {comp.groupId && (
+                <>
+                  <br />
+                  <span className="text-purple-500 font-sans text-[11px]">
+                    Group Assembly: {comp.groupId}
+                  </span>
+                </>
+              )}
+              {comp.locked && (
+                <>
+                  <br />
+                  <span className="text-amber-500 font-sans font-medium text-[11px]">
+                    🔒 Position Locked
+                  </span>
+                </>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-2">
@@ -529,6 +545,16 @@ export function RightInspector({ onClose }: RightInspectorProps) {
               <div className="text-sky-600 dark:text-sky-400 font-semibold">
                 Cropped BBox: {formatDim(effBounds.widthMm, displayUnit)} ×{" "}
                 {formatDim(effBounds.heightMm, displayUnit)}
+              </div>
+            )}
+            {cad.groupId && (
+              <div className="text-purple-500 font-sans text-[11px]">
+                Group Assembly: {cad.groupId}
+              </div>
+            )}
+            {cad.locked && (
+              <div className="text-amber-500 font-sans font-medium text-[11px]">
+                🔒 Position Locked
               </div>
             )}
           </div>

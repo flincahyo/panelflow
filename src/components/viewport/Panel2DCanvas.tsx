@@ -15,6 +15,12 @@ import {
 import { ContextMenu } from "@/components/ui/ContextMenu";
 import { detectCollisionsAndBounds, getEffectiveCadBounds } from "@/lib/collision";
 import {
+  buildAlignmentTargetBoxes,
+  computeAlignmentGuides,
+  type AlignmentGuideLine,
+  type AlignmentTargetBox,
+} from "@/lib/alignment-guides";
+import {
   buildSvgObstacleBoxes,
   formatCadDisplayLabel,
   getSmartCadLabelPosition,
@@ -226,11 +232,39 @@ function Component2DSymbol({
           width={comp.widthMm + 4}
           height={comp.heightMm + 4}
           fill="none"
-          stroke="#0284c7"
+          stroke={comp.locked ? "#f59e0b" : "#0284c7"}
           strokeWidth={1.2}
           strokeDasharray="3,2"
           rx={1}
         />
+      )}
+
+      {/* Locked / Group Badge */}
+      {(comp.locked || comp.groupId) && (
+        <g className="pointer-events-none">
+          {comp.locked && (
+            <text
+              x={x + 2}
+              y={y + 8}
+              fontSize={6}
+              fontFamily="sans-serif"
+              fill="#f59e0b"
+              fontWeight="bold"
+            >
+              🔒
+            </text>
+          )}
+          {comp.groupId && (
+            <circle
+              cx={x + comp.widthMm - 4}
+              cy={y + 4}
+              r={2.5}
+              fill="#8b5cf6"
+              stroke="#ffffff"
+              strokeWidth={0.5}
+            />
+          )}
+        </g>
       )}
 
       {/* Main Outline */}
@@ -639,11 +673,39 @@ function CadAsset2DSymbol({
           width={effW + 5}
           height={effH + 5}
           fill="none"
-          stroke={isMarkingThis ? "#f59e0b" : "#0284c7"}
+          stroke={isMarkingThis ? "#f59e0b" : asset.locked ? "#f59e0b" : "#0284c7"}
           strokeWidth={1.2}
           strokeDasharray="3,2"
           rx={1}
         />
+      )}
+
+      {/* Locked / Group Badge */}
+      {(asset.locked || asset.groupId) && (
+        <g className="pointer-events-none">
+          {asset.locked && (
+            <text
+              x={effX + 2}
+              y={effY + 8}
+              fontSize={6}
+              fontFamily="sans-serif"
+              fill="#f59e0b"
+              fontWeight="bold"
+            >
+              🔒
+            </text>
+          )}
+          {asset.groupId && (
+            <circle
+              cx={effX + effW - 4}
+              cy={effY + 4}
+              r={2.5}
+              fill="#8b5cf6"
+              stroke="#ffffff"
+              strokeWidth={0.5}
+            />
+          )}
+        </g>
       )}
 
       {/* DXF Vector Segments or 3D Mesh Silhouette */}
@@ -830,7 +892,12 @@ export function Panel2DCanvas() {
   const toggleSelectId = usePanelStore((s) => s.toggleSelectId);
   const clearSelection = usePanelStore((s) => s.clearSelection);
   const moveSelectedItems = usePanelStore((s) => s.moveSelectedItems);
+  const nudgeSelectedItems = usePanelStore((s) => s.nudgeSelectedItems);
   const deleteSelectedItems = usePanelStore((s) => s.deleteSelectedItems);
+  const copySelectedToClipboard = usePanelStore((s) => s.copySelectedToClipboard);
+  const pasteFromClipboard = usePanelStore((s) => s.pasteFromClipboard);
+  const groupSelectedItems = usePanelStore((s) => s.groupSelectedItems);
+  const ungroupSelectedItems = usePanelStore((s) => s.ungroupSelectedItems);
   const pushUndoSnapshot = usePanelStore((s) => s.pushUndoSnapshot);
   const setCanvasTool2D = usePanelStore((s) => s.setCanvasTool2D);
   const setActiveWireColor = usePanelStore((s) => s.setActiveWireColor);
@@ -853,6 +920,7 @@ export function Panel2DCanvas() {
   const [pan, setPan] = useState({ x: 480, y: 380 });
   const [spacePressed, setSpacePressed] = useState(false);
   const [dragState, setDragState] = useState<DragState | null>(null);
+  const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuideLine[]>([]);
   const [contextMenu, setContextMenu] = useState<{
     x: number;
     y: number;
@@ -934,7 +1002,7 @@ export function Panel2DCanvas() {
     return () => window.removeEventListener("resize", onResize);
   }, [fitToView]);
 
-  // Spacebar pan & Delete/Backspace bulk delete shortcuts
+  // Spacebar pan & Delete/Backspace bulk delete, Arrow nudge, Copy/Paste & Group shortcuts
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -960,6 +1028,60 @@ export function Panel2DCanvas() {
         setMeasureHover(null);
         clearSelection();
       }
+
+      if (isEditingText) return;
+
+      const mod = e.ctrlKey || e.metaKey;
+
+      // Copy: Ctrl+C / Cmd+C
+      if (mod && !e.shiftKey && e.key.toLowerCase() === "c") {
+        if (selectedIds.length > 0 || selected) {
+          e.preventDefault();
+          copySelectedToClipboard();
+        }
+        return;
+      }
+
+      // Paste: Ctrl+V / Cmd+V
+      if (mod && !e.shiftKey && e.key.toLowerCase() === "v") {
+        e.preventDefault();
+        pasteFromClipboard();
+        return;
+      }
+
+      // Group: Ctrl+G (not Shift)
+      if (mod && !e.shiftKey && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        groupSelectedItems();
+        return;
+      }
+
+      // Ungroup: Ctrl+Shift+G
+      if (mod && e.shiftKey && e.key.toLowerCase() === "g") {
+        e.preventDefault();
+        ungroupSelectedItems();
+        return;
+      }
+
+      // Arrow Keyboard Nudge (1mm, Shift=5mm)
+      if (
+        e.key === "ArrowLeft" ||
+        e.key === "ArrowRight" ||
+        e.key === "ArrowUp" ||
+        e.key === "ArrowDown"
+      ) {
+        if (selectedIds.length > 0 || selected) {
+          e.preventDefault();
+          const step = e.shiftKey ? 5 : 1;
+          let dx = 0;
+          let dy = 0;
+          if (e.key === "ArrowLeft") dx = -step;
+          if (e.key === "ArrowRight") dx = step;
+          if (e.key === "ArrowUp") dy = step;
+          if (e.key === "ArrowDown") dy = -step;
+          nudgeSelectedItems(dx, dy);
+        }
+      }
     };
     const onKeyUp = (e: KeyboardEvent) => {
       if (e.code === "Space") setSpacePressed(false);
@@ -970,7 +1092,18 @@ export function Panel2DCanvas() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [setActiveWireStartPin, clearSelection, deleteSelectedItems, selectedIds, selected]);
+  }, [
+    setActiveWireStartPin,
+    clearSelection,
+    deleteSelectedItems,
+    selectedIds,
+    selected,
+    copySelectedToClipboard,
+    pasteFromClipboard,
+    groupSelectedItems,
+    ungroupSelectedItems,
+    nudgeSelectedItems,
+  ]);
 
   const isItemSelected = useCallback(
     (kind: SelectedTarget["kind"], id: string) =>
@@ -1149,19 +1282,104 @@ export function Panel2DCanvas() {
     }
 
     if (dragState.type === "component") {
+      const comp = components.find((c) => c.id === dragState.id);
+      if (!comp) return;
+
+      const rawTargetX = world.xMm - dragState.offsetXMm;
+      const rawTargetY = world.yMm - dragState.offsetYMm;
+      const dims = getRotatedDimensions(comp.widthMm, comp.heightMm, comp.rotationDeg ?? 0);
+
+      const excludeIds = new Set<string>([comp.id]);
+      if (comp.groupId) {
+        for (const c of components) {
+          if (c.groupId === comp.groupId) excludeIds.add(c.id);
+        }
+        for (const a of cadAssets) {
+          if (a.groupId === comp.groupId) excludeIds.add(a.id);
+        }
+      }
+
+      const targets = buildAlignmentTargetBoxes(
+        components,
+        cadAssets,
+        rails,
+        ducts,
+        excludeIds
+      );
+
+      const alignResult = computeAlignmentGuides(
+        {
+          xMm: rawTargetX,
+          yMm: rawTargetY,
+          widthMm: dims.widthMm,
+          heightMm: dims.heightMm,
+        },
+        targets
+      );
+
+      setAlignmentGuides(alignResult.guides);
+
       moveComponent(
         dragState.id,
-        world.xMm - dragState.offsetXMm,
-        world.yMm - dragState.offsetYMm
+        alignResult.xMm,
+        alignResult.yMm,
+        {
+          skipGridSnapX: alignResult.snappedX,
+          skipGridSnapY: alignResult.snappedY,
+        }
       );
       return;
     }
 
     if (dragState.type === "cad") {
+      const asset = cadAssets.find((a) => a.id === dragState.id);
+      if (!asset) return;
+
+      const rawTargetX = world.xMm - dragState.offsetXMm;
+      const rawTargetY = world.yMm - dragState.offsetYMm;
+      const eff = getEffectiveCadBounds(asset);
+      const rot = asset.rotationDeg ?? 0;
+      const dims = getRotatedDimensions(eff.widthMm, eff.heightMm, rot);
+      const rotOff = rotateLocalPoint(eff.offsetX, eff.offsetY, rot);
+
+      const excludeIds = new Set<string>([asset.id]);
+      if (asset.groupId) {
+        for (const c of components) {
+          if (c.groupId === asset.groupId) excludeIds.add(c.id);
+        }
+        for (const a of cadAssets) {
+          if (a.groupId === asset.groupId) excludeIds.add(a.id);
+        }
+      }
+
+      const targets = buildAlignmentTargetBoxes(
+        components,
+        cadAssets,
+        rails,
+        ducts,
+        excludeIds
+      );
+
+      const alignResult = computeAlignmentGuides(
+        {
+          xMm: rawTargetX + rotOff.xMm,
+          yMm: rawTargetY + rotOff.yMm,
+          widthMm: dims.widthMm,
+          heightMm: dims.heightMm,
+        },
+        targets
+      );
+
+      setAlignmentGuides(alignResult.guides);
+
       moveCadAsset(
         dragState.id,
-        world.xMm - dragState.offsetXMm,
-        world.yMm - dragState.offsetYMm
+        alignResult.xMm - rotOff.xMm,
+        alignResult.yMm - rotOff.yMm,
+        {
+          skipGridSnapX: alignResult.snappedX,
+          skipGridSnapY: alignResult.snappedY,
+        }
       );
       return;
     }
@@ -1288,6 +1506,7 @@ export function Panel2DCanvas() {
         }
       }
     }
+    setAlignmentGuides([]);
     setDragState(null);
   };
 
@@ -2280,12 +2499,14 @@ export function Panel2DCanvas() {
                     return;
                   }
                   setSelected({ kind: "component", id: comp.id });
-                  setDragState({
-                    type: "component",
-                    id: comp.id,
-                    offsetXMm: w.xMm - comp.xMm,
-                    offsetYMm: w.yMm - comp.yMm,
-                  });
+                  if (!comp.locked) {
+                    setDragState({
+                      type: "component",
+                      id: comp.id,
+                      offsetXMm: w.xMm - comp.xMm,
+                      offsetYMm: w.yMm - comp.yMm,
+                    });
+                  }
                 }}
                 onContextMenu={(e) => {
                   e.preventDefault();
@@ -2362,12 +2583,14 @@ export function Panel2DCanvas() {
                       return;
                     }
                     setSelected({ kind: "cad", id: asset.id });
-                    setDragState({
-                      type: "cad",
-                      id: asset.id,
-                      offsetXMm: w.xMm - asset.xMm,
-                      offsetYMm: w.yMm - asset.yMm,
-                    });
+                    if (!asset.locked) {
+                      setDragState({
+                        type: "cad",
+                        id: asset.id,
+                        offsetXMm: w.xMm - asset.xMm,
+                        offsetYMm: w.yMm - asset.yMm,
+                      });
+                    }
                   }}
                   onContextMenu={(e) => {
                     e.preventDefault();
@@ -2626,6 +2849,42 @@ export function Panel2DCanvas() {
               </g>
             );
           })()}
+
+          {/* Smart Alignment Guides Overlay (Cyan/Sky dotted lines) */}
+          {alignmentGuides.length > 0 && (
+            <g className="pointer-events-none">
+              {alignmentGuides.map((guide, idx) => {
+                if (guide.orientation === "vertical") {
+                  return (
+                    <line
+                      key={`guide-v-${idx}`}
+                      x1={guide.coordinate}
+                      y1={-guide.start}
+                      x2={guide.coordinate}
+                      y2={-guide.end}
+                      stroke="#0ea5e9"
+                      strokeWidth={1.5 / zoom}
+                      strokeDasharray={`${6 / zoom},${4 / zoom}`}
+                      strokeOpacity={0.9}
+                    />
+                  );
+                }
+                return (
+                  <line
+                    key={`guide-h-${idx}`}
+                    x1={guide.start}
+                    y1={-guide.coordinate}
+                    x2={guide.end}
+                    y2={-guide.coordinate}
+                    stroke="#0ea5e9"
+                    strokeWidth={1.5 / zoom}
+                    strokeDasharray={`${6 / zoom},${4 / zoom}`}
+                    strokeOpacity={0.9}
+                  />
+                );
+              })}
+            </g>
+          )}
 
           {/* Marquee Box Selection Overlay */}
           {dragState?.type === "marquee" && (() => {

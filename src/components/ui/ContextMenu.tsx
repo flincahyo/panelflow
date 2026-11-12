@@ -11,6 +11,8 @@ import {
   ChevronRight,
   Copy,
   Focus,
+  Layers,
+  Lock,
   Magnet,
   Maximize2,
   Network,
@@ -18,6 +20,8 @@ import {
   RotateCw,
   Sliders,
   Trash2,
+  Unlock,
+  Users,
 } from "lucide-react";
 import { usePanelStore } from "@/store/usePanelStore";
 import type { GridSnapMm, WireColorCode } from "@/types/panel";
@@ -101,6 +105,12 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
   const deleteSelectedItems = usePanelStore((s) => s.deleteSelectedItems);
   const alignSelectedItems = usePanelStore((s) => s.alignSelectedItems);
   const requestInspectorFocus = usePanelStore((s) => s.requestInspectorFocus);
+  const clipboardItems = usePanelStore((s) => s.clipboardItems);
+  const copySelectedToClipboard = usePanelStore((s) => s.copySelectedToClipboard);
+  const pasteFromClipboard = usePanelStore((s) => s.pasteFromClipboard);
+  const groupSelectedItems = usePanelStore((s) => s.groupSelectedItems);
+  const ungroupSelectedItems = usePanelStore((s) => s.ungroupSelectedItems);
+  const toggleLockSelectedItems = usePanelStore((s) => s.toggleLockSelectedItems);
 
   // Position clamping & auto-fit into viewport
   useLayoutEffect(() => {
@@ -234,6 +244,70 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
             <button
               type="button"
               onClick={() => {
+                copySelectedToClipboard();
+                onClose();
+              }}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+            >
+              <Copy className="h-3.5 w-3.5 text-cyan-400" />
+              <span>Copy</span>
+              <span className="ml-auto font-mono text-[9px] text-slate-500">Ctrl+C</span>
+            </button>
+
+            {clipboardItems.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  pasteFromClipboard();
+                  onClose();
+                }}
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+              >
+                <Copy className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Paste</span>
+                <span className="ml-auto font-mono text-[9px] text-slate-500">Ctrl+V</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                toggleLockSelectedItems();
+                onClose();
+              }}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+            >
+              {currentComp.locked ? (
+                <>
+                  <Unlock className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Unlock Position</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Lock Position</span>
+                </>
+              )}
+            </button>
+
+            {currentComp.groupId && (
+              <button
+                type="button"
+                onClick={() => {
+                  ungroupSelectedItems();
+                  onClose();
+                }}
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+              >
+                <Layers className="h-3.5 w-3.5 text-purple-400" />
+                <span>Ungroup Assembly</span>
+                <span className="ml-auto font-mono text-[9px] text-slate-500">Ctrl+Shift+G</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
                 duplicateComponent(currentComp.id, { x: 20, y: 0 });
                 onClose();
               }}
@@ -310,6 +384,70 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
               <RotateCw className="h-3.5 w-3.5 text-sky-400" />
               <span>Rotate 90°</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                copySelectedToClipboard();
+                onClose();
+              }}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+            >
+              <Copy className="h-3.5 w-3.5 text-cyan-400" />
+              <span>Copy</span>
+              <span className="ml-auto font-mono text-[9px] text-slate-500">Ctrl+C</span>
+            </button>
+
+            {clipboardItems.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  pasteFromClipboard();
+                  onClose();
+                }}
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+              >
+                <Copy className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Paste</span>
+                <span className="ml-auto font-mono text-[9px] text-slate-500">Ctrl+V</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                toggleLockSelectedItems();
+                onClose();
+              }}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+            >
+              {currentCad.locked ? (
+                <>
+                  <Unlock className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Unlock Position</span>
+                </>
+              ) : (
+                <>
+                  <Lock className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Lock Position</span>
+                </>
+              )}
+            </button>
+
+            {currentCad.groupId && (
+              <button
+                type="button"
+                onClick={() => {
+                  ungroupSelectedItems();
+                  onClose();
+                }}
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+              >
+                <Layers className="h-3.5 w-3.5 text-purple-400" />
+                <span>Ungroup Assembly</span>
+                <span className="ml-auto font-mono text-[9px] text-slate-500">Ctrl+Shift+G</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -652,6 +790,72 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
           </div>
 
           <div className="py-1">
+            <button
+              type="button"
+              onClick={() => {
+                copySelectedToClipboard();
+                onClose();
+              }}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+            >
+              <Copy className="h-3.5 w-3.5 text-cyan-400" />
+              <span>Copy Selected</span>
+              <span className="ml-auto font-mono text-[9px] text-slate-500">Ctrl+C</span>
+            </button>
+
+            {clipboardItems.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  pasteFromClipboard();
+                  onClose();
+                }}
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+              >
+                <Copy className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Paste</span>
+                <span className="ml-auto font-mono text-[9px] text-slate-500">Ctrl+V</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => {
+                groupSelectedItems();
+                onClose();
+              }}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+            >
+              <Users className="h-3.5 w-3.5 text-indigo-400" />
+              <span>Group Assembly</span>
+              <span className="ml-auto font-mono text-[9px] text-slate-500">Ctrl+G</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                ungroupSelectedItems();
+                onClose();
+              }}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+            >
+              <Layers className="h-3.5 w-3.5 text-purple-400" />
+              <span>Ungroup Assembly</span>
+              <span className="ml-auto font-mono text-[9px] text-slate-500">Ctrl+Shift+G</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                toggleLockSelectedItems();
+                onClose();
+              }}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+            >
+              <Lock className="h-3.5 w-3.5 text-amber-400" />
+              <span>Lock / Unlock Position</span>
+            </button>
+
             <div
               className="relative"
               onMouseEnter={() => setOpenSubmenu("align-multi")}
@@ -735,6 +939,23 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
           </div>
 
           <div className="py-1">
+            {clipboardItems.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  pasteFromClipboard();
+                  onClose();
+                }}
+                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+              >
+                <Copy className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Paste (Ctrl+V)</span>
+                <span className="ml-auto font-mono text-[9px] text-slate-500">
+                  {clipboardItems.length} items
+                </span>
+              </button>
+            )}
+
             {/* Quick Add Submenu */}
             <div
               className="relative"

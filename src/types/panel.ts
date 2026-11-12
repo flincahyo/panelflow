@@ -121,6 +121,8 @@ export interface PlacedComponent {
   color: string;
   accentColor: string;
   pins: PinTerminal[];
+  groupId?: string;
+  locked?: boolean;
 }
 
 export type CadFormat = "glb" | "gltf" | "obj" | "dxf";
@@ -153,6 +155,8 @@ export interface CustomCadAsset {
   rawText?: string;
   entityCount?: number;
   parseWarning?: string;
+  groupId?: string;
+  locked?: boolean;
 }
 
 export type ViewportMode = "3d" | "2d";
