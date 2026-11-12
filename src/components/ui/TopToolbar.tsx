@@ -27,6 +27,7 @@ export function TopToolbar() {
   const rails = usePanelStore((s) => s.rails);
   const ducts = usePanelStore((s) => s.ducts);
   const components = usePanelStore((s) => s.components);
+  const cadAssets = usePanelStore((s) => s.cadAssets);
   const wires = usePanelStore((s) => s.wires);
   const titleBlock = usePanelStore((s) => s.titleBlock);
 
@@ -59,6 +60,7 @@ export function TopToolbar() {
       rails,
       ducts,
       components,
+      cadAssets,
       wires,
       meta: titleBlock,
     });

@@ -88,7 +88,7 @@ function CadAssetItem3D({ asset }: { asset: CustomCadAsset }) {
     };
   }, [asset.id, asset.format, asset.objectUrl, asset.rawText, asset.sourceUnit, updateCadAsset]);
 
-  // Parse DXF
+  // Parse DXF (segments are pre-centered around local origin by subtracting centerOffsetMm)
   const dxfGeometry = useMemo(() => {
     if (asset.format !== "dxf" || !asset.rawText) return null;
     const parsed = parseDxfToMmSegments(asset.rawText, asset.sourceUnit);
@@ -98,7 +98,13 @@ function CadAssetItem3D({ asset }: { asset: CustomCadAsset }) {
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    return { geo, bbox: parsed.boundingBoxMm };
+    geo.computeBoundingBox();
+    geo.computeBoundingSphere();
+    return {
+      geo,
+      bbox: parsed.boundingBoxMm,
+      hasSegments: parsed.segments.length > 0,
+    };
   }, [asset.format, asset.rawText, asset.sourceUnit]);
 
   useEffect(() => {

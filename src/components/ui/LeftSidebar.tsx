@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useState, type ChangeEvent } from "react";
 import { COMPONENT_LIST } from "@/lib/components-catalog";
+import { parseDxfToMmSegments } from "@/lib/dxf-parser";
 import { getBackplateDimensions } from "@/lib/template-export";
 import { formatDim, fromMm, inputStepForUnit, toMm } from "@/lib/units";
 import { usePanelStore } from "@/store/usePanelStore";
@@ -71,6 +72,12 @@ export function LeftSidebar() {
       baseAsset.objectUrl = URL.createObjectURL(file);
     } else {
       baseAsset.rawText = await file.text();
+      if (format === "dxf") {
+        const parsed = parseDxfToMmSegments(baseAsset.rawText, cadImportUnit);
+        baseAsset.boundingBoxMm = parsed.boundingBoxMm;
+        baseAsset.entityCount = parsed.entityCount;
+        baseAsset.parseWarning = parsed.warning;
+      }
     }
 
     addCadAsset(baseAsset);
@@ -351,15 +358,28 @@ export function LeftSidebar() {
                         : "border-slate-800 bg-slate-900/60"
                     }`}
                   >
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <div className="font-medium text-slate-200">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div
+                          className="truncate font-medium text-slate-200"
+                          title={asset.fileName}
+                        >
                           {asset.name}
                         </div>
                         <div className="font-mono text-[10px] text-slate-400">
                           {asset.format.toUpperCase()} ({asset.sourceUnit}) ·{" "}
+                          {Math.round(asset.boundingBoxMm.w)}×
+                          {Math.round(asset.boundingBoxMm.h)}mm ·{" "}
                           {asset.pins.length} pins
+                          {typeof asset.entityCount === "number"
+                            ? ` · ${asset.entityCount} ent`
+                            : ""}
                         </div>
+                        {asset.parseWarning && (
+                          <div className="mt-1 rounded bg-amber-950/60 px-1.5 py-0.5 font-mono text-[10px] text-amber-300 border border-amber-500/40">
+                            {asset.parseWarning}
+                          </div>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -367,7 +387,7 @@ export function LeftSidebar() {
                           e.stopPropagation();
                           removeCadAsset(asset.id);
                         }}
-                        className="p-1 text-slate-500 hover:text-rose-400"
+                        className="shrink-0 p-1 text-slate-500 hover:text-rose-400"
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>

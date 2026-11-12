@@ -98,4 +98,40 @@ describe("sheet-export", () => {
     expect(svg).toContain("F1");
     expect(svg).toContain("F01");
   });
+
+  it("includes custom CAD assets with pins in SVG output", () => {
+    const svg = generateEplanSheetSvg({
+      enclosure,
+      rails,
+      ducts,
+      components,
+      cadAssets: [
+        {
+          id: "cad-1",
+          name: "PLC-Module-FX3U",
+          fileName: "PLC-Module-FX3U.dxf",
+          format: "dxf",
+          sourceUnit: "mm",
+          xMm: 0,
+          yMm: 0,
+          zMm: 30,
+          boundingBoxMm: { w: 100, h: 80, d: 40 },
+          pins: [
+            {
+              id: "cp1",
+              label: "24V",
+              localXMm: -20,
+              localYMm: 30,
+              localZMm: 0,
+            },
+          ],
+        },
+      ],
+      wires,
+      meta,
+    });
+    expect(svg).toContain('data-id="cad-1"');
+    expect(svg).toContain("PLC-Module-FX3U");
+    expect(svg).toContain("24V");
+  });
 });

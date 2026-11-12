@@ -7,6 +7,7 @@ import type {
   WireConnection,
   WireDuct,
 } from "@/types/panel";
+import { parseDxfToMmSegments } from "./dxf-parser";
 import { getBackplateDimensions } from "./template-export";
 import { pointsToSvgPath, routeOrthogonalWire } from "./wire-router";
 
@@ -33,7 +34,15 @@ export const WIRE_COLOR_MAP: Record<string, string> = {
 export { type TitleBlockMeta };
 
 export function generateEplanSheetSvg(params: EplanSheetParams): string {
-  const { enclosure, rails, ducts, components, wires, meta } = params;
+  const {
+    enclosure,
+    rails,
+    ducts,
+    components,
+    cadAssets = [],
+    wires,
+    meta,
+  } = params;
   const { widthMm: plateW, heightMm: plateH } = getBackplateDimensions(enclosure);
 
   // Outer Sheet geometry (Standard Drawing Sheet with Margins & Title Block)
@@ -122,6 +131,62 @@ export function generateEplanSheetSvg(params: EplanSheetParams): string {
     })
     .join("\n");
 
+  // 4b. Custom CAD Assets (DXF vector lines or bounding box + pins)
+  const cadSvg = cadAssets
+    .map((asset) => {
+      let w = asset.boundingBoxMm.w;
+      let h = asset.boundingBoxMm.h;
+      let dxfSegments: Array<{ x1: number; y1: number; x2: number; y2: number }> =
+        [];
+
+      if (asset.format === "dxf" && asset.rawText) {
+        const parsed = parseDxfToMmSegments(asset.rawText, asset.sourceUnit);
+        w = parsed.boundingBoxMm.w;
+        h = parsed.boundingBoxMm.h;
+        dxfSegments = parsed.segments;
+      }
+
+      const x = toSvgX(asset.xMm - w / 2);
+      const y = toSvgY(asset.yMm + h / 2);
+
+      const pinsSvg = asset.pins
+        .map((p) => {
+          const pinSvgX = toSvgX(asset.xMm + p.localXMm);
+          const pinSvgY = toSvgY(asset.yMm + p.localYMm);
+          pinCoordMap.set(`${asset.id}:${p.id}`, { x: pinSvgX, y: pinSvgY });
+
+          return `
+      <g class="cad-pin" data-pin-id="${p.id}">
+        <circle cx="${pinSvgX.toFixed(2)}" cy="${pinSvgY.toFixed(2)}" r="1.6" fill="#fef3c7" stroke="#d97706" stroke-width="0.6" />
+        <text x="${(pinSvgX + 2.5).toFixed(2)}" y="${(pinSvgY + 2).toFixed(2)}" font-family="monospace" font-size="4.5" font-weight="bold" fill="#92400e">${p.label}</text>
+      </g>`;
+        })
+        .join("\n");
+
+      const dxfLinesSvg = dxfSegments
+        .map(
+          (s) =>
+            `<line x1="${toSvgX(asset.xMm + s.x1).toFixed(2)}" y1="${toSvgY(
+              asset.yMm + s.y1
+            ).toFixed(2)}" x2="${toSvgX(asset.xMm + s.x2).toFixed(2)}" y2="${toSvgY(
+              asset.yMm + s.y2
+            ).toFixed(2)}" stroke="#0369a1" stroke-width="0.75" />`
+        )
+        .join("\n");
+
+      const shortLabel =
+        asset.name.length > 20 ? `${asset.name.slice(0, 18)}…` : asset.name;
+
+      return `
+    <g class="cad-asset" data-id="${asset.id}">
+      <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" fill="${asset.format === "dxf" ? "#f0f9ff" : "#f8fafc"}" fill-opacity="${asset.format === "dxf" ? "0.3" : "0.85"}" stroke="${asset.format === "dxf" ? "#94a3b8" : "#0f172a"}" stroke-width="0.7" stroke-dasharray="${asset.format === "dxf" ? "2,1.5" : "none"}" />
+      <text x="${(x + 2).toFixed(2)}" y="${(y - 3).toFixed(2)}" font-family="monospace" font-size="5" font-weight="bold" fill="#0369a1">${shortLabel} [${asset.format.toUpperCase()}]</text>
+      ${dxfLinesSvg}
+      ${pinsSvg}
+    </g>`;
+    })
+    .join("\n");
+
   // 5. Wires (Orthogonal routing lines with wire tag callouts)
   const wireSvg = wires
     .map((w) => {
@@ -189,6 +254,11 @@ export function generateEplanSheetSvg(params: EplanSheetParams): string {
   <!-- Components Layer -->
   <g id="components">
     ${compSvg}
+  </g>
+
+  <!-- Custom CAD Assets Layer -->
+  <g id="cad-assets">
+    ${cadSvg}
   </g>
 
   <!-- Wires Layer -->

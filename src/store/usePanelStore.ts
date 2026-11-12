@@ -74,6 +74,7 @@ interface PanelStore {
 
   addCadAsset: (asset: CustomCadAsset) => void;
   updateCadAsset: (id: string, partial: Partial<CustomCadAsset>) => void;
+  moveCadAsset: (id: string, targetXMm: number, targetYMm: number) => void;
   removeCadAsset: (id: string) => void;
   addPinToAsset: (assetId: string, pin: Omit<PinTerminal, "id">) => void;
   removePinFromAsset: (assetId: string, pinId: string) => void;
@@ -474,6 +475,44 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
         a.id === id ? { ...a, ...partial } : a
       ),
     })),
+
+  moveCadAsset: (id, targetXMm, targetYMm) => {
+    const asset = get().cadAssets.find((a) => a.id === id);
+    if (!asset) return;
+    const { rails, gridSnapMm, enclosure } = get();
+    const snapResult = snapComponentToNearestRail(
+      targetXMm,
+      targetYMm,
+      asset.boundingBoxMm.w,
+      asset.boundingBoxMm.d,
+      rails,
+      gridSnapMm,
+      25
+    );
+    const { widthMm: plateW, heightMm: plateH } =
+      getBackplateDimensions(enclosure);
+    const clamped = clampToBackplate(
+      snapResult.xMm,
+      snapResult.yMm,
+      asset.boundingBoxMm.w,
+      asset.boundingBoxMm.h,
+      plateW,
+      plateH
+    );
+
+    set((state) => ({
+      cadAssets: state.cadAssets.map((a) =>
+        a.id === id
+          ? {
+              ...a,
+              xMm: clamped.xMm,
+              yMm: clamped.yMm,
+              zMm: snapResult.snappedToRail ? snapResult.zMm : a.zMm,
+            }
+          : a
+      ),
+    }));
+  },
 
   removeCadAsset: (id) =>
     set((state) => ({

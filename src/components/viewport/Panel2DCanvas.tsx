@@ -10,11 +10,13 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { getBackplateDimensions } from "@/lib/template-export";
+import { parseDxfToMmSegments } from "@/lib/dxf-parser";
 import { WIRE_COLOR_MAP } from "@/lib/sheet-export";
 import { snapToGrid } from "@/lib/snap";
 import { pointsToSvgPath, routeOrthogonalWire } from "@/lib/wire-router";
 import { usePanelStore } from "@/store/usePanelStore";
 import type {
+  CustomCadAsset,
   DinRail,
   PlacedComponent,
   WireColorCode,
@@ -41,6 +43,12 @@ type DragState =
     }
   | {
       type: "component";
+      id: string;
+      offsetXMm: number;
+      offsetYMm: number;
+    }
+  | {
+      type: "cad";
       id: string;
       offsetXMm: number;
       offsetYMm: number;
@@ -272,6 +280,163 @@ function Component2DSymbol({
   );
 }
 
+function CadAsset2DSymbol({
+  asset,
+  isSelected,
+  isMarkingThis,
+  isWireMode,
+  activeWireStartPin,
+  onPointerDown,
+  onPinClick,
+}: {
+  asset: CustomCadAsset;
+  isSelected: boolean;
+  isMarkingThis: boolean;
+  isWireMode: boolean;
+  activeWireStartPin: { componentId: string; pinId: string } | null;
+  onPointerDown: (e: React.PointerEvent) => void;
+  onPinClick: (e: React.PointerEvent, pinId: string) => void;
+}) {
+  const dxfParsed = useMemo(() => {
+    if (asset.format !== "dxf" || !asset.rawText) return null;
+    return parseDxfToMmSegments(asset.rawText, asset.sourceUnit);
+  }, [asset.format, asset.rawText, asset.sourceUnit]);
+
+  const w = dxfParsed ? dxfParsed.boundingBoxMm.w : asset.boundingBoxMm.w;
+  const h = dxfParsed ? dxfParsed.boundingBoxMm.h : asset.boundingBoxMm.h;
+
+  // SVG Y is down, world Y is up
+  const x = asset.xMm - w / 2;
+  const y = -(asset.yMm + h / 2);
+
+  const shortLabel =
+    asset.name.length > 18 ? `${asset.name.slice(0, 16)}…` : asset.name;
+
+  return (
+    <g
+      onPointerDown={onPointerDown}
+      className={
+        isMarkingThis || isWireMode
+          ? "cursor-crosshair"
+          : "cursor-grab active:cursor-grabbing"
+      }
+    >
+      <title>{asset.fileName}</title>
+
+      {/* Interactive Hitbox & Background */}
+      <rect
+        x={x}
+        y={y}
+        width={w}
+        height={h}
+        fill={asset.format === "dxf" ? "#f0f9ff" : "#f8fafc"}
+        fillOpacity={asset.format === "dxf" ? 0.35 : 0.85}
+        stroke={
+          isMarkingThis
+            ? "#f59e0b"
+            : isSelected
+            ? "#0284c7"
+            : asset.format === "dxf"
+            ? "#94a3b8"
+            : "#0f172a"
+        }
+        strokeWidth={isMarkingThis || isSelected ? 1.1 : 0.7}
+        strokeDasharray={asset.format === "dxf" ? "2,1.5" : undefined}
+      />
+
+      {/* Selection / Marking Halo */}
+      {(isSelected || isMarkingThis) && (
+        <rect
+          x={x - 2.5}
+          y={y - 2.5}
+          width={w + 5}
+          height={h + 5}
+          fill="none"
+          stroke={isMarkingThis ? "#f59e0b" : "#0284c7"}
+          strokeWidth={1.2}
+          strokeDasharray="3,2"
+          rx={1}
+        />
+      )}
+
+      {/* DXF Vector Segments or 3D Mesh Silhouette */}
+      {dxfParsed && dxfParsed.segments.length > 0 ? (
+        <g stroke="#0369a1" strokeWidth={0.75} strokeLinecap="round">
+          {dxfParsed.segments.map((seg, idx) => (
+            <line
+              key={idx}
+              x1={asset.xMm + seg.x1}
+              y1={-(asset.yMm + seg.y1)}
+              x2={asset.xMm + seg.x2}
+              y2={-(asset.yMm + seg.y2)}
+            />
+          ))}
+        </g>
+      ) : (
+        <g stroke="#64748b" strokeWidth={0.6} fill="none">
+          <line x1={x} y1={y} x2={x + w} y2={y + h} strokeDasharray="2,2" />
+          <line x1={x + w} y1={y} x2={x} y2={y + h} strokeDasharray="2,2" />
+          <circle cx={asset.xMm} cy={-asset.yMm} r={Math.min(w, h) * 0.2} />
+        </g>
+      )}
+
+      {/* Asset Name & Format Tag */}
+      <text
+        x={x + 2}
+        y={y - 3}
+        fontSize={4.5}
+        fontFamily="monospace"
+        fontWeight="bold"
+        fill="#0369a1"
+      >
+        {shortLabel} [{asset.format.toUpperCase()}]
+      </text>
+
+      {/* Pins */}
+      {asset.pins.map((pin) => {
+        const px = asset.xMm + pin.localXMm;
+        const py = -(asset.yMm + pin.localYMm);
+        const isStartPin =
+          activeWireStartPin?.componentId === asset.id &&
+          activeWireStartPin?.pinId === pin.id;
+
+        return (
+          <g
+            key={pin.id}
+            onPointerDown={(e) => {
+              if (isWireMode) {
+                e.stopPropagation();
+                onPinClick(e, pin.id);
+              }
+            }}
+            className={isWireMode ? "cursor-pointer" : undefined}
+          >
+            <circle
+              cx={px}
+              cy={py}
+              r={isWireMode ? 2.6 : 1.8}
+              fill={isStartPin ? "#f59e0b" : "#fef3c7"}
+              stroke={isStartPin ? "#b45309" : isWireMode ? "#0284c7" : "#d97706"}
+              strokeWidth={isWireMode ? 0.9 : 0.65}
+            />
+            <text
+              x={px}
+              y={py - 3}
+              fontSize={3.6}
+              fontFamily="monospace"
+              fontWeight="bold"
+              fill="#92400e"
+              textAnchor="middle"
+            >
+              {pin.label}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  );
+}
+
 export function Panel2DCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -279,6 +444,7 @@ export function Panel2DCanvas() {
   const rails = usePanelStore((s) => s.rails);
   const ducts = usePanelStore((s) => s.ducts);
   const components = usePanelStore((s) => s.components);
+  const cadAssets = usePanelStore((s) => s.cadAssets);
   const wires = usePanelStore((s) => s.wires);
   const titleBlock = usePanelStore((s) => s.titleBlock);
   const gridSnapMm = usePanelStore((s) => s.gridSnapMm);
@@ -287,6 +453,8 @@ export function Panel2DCanvas() {
   const activeWireColor = usePanelStore((s) => s.activeWireColor);
   const activeWireGauge = usePanelStore((s) => s.activeWireGauge);
   const activeWireStartPin = usePanelStore((s) => s.activeWireStartPin);
+  const isPinMarkingMode = usePanelStore((s) => s.isPinMarkingMode);
+  const activeMarkingAssetId = usePanelStore((s) => s.activeMarkingAssetId);
 
   const setSelected = usePanelStore((s) => s.setSelected);
   const setCanvasTool2D = usePanelStore((s) => s.setCanvasTool2D);
@@ -294,6 +462,8 @@ export function Panel2DCanvas() {
   const setActiveWireGauge = usePanelStore((s) => s.setActiveWireGauge);
   const setActiveWireStartPin = usePanelStore((s) => s.setActiveWireStartPin);
   const moveComponent = usePanelStore((s) => s.moveComponent);
+  const moveCadAsset = usePanelStore((s) => s.moveCadAsset);
+  const addPinToAsset = usePanelStore((s) => s.addPinToAsset);
   const updateRail = usePanelStore((s) => s.updateRail);
   const updateDuct = usePanelStore((s) => s.updateDuct);
   const addWire = usePanelStore((s) => s.addWire);
@@ -442,6 +612,15 @@ export function Panel2DCanvas() {
       return;
     }
 
+    if (dragState.type === "cad") {
+      moveCadAsset(
+        dragState.id,
+        world.xMm - dragState.offsetXMm,
+        world.yMm - dragState.offsetYMm
+      );
+      return;
+    }
+
     if (dragState.type === "rail-move") {
       updateRail(dragState.id, {
         xMm: snapToGrid(world.xMm - dragState.offsetXMm, gridSnapMm),
@@ -547,8 +726,16 @@ export function Panel2DCanvas() {
         });
       }
     }
+    for (const a of cadAssets) {
+      for (const p of a.pins) {
+        map.set(`${a.id}:${p.id}`, {
+          x: a.xMm + p.localXMm,
+          y: -(a.yMm + p.localYMm),
+        });
+      }
+    }
     return map;
-  }, [components]);
+  }, [components, cadAssets]);
 
   // Ruler ticks computation
   const rulerStepMm = zoom > 1.5 ? 25 : zoom > 0.7 ? 50 : 100;
@@ -701,6 +888,14 @@ export function Panel2DCanvas() {
                 Select target pin... (Esc to cancel)
               </span>
             )}
+          </div>
+        )}
+
+        {isPinMarkingMode && activeMarkingAssetId && (
+          <div className="flex items-center gap-2 border-l border-slate-200 pl-2">
+            <span className="font-mono text-[10px] font-semibold text-amber-600">
+              Pin Marking Mode: Click on CAD asset to place pin
+            </span>
           </div>
         )}
       </div>
@@ -1083,6 +1278,54 @@ export function Panel2DCanvas() {
                 }}
               />
             ))}
+          </g>
+
+          {/* Custom CAD Assets Layer */}
+          <g>
+            {cadAssets.map((asset) => {
+              const isMarkingThis =
+                isPinMarkingMode && activeMarkingAssetId === asset.id;
+              return (
+                <CadAsset2DSymbol
+                  key={asset.id}
+                  asset={asset}
+                  isSelected={
+                    selected?.kind === "cad" && selected.id === asset.id
+                  }
+                  isMarkingThis={isMarkingThis}
+                  isWireMode={canvasTool2D === "wire"}
+                  activeWireStartPin={activeWireStartPin}
+                  onPointerDown={(e) => {
+                    if (spacePressed) return;
+                    if (isMarkingThis) {
+                      e.stopPropagation();
+                      const w = screenToWorld(e.clientX, e.clientY);
+                      addPinToAsset(asset.id, {
+                        label: `P${asset.pins.length + 1}`,
+                        localXMm: Number((w.xMm - asset.xMm).toFixed(1)),
+                        localYMm: Number((w.yMm - asset.yMm).toFixed(1)),
+                        localZMm: 0,
+                      });
+                      return;
+                    }
+                    if (canvasTool2D !== "select") return;
+                    e.stopPropagation();
+                    setSelected({ kind: "cad", id: asset.id });
+                    const w = screenToWorld(e.clientX, e.clientY);
+                    setDragState({
+                      type: "cad",
+                      id: asset.id,
+                      offsetXMm: w.xMm - asset.xMm,
+                      offsetYMm: w.yMm - asset.yMm,
+                    });
+                  }}
+                  onPinClick={(e, pinId) => {
+                    e.stopPropagation();
+                    handlePinClick(asset.id, pinId);
+                  }}
+                />
+              );
+            })}
           </g>
 
           {/* Wires / Netlist Layer */}

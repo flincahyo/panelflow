@@ -92,6 +92,8 @@ export interface CustomCadAsset {
   pins: PinTerminal[];
   objectUrl?: string;
   rawText?: string;
+  entityCount?: number;
+  parseWarning?: string;
 }
 
 export type ViewportMode = "3d" | "2d";
