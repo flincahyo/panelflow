@@ -233,49 +233,105 @@ function Component2DSymbol({
       <rect x={x} y={y} width={comp.widthMm} height={5} fill={accent} />
 
       {/* Eplan 2D Vector Symbol Detail */}
-      {comp.templateId === "mcb-1p" || comp.templateId === "mcb-3p" ? (
+      {comp.templateId === "mcb-1p" ||
+      comp.templateId === "mcb-2p" ||
+      comp.templateId === "mcb-3p" ||
+      comp.templateId === "mcb-4p" ||
+      comp.templateId === "spd-3pn" ||
+      comp.templateId === "fuse-1p" ? (
         <g stroke="#334155" strokeWidth={0.7} fill="none">
           <rect
-            x={x + comp.widthMm * 0.2}
+            x={x + comp.widthMm * 0.16}
             y={y + comp.heightMm * 0.38}
-            width={comp.widthMm * 0.6}
+            width={comp.widthMm * 0.68}
             height={comp.heightMm * 0.24}
             fill="#e2e8f0"
           />
           <line
-            x1={x + comp.widthMm * 0.25}
+            x1={x + comp.widthMm * 0.22}
             y1={y + comp.heightMm * 0.5}
-            x2={x + comp.widthMm * 0.75}
+            x2={x + comp.widthMm * 0.78}
             y2={y + comp.heightMm * 0.5}
-            stroke="#0f172a"
-            strokeWidth={1.2}
+            stroke={accent}
+            strokeWidth={1.3}
           />
         </g>
-      ) : comp.templateId === "contactor" ? (
+      ) : comp.templateId === "mccb-100a" ? (
+        <g stroke="#334155" strokeWidth={0.8} fill="none">
+          <rect
+            x={x + comp.widthMm * 0.28}
+            y={y + comp.heightMm * 0.35}
+            width={comp.widthMm * 0.44}
+            height={comp.heightMm * 0.28}
+            rx={2}
+            fill="#e2e8f0"
+          />
+          <rect
+            x={x + comp.widthMm * 0.35}
+            y={y + comp.heightMm * 0.44}
+            width={comp.widthMm * 0.3}
+            height={comp.heightMm * 0.1}
+            fill={accent}
+          />
+        </g>
+      ) : comp.templateId === "contactor" || comp.templateId === "tor" ? (
         <g stroke="#334155" strokeWidth={0.7} fill="none">
           <rect
             x={x + 6}
-            y={y + 26}
+            y={y + 22}
             width={comp.widthMm - 12}
-            height={comp.heightMm - 52}
+            height={comp.heightMm - 44}
             fill="#f8fafc"
           />
           <line
             x1={x + 10}
-            y1={y + 34}
+            y1={y + 28}
             x2={x + comp.widthMm - 10}
-            y2={y + comp.heightMm - 34}
-            stroke="#0ea5e9"
-            strokeWidth={0.9}
+            y2={y + comp.heightMm - 28}
+            stroke={accent}
+            strokeWidth={1.0}
           />
         </g>
-      ) : comp.templateId === "psu-24v" ? (
+      ) : comp.templateId === "relay" || comp.templateId === "timer-relay" ? (
+        <g stroke="#334155" strokeWidth={0.7} fill="none">
+          <rect
+            x={x + 3}
+            y={y + 22}
+            width={comp.widthMm - 6}
+            height={comp.heightMm - 44}
+            fill="#f8fafc"
+          />
+          <circle
+            cx={x + comp.widthMm / 2}
+            cy={y + comp.heightMm / 2}
+            r={Math.min(5, comp.widthMm * 0.25)}
+            fill={accent}
+            fillOpacity={0.35}
+            stroke={accent}
+          />
+        </g>
+      ) : comp.templateId === "plc-compact" ? (
+        <g stroke="#334155" strokeWidth={0.7} fill="none">
+          <rect x={x + 6} y={y + 22} width={comp.widthMm - 12} height={comp.heightMm - 44} fill="#f1f5f9" />
+          <rect x={x + 10} y={y + 26} width={comp.widthMm - 20} height={10} fill="#0f172a" />
+          <circle cx={x + 15} cy={y + 31} r={1.8} fill="#22c55e" />
+          <circle cx={x + 21} cy={y + 31} r={1.8} fill="#06b6d4" />
+        </g>
+      ) : comp.templateId === "vfd-15kw" ? (
+        <g stroke="#334155" strokeWidth={0.7} fill="none">
+          <rect x={x + 8} y={y + 26} width={comp.widthMm - 16} height={32} fill="#0f172a" />
+          <circle cx={x + comp.widthMm / 2} cy={y + 82} r={12} fill="#e2e8f0" stroke={accent} strokeWidth={1} />
+          <rect x={x + 10} y={y + 110} width={comp.widthMm - 20} height={44} fill="#f1f5f9" />
+        </g>
+      ) : comp.templateId === "psu-24v" ||
+        comp.templateId === "psu-24v-10a" ||
+        comp.templateId === "dist-block-4p" ? (
         <g stroke="#334155" strokeWidth={0.7} fill="none">
           <rect
             x={x + 8}
-            y={y + 28}
+            y={y + 26}
             width={comp.widthMm - 16}
-            height={comp.heightMm - 56}
+            height={comp.heightMm - 52}
             fill="#f1f5f9"
           />
           <line
@@ -283,9 +339,44 @@ function Component2DSymbol({
             y1={y + comp.heightMm / 2}
             x2={x + comp.widthMm - 12}
             y2={y + comp.heightMm / 2}
-            stroke="#10b981"
-            strokeWidth={1}
+            stroke={accent}
+            strokeWidth={1.1}
           />
+        </g>
+      ) : comp.templateId === "pilot-lamp-red" ||
+        comp.templateId === "pilot-lamp-green" ||
+        comp.templateId === "push-button" ||
+        comp.templateId === "e-stop" ||
+        comp.templateId === "selector-3pos" ? (
+        <g stroke="#0f172a" strokeWidth={0.8} fill="none">
+          <circle
+            cx={x + comp.widthMm / 2}
+            cy={y + comp.heightMm / 2}
+            r={Math.min(comp.widthMm, comp.heightMm) * 0.36}
+            fill={accent}
+            fillOpacity={0.3}
+            stroke={accent}
+            strokeWidth={1.2}
+          />
+          <circle
+            cx={x + comp.widthMm / 2}
+            cy={y + comp.heightMm / 2}
+            r={11}
+            strokeDasharray="2,1.5"
+            stroke="#475569"
+          />
+        </g>
+      ) : comp.templateId === "panel-meter-96" ? (
+        <g stroke="#0f172a" strokeWidth={0.8} fill="none">
+          <rect x={x + 10} y={y + 22} width={comp.widthMm - 20} height={36} fill="#0f172a" />
+          <rect x={x + 14} y={y + 26} width={comp.widthMm - 28} height={28} stroke="#38bdf8" strokeWidth={0.8} />
+        </g>
+      ) : comp.templateId === "cooling-fan-120" ? (
+        <g stroke="#334155" strokeWidth={0.8} fill="none">
+          <circle cx={x + comp.widthMm / 2} cy={y + comp.heightMm / 2} r={comp.widthMm * 0.38} fill="#f1f5f9" />
+          <circle cx={x + comp.widthMm / 2} cy={y + comp.heightMm / 2} r={10} fill="#94a3b8" />
+          <line x1={x + 14} y1={y + comp.heightMm / 2} x2={x + comp.widthMm - 14} y2={y + comp.heightMm / 2} stroke="#475569" />
+          <line x1={x + comp.widthMm / 2} y1={y + 14} x2={x + comp.widthMm / 2} y2={y + comp.heightMm - 14} stroke="#475569" />
         </g>
       ) : null}
 

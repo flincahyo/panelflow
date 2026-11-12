@@ -1,12 +1,17 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { LeftSidebar } from "@/components/ui/LeftSidebar";
 import { RightInspector } from "@/components/ui/RightInspector";
 import { SheetTabs } from "@/components/ui/SheetTabs";
 import { TopToolbar } from "@/components/ui/TopToolbar";
 import { Panel2DCanvas } from "@/components/viewport/Panel2DCanvas";
+import {
+  loadAutoSaveSession,
+  saveAutoSaveSession,
+} from "@/lib/indexed-db";
+import { rehydrateCadAssets } from "@/lib/project-io";
 import { usePanelStore } from "@/store/usePanelStore";
 
 const PanelViewport = dynamic(
@@ -27,7 +32,9 @@ const PanelViewport = dynamic(
 export function PanelWorkbench() {
   const viewportMode = usePanelStore((s) => s.viewportMode);
   const setTheme = usePanelStore((s) => s.setTheme);
+  const loadProjectState = usePanelStore((s) => s.loadProjectState);
   const [inspectorOpen, setInspectorOpen] = useState(true);
+  const restoredRef = useRef(false);
 
   // Sync theme from localStorage on initial client mount
   useEffect(() => {
@@ -42,6 +49,54 @@ export function PanelWorkbench() {
       // storage unavailable
     }
   }, [setTheme]);
+
+  // Restore last auto-saved session from IndexedDB on mount
+  useEffect(() => {
+    let active = true;
+    loadAutoSaveSession()
+      .then((snapshot) => {
+        if (!active) return;
+        if (snapshot && Array.isArray(snapshot.sheets) && snapshot.sheets.length > 0) {
+          loadProjectState({
+            sheets: rehydrateCadAssets(snapshot.sheets),
+            activeSheetId: snapshot.activeSheetId,
+          });
+        }
+      })
+      .catch(() => {
+        // IndexedDB unavailable or empty
+      })
+      .finally(() => {
+        restoredRef.current = true;
+      });
+    return () => {
+      active = false;
+    };
+  }, [loadProjectState]);
+
+  // Debounced auto-save to IndexedDB (~1.5s) whenever sheets or activeSheetId change
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const unsub = usePanelStore.subscribe((state, prevState) => {
+      if (!restoredRef.current) return;
+      if (
+        state.sheets === prevState.sheets &&
+        state.activeSheetId === prevState.activeSheetId
+      ) {
+        return;
+      }
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        saveAutoSaveSession(state.sheets, state.activeSheetId).catch(() => {
+          // ignore storage quota errors
+        });
+      }, 1500);
+    });
+    return () => {
+      unsub();
+      if (timer) clearTimeout(timer);
+    };
+  }, []);
 
   return (
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#f8fafc] dark:bg-[#090b10] text-[#0f172a] dark:text-slate-100 antialiased select-none">

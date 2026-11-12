@@ -398,6 +398,17 @@ interface PanelStore {
   duplicateCadAsset: (id: string, offsetMm?: { x: number; y: number }) => string | null;
   addPinToAsset: (assetId: string, pin: Omit<PinTerminal, "id">) => void;
   removePinFromAsset: (assetId: string, pinId: string) => void;
+
+  // Project Import / Restore / Reset
+  loadProjectState: (params: {
+    sheets: PanelSheet[];
+    activeSheetId?: string;
+    displayUnit?: LengthUnit;
+    gridSnapMm?: GridSnapMm;
+    autoRouteDuctsEnabled?: boolean;
+    titleBlock?: TitleBlockMeta;
+  }) => void;
+  resetToDefaultProject: () => void;
 }
 
 const MAX_HISTORY = 30;
@@ -1535,26 +1546,36 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     pushHistory(sheets);
 
     let snapResult: { railId: string | null; xMm: number; yMm: number; zMm: number };
-    if (customPos) {
-      snapResult = snapComponentToNearestRail(
-        customPos.xMm,
-        customPos.yMm,
-        template.widthMm,
-        template.depthMm,
-        activeSheet.rails,
-        gridSnapMm,
-        35
-      );
+    const mounting = template.mountingType ?? "din_rail";
+    if (mounting === "din_rail") {
+      if (customPos) {
+        snapResult = snapComponentToNearestRail(
+          customPos.xMm,
+          customPos.yMm,
+          template.widthMm,
+          template.depthMm,
+          activeSheet.rails,
+          gridSnapMm,
+          35
+        );
+      } else {
+        const targetY = nearYMm ?? (activeSheet.rails[0]?.yMm ?? 0);
+        snapResult = snapComponentToNearestRail(
+          0,
+          targetY,
+          template.widthMm,
+          template.depthMm,
+          activeSheet.rails,
+          gridSnapMm
+        );
+      }
     } else {
-      const targetY = nearYMm ?? (activeSheet.rails[0]?.yMm ?? 0);
-      snapResult = snapComponentToNearestRail(
-        0,
-        targetY,
-        template.widthMm,
-        template.depthMm,
-        activeSheet.rails,
-        gridSnapMm
-      );
+      snapResult = {
+        railId: null,
+        xMm: snapToGrid(customPos?.xMm ?? 0, gridSnapMm),
+        yMm: snapToGrid(customPos?.yMm ?? nearYMm ?? 0, gridSnapMm),
+        zMm: template.depthMm / 2 + 2,
+      };
     }
 
     const id = makeUid("comp");
@@ -1565,6 +1586,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
         template.shortName,
         activeSheet.components.map((c) => c.name)
       ),
+      mountingType: mounting,
       xMm: snapResult.xMm,
       yMm: snapResult.yMm,
       zMm: snapResult.zMm,
@@ -2060,6 +2082,51 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
       canUndo: true,
       canRedo: false,
       ...syncActiveSheetProjection(active),
+    });
+  },
+
+  loadProjectState: (params) => {
+    if (!params.sheets || params.sheets.length === 0) return;
+    historyStack = { past: [], future: [] };
+    const validActiveId =
+      params.activeSheetId &&
+      params.sheets.some((s) => s.id === params.activeSheetId)
+        ? params.activeSheetId
+        : params.sheets[0].id;
+    const active = params.sheets.find((s) => s.id === validActiveId)!;
+
+    set({
+      sheets: params.sheets,
+      activeSheetId: validActiveId,
+      displayUnit: params.displayUnit ?? get().displayUnit,
+      gridSnapMm: params.gridSnapMm ?? get().gridSnapMm,
+      autoRouteDuctsEnabled:
+        params.autoRouteDuctsEnabled ?? get().autoRouteDuctsEnabled,
+      selected: null,
+      selectedIds: [],
+      isPinMarkingMode: false,
+      activeMarkingAssetId: null,
+      canUndo: false,
+      canRedo: false,
+      ...syncActiveSheetProjection(active),
+    });
+  },
+
+  resetToDefaultProject: () => {
+    historyStack = { past: [], future: [] };
+    const defaultSheet = createDefaultSheet();
+    set({
+      sheets: [defaultSheet],
+      activeSheetId: defaultSheet.id,
+      displayUnit: "mm",
+      gridSnapMm: 10,
+      selected: null,
+      selectedIds: [],
+      isPinMarkingMode: false,
+      activeMarkingAssetId: null,
+      canUndo: false,
+      canRedo: false,
+      ...syncActiveSheetProjection(defaultSheet),
     });
   },
 }));

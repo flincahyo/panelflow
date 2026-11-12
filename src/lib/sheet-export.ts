@@ -131,12 +131,21 @@ export function generateEplanSheetSvg(params: EplanSheetParams): string {
         })
         .join("\n");
 
+      const tagShort = c.name.length > 16 ? `${c.name.slice(0, 14)}…` : c.name;
+      const typeShort = c.templateId.toUpperCase();
+      const isNarrow = c.widthMm < 25;
+
       return `
     <g class="component" data-id="${c.id}">
       <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${c.widthMm.toFixed(2)}" height="${c.heightMm.toFixed(2)}" fill="#ffffff" stroke="#0f172a" stroke-width="0.8" />
-      <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${c.widthMm.toFixed(2)}" height="6" fill="${c.accentColor || "#3b82f6"}" />
-      <text x="${(x + 3).toFixed(2)}" y="${(y + 12).toFixed(2)}" font-family="monospace" font-size="6.5" font-weight="bold" fill="#0f172a">${c.name}</text>
-      <text x="${(x + 3).toFixed(2)}" y="${(y + 19).toFixed(2)}" font-family="sans-serif" font-size="5" fill="#64748b">${c.templateId.toUpperCase()}</text>
+      <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${c.widthMm.toFixed(2)}" height="5" fill="${c.accentColor || "#3b82f6"}" />
+      ${
+        isNarrow
+          ? `<text x="${(x + c.widthMm / 2).toFixed(2)}" y="${(y + 11).toFixed(2)}" font-family="monospace" font-size="3.5" font-weight="bold" fill="#0f172a" text-anchor="middle">${tagShort}</text>
+             <text x="${(x + c.widthMm / 2).toFixed(2)}" y="${(y + 16).toFixed(2)}" font-family="sans-serif" font-size="2.8" fill="#64748b" text-anchor="middle">${typeShort}</text>`
+          : `<text x="${(x + 3).toFixed(2)}" y="${(y + 12).toFixed(2)}" font-family="monospace" font-size="5" font-weight="bold" fill="#0f172a">${tagShort}</text>
+             <text x="${(x + 3).toFixed(2)}" y="${(y + 18).toFixed(2)}" font-family="sans-serif" font-size="3.8" fill="#64748b">${typeShort}</text>`
+      }
       ${pinsSvg}
     </g>`;
     })

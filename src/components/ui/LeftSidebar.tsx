@@ -1,7 +1,9 @@
 "use client";
 
 import {
+  BookmarkPlus,
   Box,
+  Check,
   ChevronDown,
   Cpu,
   FileUp,
@@ -12,15 +14,25 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useState, type ChangeEvent } from "react";
-import { COMPONENT_LIST } from "@/lib/components-catalog";
+import { useEffect, useState, type ChangeEvent } from "react";
+import {
+  COMPONENT_CATEGORIES,
+  COMPONENT_LIST,
+} from "@/lib/components-catalog";
 import { parseDxfToMmSegments } from "@/lib/dxf-parser";
+import {
+  listCustomCadLibrary,
+  removeCustomCadFromLibrary,
+  saveCustomCadToLibrary,
+  type CustomLibraryCadItem,
+} from "@/lib/indexed-db";
 import { getBackplateDimensions } from "@/lib/template-export";
 import { formatDim, fromMm, inputStepForUnit, toMm } from "@/lib/units";
 import { usePanelStore } from "@/store/usePanelStore";
 import type {
   CadFormat,
   CadImportUnit,
+  ComponentCategory,
   ComponentTemplateId,
   CustomCadAsset,
 } from "@/types/panel";
@@ -36,37 +48,34 @@ function PartVectorIcon({
 }) {
   switch (templateId) {
     case "mcb-1p":
+    case "fuse-1p":
       return (
         <svg viewBox="0 0 36 44" className="h-9 w-9">
-          <rect
-            x="10"
-            y="4"
-            width="16"
-            height="36"
-            rx="2"
-            fill="#1e222d"
-            stroke="#475569"
-            strokeWidth="1.3"
-          />
+          <rect x="10" y="4" width="16" height="36" rx="2" fill="#1e222d" stroke="#475569" strokeWidth="1.3" />
           <circle cx="18" cy="8" r="1.8" fill="#94a3b8" />
           <circle cx="18" cy="36" r="1.8" fill="#94a3b8" />
           <rect x="13" y="17" width="10" height="9" rx="1.2" fill={accentColor} />
           <line x1="18" y1="12" x2="18" y2="17" stroke="#64748b" strokeWidth="1" />
         </svg>
       );
+    case "mcb-2p":
+      return (
+        <svg viewBox="0 0 42 44" className="h-9 w-9">
+          <rect x="7" y="4" width="28" height="36" rx="2" fill="#1e222d" stroke="#475569" strokeWidth="1.3" />
+          <line x1="21" y1="4" x2="21" y2="40" stroke="#334155" strokeWidth="0.9" />
+          <circle cx="14" cy="8" r="1.6" fill="#94a3b8" />
+          <circle cx="28" cy="8" r="1.6" fill="#94a3b8" />
+          <circle cx="14" cy="36" r="1.6" fill="#94a3b8" />
+          <circle cx="28" cy="36" r="1.6" fill="#94a3b8" />
+          <rect x="10" y="18" width="22" height="7" rx="1.2" fill={accentColor} />
+        </svg>
+      );
     case "mcb-3p":
+    case "mcb-4p":
+    case "spd-3pn":
       return (
         <svg viewBox="0 0 48 44" className="h-9 w-9">
-          <rect
-            x="4"
-            y="4"
-            width="40"
-            height="36"
-            rx="2"
-            fill="#1e222d"
-            stroke="#475569"
-            strokeWidth="1.3"
-          />
+          <rect x="4" y="4" width="40" height="36" rx="2" fill="#1e222d" stroke="#475569" strokeWidth="1.3" />
           <line x1="17" y1="4" x2="17" y2="40" stroke="#334155" strokeWidth="0.9" />
           <line x1="31" y1="4" x2="31" y2="40" stroke="#334155" strokeWidth="0.9" />
           <circle cx="10.5" cy="8" r="1.6" fill="#94a3b8" />
@@ -78,19 +87,25 @@ function PartVectorIcon({
           <rect x="8" y="18" width="32" height="7" rx="1.2" fill={accentColor} />
         </svg>
       );
+    case "mccb-100a":
+      return (
+        <svg viewBox="0 0 48 48" className="h-9 w-9">
+          <rect x="8" y="3" width="32" height="42" rx="3" fill="#1e293b" stroke="#475569" strokeWidth="1.4" />
+          <rect x="18" y="15" width="12" height="16" rx="2" fill="#0f172a" stroke={accentColor} strokeWidth="1.2" />
+          <rect x="20" y="20" width="8" height="6" rx="1" fill={accentColor} />
+          <circle cx="14" cy="7" r="1.6" fill="#94a3b8" />
+          <circle cx="24" cy="7" r="1.6" fill="#94a3b8" />
+          <circle cx="34" cy="7" r="1.6" fill="#94a3b8" />
+          <circle cx="14" cy="41" r="1.6" fill="#94a3b8" />
+          <circle cx="24" cy="41" r="1.6" fill="#94a3b8" />
+          <circle cx="34" cy="41" r="1.6" fill="#94a3b8" />
+        </svg>
+      );
     case "contactor":
+    case "tor":
       return (
         <svg viewBox="0 0 46 44" className="h-9 w-9">
-          <rect
-            x="5"
-            y="4"
-            width="36"
-            height="36"
-            rx="2.5"
-            fill="#1e222d"
-            stroke="#475569"
-            strokeWidth="1.3"
-          />
+          <rect x="5" y="4" width="36" height="36" rx="2.5" fill="#1e222d" stroke="#475569" strokeWidth="1.3" />
           <rect x="9" y="13" width="28" height="18" rx="1.5" fill="#0f172a" stroke={accentColor} strokeWidth="1.1" />
           <rect x="17" y="18" width="12" height="8" rx="1" fill={accentColor} fillOpacity="0.8" />
           <circle cx="11" cy="8" r="1.5" fill="#94a3b8" />
@@ -104,61 +119,98 @@ function PartVectorIcon({
         </svg>
       );
     case "relay":
+    case "timer-relay":
       return (
         <svg viewBox="0 0 36 44" className="h-9 w-9">
-          <rect
-            x="8"
-            y="5"
-            width="20"
-            height="34"
-            rx="2"
-            fill="#1e222d"
-            stroke="#475569"
-            strokeWidth="1.3"
-          />
+          <rect x="8" y="5" width="20" height="34" rx="2" fill="#1e222d" stroke="#475569" strokeWidth="1.3" />
           <rect x="11" y="12" width="14" height="20" rx="1.5" fill="#0f172a" stroke={accentColor} strokeWidth="1" />
-          <circle cx="18" cy="18" r="2.2" fill={accentColor} />
+          <circle cx="18" cy="18" r="2.6" fill={accentColor} />
           <line x1="14" y1="25" x2="22" y2="25" stroke="#64748b" strokeWidth="1.2" />
         </svg>
       );
+    case "plc-compact":
+      return (
+        <svg viewBox="0 0 48 44" className="h-9 w-9">
+          <rect x="4" y="6" width="40" height="32" rx="2.5" fill="#1e293b" stroke="#475569" strokeWidth="1.3" />
+          <rect x="7" y="9" width="34" height="4" rx="1" fill="#0f172a" />
+          <rect x="7" y="31" width="34" height="4" rx="1" fill="#0f172a" />
+          <circle cx="11" cy="20" r="1.8" fill="#22c55e" />
+          <circle cx="16" cy="20" r="1.8" fill={accentColor} />
+          <text x="22" y="22.5" fontSize="6" fontFamily="monospace" fill="#cbd5e1" fontWeight="bold">PLC</text>
+        </svg>
+      );
+    case "vfd-15kw":
+      return (
+        <svg viewBox="0 0 42 48" className="h-9 w-9">
+          <rect x="8" y="3" width="26" height="42" rx="2.5" fill="#1e293b" stroke="#475569" strokeWidth="1.3" />
+          <rect x="12" y="8" width="18" height="10" rx="1.2" fill="#0f172a" stroke={accentColor} strokeWidth="1" />
+          <circle cx="21" cy="27" r="4" fill="#334155" stroke={accentColor} strokeWidth="1" />
+          <text x="14" y="15" fontSize="5" fontFamily="monospace" fill="#38bdf8" fontWeight="bold">50.0</text>
+        </svg>
+      );
     case "terminal-block":
+    case "terminal-n":
+    case "terminal-pe":
+    case "end-clamp":
       return (
         <svg viewBox="0 0 36 44" className="h-9 w-9">
-          <rect
-            x="12"
-            y="5"
-            width="12"
-            height="34"
-            rx="1.5"
-            fill="#1e222d"
-            stroke="#64748b"
-            strokeWidth="1.3"
-          />
+          <rect x="12" y="5" width="12" height="34" rx="1.5" fill="#1e222d" stroke={accentColor} strokeWidth="1.3" />
           <circle cx="18" cy="11" r="2" fill="#94a3b8" />
           <circle cx="18" cy="33" r="2" fill="#94a3b8" />
-          <line x1="18" y1="13" x2="18" y2="31" stroke="#cbd5e1" strokeWidth="1.4" />
+          <line x1="18" y1="13" x2="18" y2="31" stroke={accentColor} strokeWidth="1.5" />
         </svg>
       );
     case "psu-24v":
+    case "psu-24v-10a":
+    case "dist-block-4p":
       return (
         <svg viewBox="0 0 48 44" className="h-9 w-9">
-          <rect
-            x="5"
-            y="4"
-            width="38"
-            height="36"
-            rx="2.5"
-            fill="#1e222d"
-            stroke="#475569"
-            strokeWidth="1.3"
-          />
+          <rect x="5" y="4" width="38" height="36" rx="2.5" fill="#1e222d" stroke="#475569" strokeWidth="1.3" />
           <line x1="10" y1="12" x2="38" y2="12" stroke="#334155" strokeWidth="1" />
           <line x1="10" y1="16" x2="38" y2="16" stroke="#334155" strokeWidth="1" />
           <line x1="10" y1="20" x2="38" y2="20" stroke="#334155" strokeWidth="1" />
           <circle cx="34" cy="29" r="2.5" fill={accentColor} />
           <text x="10" y="31" fontSize="6.5" fontFamily="monospace" fill="#cbd5e1" fontWeight="bold">
-            24V
+            {templateId === "dist-block-4p" ? "DIST" : "24V"}
           </text>
+        </svg>
+      );
+    case "pilot-lamp-red":
+    case "pilot-lamp-green":
+    case "push-button":
+    case "e-stop":
+    case "selector-3pos":
+      return (
+        <svg viewBox="0 0 40 40" className="h-9 w-9">
+          <circle cx="20" cy="20" r="14" fill={templateId === "e-stop" ? "#facc15" : "#1e293b"} stroke="#475569" strokeWidth="1.5" />
+          <circle cx="20" cy="20" r="9" fill={accentColor} stroke="#0f172a" strokeWidth="1.2" />
+          {templateId === "selector-3pos" && (
+            <line x1="14" y1="14" x2="26" y2="26" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" />
+          )}
+        </svg>
+      );
+    case "panel-meter-96":
+      return (
+        <svg viewBox="0 0 44 44" className="h-9 w-9">
+          <rect x="5" y="5" width="34" height="34" rx="2.5" fill="#0f172a" stroke="#475569" strokeWidth="1.4" />
+          <rect x="9" y="10" width="26" height="16" rx="1" fill="#0284c7" fillOpacity="0.25" stroke={accentColor} strokeWidth="1" />
+          <text x="12" y="21" fontSize="6.5" fontFamily="monospace" fill="#38bdf8" fontWeight="bold">400V</text>
+        </svg>
+      );
+    case "cooling-fan-120":
+      return (
+        <svg viewBox="0 0 44 44" className="h-9 w-9">
+          <rect x="5" y="5" width="34" height="34" rx="2.5" fill="#1e293b" stroke="#475569" strokeWidth="1.4" />
+          <circle cx="22" cy="22" r="12" fill="#0f172a" stroke="#64748b" strokeWidth="1" />
+          <circle cx="22" cy="22" r="3.5" fill={accentColor} />
+          <line x1="22" y1="11" x2="22" y2="33" stroke="#94a3b8" strokeWidth="1.5" />
+          <line x1="11" y1="22" x2="33" y2="22" stroke="#94a3b8" strokeWidth="1.5" />
+        </svg>
+      );
+    default:
+      return (
+        <svg viewBox="0 0 36 44" className="h-9 w-9">
+          <rect x="8" y="6" width="20" height="32" rx="2" fill="#1e222d" stroke={accentColor} strokeWidth="1.3" />
         </svg>
       );
   }
@@ -170,6 +222,24 @@ export function LeftSidebar() {
   const [cadImportUnit, setCadImportUnit] = useState<CadImportUnit>("mm");
   const [railsOpen, setRailsOpen] = useState(true);
   const [ductsOpen, setDuctsOpen] = useState(true);
+  const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({
+    "Protection & Switchgear": true,
+    "Control & Automation": true,
+    "Power & Distribution": true,
+    "Terminals & DIN Accessories": true,
+    "Door & Panel Controls": true,
+    "My CAD Library": true,
+  });
+  const [customLibrary, setCustomLibrary] = useState<CustomLibraryCadItem[]>([]);
+  const [savedToastId, setSavedToastId] = useState<string | null>(null);
+
+  useEffect(() => {
+    listCustomCadLibrary()
+      .then((items) => setCustomLibrary(items))
+      .catch(() => {
+        // IndexedDB unavailable
+      });
+  }, []);
 
   const displayUnit = usePanelStore((s) => s.displayUnit);
   const enclosure = usePanelStore((s) => s.enclosure);
@@ -219,6 +289,72 @@ export function LeftSidebar() {
       a.name.toLowerCase().includes(q) ||
       a.fileName.toLowerCase().includes(q)
   );
+  const filteredLibrary = customLibrary.filter(
+    (item) =>
+      !q ||
+      item.name.toLowerCase().includes(q) ||
+      item.fileName.toLowerCase().includes(q) ||
+      item.format.toLowerCase().includes(q)
+  );
+
+  const toggleCategory = (cat: string) => {
+    setOpenCategories((prev) => ({ ...prev, [cat]: !prev[cat] }));
+  };
+
+  const handleSaveToLibrary = async (asset: CustomCadAsset) => {
+    try {
+      const saved = await saveCustomCadToLibrary(asset);
+      setCustomLibrary((prev) => {
+        const idx = prev.findIndex((i) => i.id === saved.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = saved;
+          return next;
+        }
+        return [saved, ...prev];
+      });
+      setSavedToastId(asset.id);
+      setTimeout(() => {
+        setSavedToastId((curr) => (curr === asset.id ? null : curr));
+      }, 1800);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleDeleteFromLibrary = async (id: string) => {
+    try {
+      await removeCustomCadFromLibrary(id);
+      setCustomLibrary((prev) => prev.filter((i) => i.id !== id));
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleInstantiateFromLibrary = (item: CustomLibraryCadItem) => {
+    const uid = `cad-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const newAsset: CustomCadAsset = {
+      id: uid,
+      name: item.name,
+      fileName: item.fileName,
+      format: item.format,
+      sourceUnit: item.sourceUnit,
+      xMm: 0,
+      yMm: 0,
+      zMm: Math.max(10, item.boundingBoxMm.d / 2),
+      boundingBoxMm: { ...item.boundingBoxMm },
+      pins: item.pins.map((p, idx) => ({
+        ...p,
+        id: `${uid}-pin-${idx + 1}`,
+      })),
+      rawText: item.rawText,
+      dataUrl: item.dataUrl,
+      objectUrl: item.dataUrl,
+      entityCount: item.entityCount,
+      parseWarning: item.parseWarning,
+    };
+    addCadAsset(newAsset);
+  };
 
   const handleCadUpload = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -243,6 +379,13 @@ export function LeftSidebar() {
 
     if (format === "glb" || format === "gltf") {
       baseAsset.objectUrl = URL.createObjectURL(file);
+      baseAsset.dataUrl = await new Promise<string | undefined>((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () =>
+          resolve(typeof reader.result === "string" ? reader.result : undefined);
+        reader.onerror = () => resolve(undefined);
+        reader.readAsDataURL(file);
+      });
     } else {
       baseAsset.rawText = await file.text();
       if (format === "dxf") {
@@ -317,50 +460,143 @@ export function LeftSidebar() {
       {/* Tab Body */}
       <div className="flex-1 overflow-y-auto px-2.5 pb-3 space-y-3 text-xs">
         {activeTab === "components" && (
-          <div className="rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#131620]/70 p-2.5 space-y-2.5 shadow-xs">
-            <div className="flex items-center justify-between">
-              <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-[#64748b] dark:text-slate-400">
-                Parts Library
-              </span>
-              <span className="font-mono text-[11px] text-[#94a3b8] dark:text-slate-500">
-                DIN Auto-Snap
-              </span>
-            </div>
+          <div className="space-y-2.5">
+            {/* My CAD Library Accordion */}
+            {filteredLibrary.length > 0 && (
+              <div className="rounded-xl border border-sky-200 dark:border-sky-500/20 bg-sky-50/50 dark:bg-sky-950/20 p-2.5 space-y-2 shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => toggleCategory("My CAD Library")}
+                  className="flex w-full items-center justify-between font-mono text-[11px] font-semibold uppercase tracking-wider text-sky-700 dark:text-sky-300"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 transition-transform ${
+                        openCategories["My CAD Library"] ? "" : "-rotate-90"
+                      }`}
+                    />
+                    My CAD Library
+                  </span>
+                  <span className="rounded-full bg-sky-100 dark:bg-sky-900/50 px-2 py-0.5 text-[10px]">
+                    {filteredLibrary.length}
+                  </span>
+                </button>
 
-            {filteredComponents.length === 0 ? (
-              <div className="py-6 text-center text-xs text-[#94a3b8] dark:text-slate-500">
-                No matching parts
+                {openCategories["My CAD Library"] && (
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    {filteredLibrary.map((item) => (
+                      <div
+                        key={item.id}
+                        className="group relative flex flex-col justify-between rounded-xl border border-sky-200 dark:border-sky-500/30 bg-white dark:bg-[#171a21] p-2 transition-all hover:border-sky-400 dark:hover:border-sky-400"
+                      >
+                        <div className="min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="rounded bg-sky-100 dark:bg-sky-950 px-1 py-0.2 font-mono text-[9px] font-bold text-sky-700 dark:text-sky-400">
+                              {item.format.toUpperCase()}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteFromLibrary(item.id)}
+                              title="Delete from Library"
+                              className="p-1 text-[#94a3b8] hover:text-rose-500"
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </button>
+                          </div>
+                          <div className="mt-1 truncate text-[12px] font-medium text-[#0f172a] dark:text-slate-100">
+                            {item.name}
+                          </div>
+                          <div className="font-mono text-[10px] text-[#64748b] dark:text-slate-400">
+                            {formatDim(item.boundingBoxMm.w, displayUnit, 0)}×
+                            {formatDim(item.boundingBoxMm.h, displayUnit, 0)}mm ·{" "}
+                            {item.pins.length}P
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleInstantiateFromLibrary(item)}
+                          className="mt-2 flex w-full items-center justify-center gap-1 rounded-md bg-sky-600 hover:bg-sky-500 py-1 font-mono text-[10px] font-semibold text-white transition-colors"
+                        >
+                          <Plus className="h-3 w-3" /> Place
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {filteredComponents.map((tpl) => (
+            )}
+
+            {/* Standard EPLAN Categories */}
+            {COMPONENT_CATEGORIES.map((cat) => {
+              const catItems = filteredComponents.filter(
+                (c) => c.category === cat
+              );
+              if (catItems.length === 0) return null;
+              const isOpen = openCategories[cat] ?? true;
+
+              return (
+                <div
+                  key={cat}
+                  className="rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#131620]/70 p-2.5 space-y-2 shadow-xs"
+                >
                   <button
-                    key={tpl.id}
                     type="button"
-                    onClick={() => addComponent(tpl.id)}
-                    title={`Add ${tpl.name} (${tpl.widthMm}×${tpl.heightMm}mm)`}
-                    className="group relative flex flex-col items-center justify-between rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] p-2.5 text-center transition-all hover:border-[#cbd5e1] dark:hover:border-white/25 hover:bg-[#f1f5f9] dark:hover:bg-[#1d212b] active:scale-[0.98]"
+                    onClick={() => toggleCategory(cat)}
+                    className="flex w-full items-center justify-between font-mono text-[11px] font-semibold uppercase tracking-wider text-[#334155] dark:text-slate-300"
                   >
-                    <div className="flex h-10 w-full items-center justify-center">
-                      <PartVectorIcon
-                        templateId={tpl.id}
-                        accentColor={tpl.accentColor}
+                    <span className="flex items-center gap-1.5">
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 transition-transform ${
+                          isOpen ? "" : "-rotate-90"
+                        }`}
                       />
-                    </div>
-                    <div className="mt-1.5 w-full">
-                      <div className="truncate text-[13px] font-medium text-[#0f172a] dark:text-slate-100 group-hover:text-[#0f172a] dark:group-hover:text-white">
-                        {tpl.shortName}
-                      </div>
-                      <div className="mt-0.5 font-mono text-[11px] tabular-nums text-[#64748b] dark:text-slate-500">
-                        {formatDim(tpl.widthMm, displayUnit)} ×{" "}
-                        {formatDim(tpl.heightMm, displayUnit)}
-                      </div>
-                    </div>
-                    <span className="absolute top-1.5 right-1.5 rounded-full bg-[#e2e8f0] dark:bg-white/5 p-0.5 text-[#64748b] dark:text-slate-500 opacity-0 transition-opacity group-hover:opacity-100 group-hover:text-[#0f172a] dark:group-hover:text-white">
-                      <Plus className="h-2.5 w-2.5" />
+                      {cat}
+                    </span>
+                    <span className="rounded-full bg-[#f1f5f9] dark:bg-white/5 px-2 py-0.5 text-[10px] text-[#64748b] dark:text-slate-400">
+                      {catItems.length}
                     </span>
                   </button>
-                ))}
+
+                  {isOpen && (
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      {catItems.map((tpl) => (
+                        <button
+                          key={tpl.id}
+                          type="button"
+                          onClick={() => addComponent(tpl.id)}
+                          title={`Add ${tpl.name} (${tpl.widthMm}×${tpl.heightMm}mm)`}
+                          className="group relative flex flex-col items-center justify-between rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] p-2 text-center transition-all hover:border-[#cbd5e1] dark:hover:border-white/25 hover:bg-[#f1f5f9] dark:hover:bg-[#1d212b] active:scale-[0.98]"
+                        >
+                          <div className="flex h-10 w-full items-center justify-center">
+                            <PartVectorIcon
+                              templateId={tpl.id}
+                              accentColor={tpl.accentColor}
+                            />
+                          </div>
+                          <div className="mt-1.5 w-full">
+                            <div className="truncate text-[12px] font-medium text-[#0f172a] dark:text-slate-100 group-hover:text-[#0f172a] dark:group-hover:text-white">
+                              {tpl.shortName}
+                            </div>
+                            <div className="mt-0.5 font-mono text-[10px] tabular-nums text-[#64748b] dark:text-slate-500">
+                              {formatDim(tpl.widthMm, displayUnit, 0)} ×{" "}
+                              {formatDim(tpl.heightMm, displayUnit, 0)}
+                            </div>
+                          </div>
+                          <span className="absolute top-1.5 right-1.5 rounded-full bg-[#e2e8f0] dark:bg-white/5 p-0.5 text-[#64748b] dark:text-slate-500 opacity-0 transition-opacity group-hover:opacity-100 group-hover:text-[#0f172a] dark:group-hover:text-white">
+                            <Plus className="h-2.5 w-2.5" />
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {filteredComponents.length === 0 && filteredLibrary.length === 0 && (
+              <div className="rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#131620]/70 p-6 text-center text-xs text-[#94a3b8] dark:text-slate-500">
+                No matching parts in library
               </div>
             )}
           </div>
@@ -727,7 +963,7 @@ export function LeftSidebar() {
                       </button>
                     </div>
 
-                    <div className="mt-2 flex gap-1">
+                    <div className="mt-2 flex gap-1.5">
                       <button
                         type="button"
                         onClick={(e) => {
@@ -743,6 +979,31 @@ export function LeftSidebar() {
                       >
                         <MapPin className="mr-1 inline h-3.5 w-3.5" />
                         {markingThis ? "Done Marking" : "Mark Pins"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSaveToLibrary(asset);
+                        }}
+                        title="Save CAD asset + marked pins to My Library (IndexedDB)"
+                        className={`flex-1 rounded-md py-1.5 font-mono text-[11px] font-semibold transition-colors ${
+                          savedToastId === asset.id
+                            ? "bg-emerald-600 text-white"
+                            : "border border-sky-300 dark:border-sky-500/30 bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/60"
+                        }`}
+                      >
+                        {savedToastId === asset.id ? (
+                          <>
+                            <Check className="mr-1 inline h-3.5 w-3.5" />
+                            Saved!
+                          </>
+                        ) : (
+                          <>
+                            <BookmarkPlus className="mr-1 inline h-3.5 w-3.5" />
+                            Save to My Library
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>

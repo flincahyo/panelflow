@@ -53,19 +53,50 @@ export interface PinTerminal {
   localZMm: number;
 }
 
+export type ComponentCategory =
+  | "Protection & Switchgear"
+  | "Control & Automation"
+  | "Power & Distribution"
+  | "Terminals & DIN Accessories"
+  | "Door & Panel Controls";
+
+export type ComponentMountingType = "din_rail" | "screw_plate" | "door_cutout";
+
 export type ComponentTemplateId =
   | "mcb-1p"
+  | "mcb-2p"
   | "mcb-3p"
+  | "mcb-4p"
+  | "mccb-100a"
+  | "spd-3pn"
+  | "fuse-1p"
   | "contactor"
+  | "tor"
   | "relay"
+  | "timer-relay"
+  | "plc-compact"
+  | "vfd-15kw"
+  | "psu-24v"
+  | "psu-24v-10a"
+  | "dist-block-4p"
   | "terminal-block"
-  | "psu-24v";
+  | "terminal-n"
+  | "terminal-pe"
+  | "end-clamp"
+  | "pilot-lamp-red"
+  | "pilot-lamp-green"
+  | "push-button"
+  | "e-stop"
+  | "selector-3pos"
+  | "panel-meter-96"
+  | "cooling-fan-120";
 
 export interface ComponentTemplate {
   id: ComponentTemplateId;
   name: string;
   shortName: string;
-  category: "Protection" | "Switching" | "Termination" | "Power";
+  category: ComponentCategory;
+  mountingType?: ComponentMountingType;
   widthMm: number;
   heightMm: number;
   depthMm: number;
@@ -78,6 +109,7 @@ export interface PlacedComponent {
   id: string;
   templateId: ComponentTemplateId;
   name: string;
+  mountingType?: ComponentMountingType;
   xMm: number;
   yMm: number;
   zMm: number;
@@ -106,6 +138,7 @@ export interface CustomCadAsset {
   boundingBoxMm: { w: number; h: number; d: number };
   pins: PinTerminal[];
   objectUrl?: string;
+  dataUrl?: string;
   rawText?: string;
   entityCount?: number;
   parseWarning?: string;

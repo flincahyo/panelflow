@@ -37,10 +37,11 @@ function CadAssetItem3D({
     const scale = getCadScaleFactorToMm(asset.sourceUnit);
 
     if (asset.format === "glb" || asset.format === "gltf") {
-      if (!asset.objectUrl) return;
+      const src = asset.objectUrl || asset.dataUrl;
+      if (!src) return;
       const loader = new GLTFLoader();
       loader.load(
-        asset.objectUrl,
+        src,
         (gltf) => {
           if (cancelled) return;
           const scene = gltf.scene.clone();
@@ -92,7 +93,7 @@ function CadAssetItem3D({
     return () => {
       cancelled = true;
     };
-  }, [asset.id, asset.format, asset.objectUrl, asset.rawText, asset.sourceUnit, updateCadAsset]);
+  }, [asset.id, asset.format, asset.objectUrl, asset.dataUrl, asset.rawText, asset.sourceUnit, updateCadAsset]);
 
   // Parse DXF (segments are pre-centered around local origin by subtracting centerOffsetMm)
   const dxfGeometry = useMemo(() => {

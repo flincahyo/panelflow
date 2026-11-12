@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import {
   Box,
   ChevronDown,
@@ -22,12 +22,20 @@ import {
   Redo2,
   RotateCcw,
   Ruler,
+  Save,
   Sliders,
   Sun,
   Moon,
   Undo2,
   Zap,
 } from "lucide-react";
+import { clearAutoSaveSession } from "@/lib/indexed-db";
+import {
+  parseAndValidatePflow,
+  rehydrateCadAssets,
+  sanitizeProjectFilename,
+  serializeProjectAsync,
+} from "@/lib/project-io";
 import { generateEplanSheetSvg } from "@/lib/sheet-export";
 import { generateDrillingDxf, generateDrillingSvg } from "@/lib/template-export";
 import { formatDim } from "@/lib/units";
@@ -69,6 +77,12 @@ export function TopToolbar({
   const wires = usePanelStore((s) => s.wires);
   const titleBlock = usePanelStore((s) => s.titleBlock);
 
+  const sheets = usePanelStore((s) => s.sheets);
+  const activeSheetId = usePanelStore((s) => s.activeSheetId);
+  const autoRouteDuctsEnabled = usePanelStore((s) => s.autoRouteDuctsEnabled);
+  const loadProjectState = usePanelStore((s) => s.loadProjectState);
+  const resetToDefaultProject = usePanelStore((s) => s.resetToDefaultProject);
+
   const undo = usePanelStore((s) => s.undo);
   const redo = usePanelStore((s) => s.redo);
   const canUndo = usePanelStore((s) => s.canUndo);
@@ -85,6 +99,7 @@ export function TopToolbar({
     null
   );
   const menuBarRef = useRef<HTMLDivElement>(null);
+  const openPflowInputRef = useRef<HTMLInputElement>(null);
 
   const units: LengthUnit[] = ["mm", "cm", "m"];
   const snaps: GridSnapMm[] = [5, 10, 25];
@@ -125,6 +140,73 @@ export function TopToolbar({
       meta: titleBlock,
     });
 
+  const handleSavePflow = useCallback(async () => {
+    try {
+      const json = await serializeProjectAsync({
+        sheets,
+        activeSheetId,
+        displayUnit,
+        gridSnapMm,
+        autoRouteDuctsEnabled,
+        titleBlock,
+      });
+      const filename = sanitizeProjectFilename(titleBlock.projectName || "project");
+      triggerDownload(filename, json, "application/json");
+    } catch (err) {
+      alert(
+        `Failed to save project: ${
+          err instanceof Error ? err.message : "Unknown error"
+        }`
+      );
+    }
+  }, [sheets, activeSheetId, displayUnit, gridSnapMm, autoRouteDuctsEnabled, titleBlock]);
+
+  const handleOpenPflowFile = useCallback(
+    async (e: ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const result = parseAndValidatePflow(text);
+        if (!result.ok) {
+          alert(`Failed to load .pflow project: ${result.error}`);
+          return;
+        }
+        const proj = result.data;
+        loadProjectState({
+          sheets: rehydrateCadAssets(proj.sheets),
+          activeSheetId: proj.activeSheetId,
+          displayUnit: proj.displayUnit,
+          gridSnapMm: proj.gridSnapMm,
+          autoRouteDuctsEnabled: proj.autoRouteDuctsEnabled,
+          titleBlock: proj.titleBlock,
+        });
+      } catch (err) {
+        alert(
+          `Failed to read .pflow file: ${
+            err instanceof Error ? err.message : "Unknown error"
+          }`
+        );
+      } finally {
+        e.target.value = "";
+      }
+    },
+    [loadProjectState]
+  );
+
+  const handleNewProject = useCallback(async () => {
+    const ok = window.confirm(
+      "Start a New Project? Unsaved changes will be cleared and reset to a clean default mounting plate."
+    );
+    if (!ok) return;
+    try {
+      await clearAutoSaveSession();
+    } catch {
+      // ignore
+    }
+    resetToDefaultProject();
+  }, [resetToDefaultProject]);
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
@@ -140,7 +222,13 @@ export function TopToolbar({
       const mod = e.ctrlKey || e.metaKey;
       if (!mod) return;
       const key = e.key.toLowerCase();
-      if (key === "z" && !e.shiftKey) {
+      if (key === "s") {
+        e.preventDefault();
+        handleSavePflow();
+      } else if (key === "o") {
+        e.preventDefault();
+        openPflowInputRef.current?.click();
+      } else if (key === "z" && !e.shiftKey) {
         e.preventDefault();
         undo();
       } else if (key === "y" || (key === "z" && e.shiftKey)) {
@@ -150,7 +238,7 @@ export function TopToolbar({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [undo, redo]);
+  }, [undo, redo, handleSavePflow]);
 
   const handleExport2DSheetSvg = () => {
     triggerDownload("panelflow-2d-sheet.svg", get2DSheetSvg(), "image/svg+xml");
@@ -255,7 +343,54 @@ export function TopToolbar({
             </button>
 
             {activeMenu === "file" && (
-              <div className={`${dropdownPanelClass} w-56`}>
+              <div className={`${dropdownPanelClass} w-64`}>
+                <div className={dropdownSectionLabelClass}>
+                  Project (.PFLOW)
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveMenu(null);
+                    handleNewProject();
+                  }}
+                  className={dropdownItemClass}
+                >
+                  <RotateCcw className="h-3.5 w-3.5 text-rose-500 dark:text-rose-400" />
+                  New Project (Reset to Default)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveMenu(null);
+                    openPflowInputRef.current?.click();
+                  }}
+                  className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white"
+                >
+                  <span className="flex items-center gap-2">
+                    <FolderOpen className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400" />
+                    Open .pflow Project...
+                  </span>
+                  <span className="font-mono text-[11px] text-[#64748b] dark:text-slate-500">
+                    Ctrl+O
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveMenu(null);
+                    handleSavePflow();
+                  }}
+                  className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white"
+                >
+                  <span className="flex items-center gap-2">
+                    <Save className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
+                    Save Project (.pflow)
+                  </span>
+                  <span className="font-mono text-[11px] text-[#64748b] dark:text-slate-500">
+                    Ctrl+S
+                  </span>
+                </button>
+                <div className={dropdownDividerClass} />
                 <div className={dropdownSectionLabelClass}>
                   Project Sheets
                 </div>
@@ -580,6 +715,13 @@ export function TopToolbar({
           </button>
         )}
       </div>
+      <input
+        ref={openPflowInputRef}
+        type="file"
+        accept=".pflow,.json"
+        onChange={handleOpenPflowFile}
+        className="hidden"
+      />
     </header>
   );
 }
