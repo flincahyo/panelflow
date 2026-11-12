@@ -17,6 +17,7 @@ export interface CustomLibraryCadItem {
   dataUrl?: string;
   entityCount?: number;
   parseWarning?: string;
+  cloudId?: string;
   createdAt: number;
 }
 
@@ -155,5 +156,64 @@ export async function removeCustomCadFromLibrary(id: string): Promise<void> {
     const req = store.delete(id);
     req.onsuccess = () => resolve();
     req.onerror = () => reject(req.error);
+  });
+}
+
+export async function renameCustomCadInLibrary(
+  id: string,
+  newName: string
+): Promise<CustomLibraryCadItem | null> {
+  const trimmed = newName.trim();
+  if (!trimmed) {
+    throw new Error("Name cannot be empty");
+  }
+
+  const db = await getDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_CUSTOM_LIBRARY, "readwrite");
+    const store = tx.objectStore(STORE_CUSTOM_LIBRARY);
+    const getReq = store.get(id);
+
+    getReq.onsuccess = () => {
+      const existing = getReq.result as CustomLibraryCadItem | undefined;
+      if (!existing) {
+        resolve(null);
+        return;
+      }
+
+      const updated: CustomLibraryCadItem = {
+        ...existing,
+        name: trimmed,
+      };
+
+      const putReq = store.put(updated);
+      putReq.onsuccess = () => resolve(updated);
+      putReq.onerror = () => reject(putReq.error);
+    };
+
+    getReq.onerror = () => reject(getReq.error);
+  });
+}
+
+export async function updateCustomCadCloudId(
+  id: string,
+  cloudId: string
+): Promise<void> {
+  const db = await getDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_CUSTOM_LIBRARY, "readwrite");
+    const store = tx.objectStore(STORE_CUSTOM_LIBRARY);
+    const getReq = store.get(id);
+    getReq.onsuccess = () => {
+      const existing = getReq.result as CustomLibraryCadItem | undefined;
+      if (!existing) {
+        resolve();
+        return;
+      }
+      const putReq = store.put({ ...existing, cloudId });
+      putReq.onsuccess = () => resolve();
+      putReq.onerror = () => reject(putReq.error);
+    };
+    getReq.onerror = () => reject(getReq.error);
   });
 }

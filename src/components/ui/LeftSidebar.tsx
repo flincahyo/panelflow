@@ -10,6 +10,7 @@ import {
   FileUp,
   Layers,
   MapPin,
+  Pencil,
   Plus,
   Search,
   Star,
@@ -17,6 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState, type ChangeEvent } from "react";
+import { CadPreviewThumbnail } from "@/components/ui/CadPreviewThumbnail";
 import {
   COMPONENT_CATALOG,
   COMPONENT_CATEGORIES,
@@ -26,7 +28,9 @@ import { parseDxfToMmSegments } from "@/lib/dxf-parser";
 import {
   listCustomCadLibrary,
   removeCustomCadFromLibrary,
+  renameCustomCadInLibrary,
   saveCustomCadToLibrary,
+  updateCustomCadCloudId,
   type CustomLibraryCadItem,
 } from "@/lib/indexed-db";
 import { getBackplateDimensions } from "@/lib/template-export";
@@ -237,6 +241,10 @@ export function LeftSidebar() {
   });
   const [customLibrary, setCustomLibrary] = useState<CustomLibraryCadItem[]>([]);
   const [savedToastId, setSavedToastId] = useState<string | null>(null);
+  const [editingLibraryId, setEditingLibraryId] = useState<string | null>(null);
+  const [editingLibraryName, setEditingLibraryName] = useState("");
+  const [editingCadId, setEditingCadId] = useState<string | null>(null);
+  const [editingCadName, setEditingCadName] = useState("");
 
   const hydratePartPreferences = usePanelStore((s) => s.hydratePartPreferences);
 
@@ -283,6 +291,7 @@ export function LeftSidebar() {
   const favoritePartIds = usePanelStore((s) => s.favoritePartIds);
   const toggleFavoritePart = usePanelStore((s) => s.toggleFavoritePart);
   const addCadAsset = usePanelStore((s) => s.addCadAsset);
+  const updateCadAsset = usePanelStore((s) => s.updateCadAsset);
   const removeCadAsset = usePanelStore((s) => s.removeCadAsset);
   const setPinMarkingMode = usePanelStore((s) => s.setPinMarkingMode);
 
@@ -368,7 +377,18 @@ export function LeftSidebar() {
           pins: asset.pins,
           cad_data: asset.rawText || asset.dataUrl || null,
         }),
-      }).catch(() => {});
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          const cloudId = data?.part?.id;
+          if (typeof cloudId === "string" && cloudId) {
+            updateCustomCadCloudId(saved.id, cloudId).catch(() => {});
+            setCustomLibrary((prev) =>
+              prev.map((i) => (i.id === saved.id ? { ...i, cloudId } : i))
+            );
+          }
+        })
+        .catch(() => {});
 
       setSavedToastId(asset.id);
       setTimeout(() => {
@@ -379,13 +399,47 @@ export function LeftSidebar() {
     }
   };
 
-  const handleDeleteFromLibrary = async (id: string) => {
+  const handleDeleteFromLibrary = async (item: CustomLibraryCadItem) => {
     try {
-      await removeCustomCadFromLibrary(id);
-      setCustomLibrary((prev) => prev.filter((i) => i.id !== id));
+      await removeCustomCadFromLibrary(item.id);
+      setCustomLibrary((prev) => prev.filter((i) => i.id !== item.id));
+      const remoteId = item.cloudId ?? item.id;
+      fetch(`/api/custom-parts?id=${encodeURIComponent(remoteId)}`, {
+        method: "DELETE",
+      }).catch(() => {});
     } catch {
       // ignore
     }
+  };
+
+  const handleRenameLibraryItem = async (item: CustomLibraryCadItem) => {
+    const trimmed = editingLibraryName.trim();
+    setEditingLibraryId(null);
+    if (!trimmed || trimmed === item.name) return;
+
+    try {
+      const updated = await renameCustomCadInLibrary(item.id, trimmed);
+      setCustomLibrary((prev) =>
+        prev.map((i) =>
+          i.id === item.id ? updated ?? { ...i, name: trimmed } : i
+        )
+      );
+      const remoteId = item.cloudId ?? item.id;
+      fetch("/api/custom-parts", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: remoteId, name: trimmed }),
+      }).catch(() => {});
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleRenameCadAsset = (asset: CustomCadAsset) => {
+    const trimmed = editingCadName.trim();
+    setEditingCadId(null);
+    if (!trimmed || trimmed === asset.name) return;
+    updateCadAsset(asset.id, { name: trimmed });
   };
 
   const handleInstantiateFromLibrary = (item: CustomLibraryCadItem) => {
@@ -734,21 +788,66 @@ export function LeftSidebar() {
                             <span className="rounded bg-sky-100 dark:bg-sky-950 px-1 py-0.2 font-mono text-[9px] font-bold text-sky-700 dark:text-sky-400">
                               {item.format.toUpperCase()}
                             </span>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteFromLibrary(item.id)}
-                              title="Delete from Library"
-                              className="p-1 text-[#94a3b8] hover:text-rose-500"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </button>
+                            <div className="flex items-center gap-0.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingLibraryId(item.id);
+                                  setEditingLibraryName(item.name);
+                                }}
+                                title="Rename in Library"
+                                className="p-1 text-[#94a3b8] hover:text-sky-500"
+                              >
+                                <Pencil className="h-3 w-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteFromLibrary(item)}
+                                title="Delete from Library"
+                                className="p-1 text-[#94a3b8] hover:text-rose-500"
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </button>
+                            </div>
                           </div>
-                          <div className="mt-1 truncate text-[12px] font-medium text-[#0f172a] dark:text-slate-100">
-                            {item.name}
+
+                          <div className="mt-1.5 flex h-14 w-full items-center justify-center rounded-lg border border-sky-100 dark:border-white/5 bg-sky-50/40 dark:bg-[#0c0e14]/60 p-1.5">
+                            <CadPreviewThumbnail
+                              format={item.format}
+                              rawText={item.rawText}
+                              sourceUnit={item.sourceUnit}
+                              boundingBoxMm={item.boundingBoxMm}
+                              pins={item.pins}
+                              className="h-full w-full"
+                            />
                           </div>
+
+                          {editingLibraryId === item.id ? (
+                            <input
+                              type="text"
+                              autoFocus
+                              value={editingLibraryName}
+                              onChange={(e) => setEditingLibraryName(e.target.value)}
+                              onBlur={() => handleRenameLibraryItem(item)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleRenameLibraryItem(item);
+                                } else if (e.key === "Escape") {
+                                  e.preventDefault();
+                                  setEditingLibraryId(null);
+                                }
+                              }}
+                              className="mt-1.5 w-full rounded border border-sky-400 bg-white dark:bg-[#0c0e14] px-1.5 py-0.5 text-[12px] font-medium text-[#0f172a] dark:text-slate-100 focus:outline-none"
+                            />
+                          ) : (
+                            <div className="mt-1.5 truncate text-[12px] font-medium text-[#0f172a] dark:text-slate-100">
+                              {item.name}
+                            </div>
+                          )}
                           <div className="font-mono text-[10px] text-[#64748b] dark:text-slate-400">
                             {formatDim(item.boundingBoxMm.w, displayUnit, 0)}×
-                            {formatDim(item.boundingBoxMm.h, displayUnit, 0)}mm ·{" "}
+                            {formatDim(item.boundingBoxMm.h, displayUnit, 0)} ·{" "}
                             {item.pins.length}P
                           </div>
                         </div>
@@ -1205,26 +1304,75 @@ export function LeftSidebar() {
                         : "border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#171a21] hover:border-[#cbd5e1] dark:hover:border-white/20"
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="min-w-0">
-                        <div className="truncate text-[13px] font-medium text-[#0f172a] dark:text-slate-200">
-                          {asset.name}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14] p-1">
+                          <CadPreviewThumbnail
+                            format={asset.format}
+                            rawText={asset.rawText}
+                            sourceUnit={asset.sourceUnit}
+                            boundingBoxMm={asset.boundingBoxMm}
+                            pins={asset.pins}
+                            className="h-full w-full"
+                          />
                         </div>
-                        <div className="font-mono text-[11px] text-[#64748b] dark:text-slate-400">
-                          [{asset.format.toUpperCase()}] · {asset.pins.length}{" "}
-                          pins
+                        <div className="min-w-0 flex-1">
+                          {editingCadId === asset.id ? (
+                            <input
+                              type="text"
+                              autoFocus
+                              value={editingCadName}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => setEditingCadName(e.target.value)}
+                              onBlur={() => handleRenameCadAsset(asset)}
+                              onKeyDown={(e) => {
+                                e.stopPropagation();
+                                if (e.key === "Enter") {
+                                  e.preventDefault();
+                                  handleRenameCadAsset(asset);
+                                } else if (e.key === "Escape") {
+                                  e.preventDefault();
+                                  setEditingCadId(null);
+                                }
+                              }}
+                              className="w-full rounded border border-sky-400 bg-white dark:bg-[#0c0e14] px-1.5 py-0.5 text-[13px] font-medium text-[#0f172a] dark:text-slate-100 focus:outline-none"
+                            />
+                          ) : (
+                            <div className="truncate text-[13px] font-medium text-[#0f172a] dark:text-slate-200">
+                              {asset.name}
+                            </div>
+                          )}
+                          <div className="font-mono text-[11px] text-[#64748b] dark:text-slate-400">
+                            [{asset.format.toUpperCase()}] · {asset.pins.length}{" "}
+                            pins
+                          </div>
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeCadAsset(asset.id);
-                        }}
-                        className="p-1 text-[#94a3b8] dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      <div className="flex shrink-0 items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingCadId(asset.id);
+                            setEditingCadName(asset.name);
+                          }}
+                          title="Rename CAD asset"
+                          className="p-1 text-[#94a3b8] dark:text-slate-500 hover:text-sky-500 dark:hover:text-sky-400"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeCadAsset(asset.id);
+                          }}
+                          title="Remove CAD asset"
+                          className="p-1 text-[#94a3b8] dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="mt-2 flex gap-1.5">
