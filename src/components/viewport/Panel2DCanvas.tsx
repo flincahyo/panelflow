@@ -14,6 +14,12 @@ import {
 } from "lucide-react";
 import { ContextMenu } from "@/components/ui/ContextMenu";
 import { detectCollisionsAndBounds, getEffectiveCadBounds } from "@/lib/collision";
+import {
+  buildSvgObstacleBoxes,
+  formatCadDisplayLabel,
+  getSmartCadLabelPosition,
+  type SvgRect,
+} from "@/lib/cad-label";
 import { getBackplateDimensions } from "@/lib/template-export";
 import { parseDxfToMmSegments } from "@/lib/dxf-parser";
 import { WIRE_COLOR_MAP } from "@/lib/sheet-export";
@@ -511,6 +517,8 @@ function CadAsset2DSymbol({
   isSelected,
   isMarkingThis,
   isWireMode,
+  isDark,
+  obstacleBoxes,
   activeWireStartPin,
   onPointerDown,
   onContextMenu,
@@ -520,6 +528,8 @@ function CadAsset2DSymbol({
   isSelected: boolean;
   isMarkingThis: boolean;
   isWireMode: boolean;
+  isDark: boolean;
+  obstacleBoxes: SvgRect[];
   activeWireStartPin: { componentId: string; pinId: string } | null;
   onPointerDown: (e: React.PointerEvent) => void;
   onContextMenu: (e: React.MouseEvent) => void;
@@ -554,9 +564,30 @@ function CadAsset2DSymbol({
   );
   const clipId = `cad-crop-${asset.id.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 
-  const shortLabel =
-    asset.name.length > 18 ? `${asset.name.slice(0, 16)}…` : asset.name;
+  const cleanLabel = formatCadDisplayLabel(asset.name, 28);
   const rot = asset.rotationDeg ?? 0;
+
+  const smartPos = useMemo(() => {
+    return getSmartCadLabelPosition({
+      assetId: asset.id,
+      effX,
+      effY,
+      effW,
+      effH,
+      cropMm: asset.cropMm,
+      labelPosition: asset.labelPosition,
+      otherBoxes: obstacleBoxes,
+    });
+  }, [
+    asset.id,
+    effX,
+    effY,
+    effW,
+    effH,
+    asset.cropMm,
+    asset.labelPosition,
+    obstacleBoxes,
+  ]);
 
   return (
     <g
@@ -646,109 +677,125 @@ function CadAsset2DSymbol({
         </g>
       )}
 
-      {/* Asset Name & Format Tag */}
-      <text
-        x={effX + 2}
-        y={effY - 3}
-        fontSize={4.5}
-        fontFamily="monospace"
-        fontWeight="bold"
-        fill="#0369a1"
-      >
-        {shortLabel} [{asset.format.toUpperCase()}]
-      </text>
+      {/* Smart Positioned CAD Label (Clean, no [DXF] suffix, with contrast halo) */}
+      <g pointerEvents="none">
+        <text
+          x={smartPos.x}
+          y={smartPos.y}
+          textAnchor={smartPos.textAnchor}
+          dominantBaseline={smartPos.dominantBaseline}
+          fontSize={4.6}
+          fontFamily="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif"
+          fontWeight={600}
+          fill="#0284c7"
+          stroke={isDark ? "#0b0f19" : "#ffffff"}
+          strokeWidth={1.2}
+          strokeLinejoin="round"
+          style={{ paintOrder: "stroke fill" }}
+        >
+          {cleanLabel}
+        </text>
+      </g>
 
-      {/* Transparent / Subtle Hollow Crosshair Pin Markers */}
-      {asset.pins.map((pin) => {
-        const px = asset.xMm + pin.localXMm;
-        const py = -(asset.yMm + pin.localYMm);
-        const isStartPin =
-          activeWireStartPin?.componentId === asset.id &&
-          activeWireStartPin?.pinId === pin.id;
-        const isHovered = hoveredPinId === pin.id;
-        const isActivePin =
-          isWireMode || isMarkingThis || isHovered || isStartPin;
+      {/* 100% Transparent Crosshair Pin Markers (Outside clipPath, with text halo) */}
+      <g className="cad-pin-markers">
+        {asset.pins.map((pin) => {
+          const px = asset.xMm + pin.localXMm;
+          const py = -(asset.yMm + pin.localYMm);
+          const isStartPin =
+            activeWireStartPin?.componentId === asset.id &&
+            activeWireStartPin?.pinId === pin.id;
+          const isHovered = hoveredPinId === pin.id;
+          const isActivePin =
+            isWireMode || isMarkingThis || isHovered || isStartPin;
 
-        const ringStroke = isStartPin
-          ? "#b45309"
-          : isWireMode
-          ? "#0284c7"
-          : "#d97706";
+          const ringStroke = isStartPin
+            ? "#b45309"
+            : isWireMode
+            ? "#0284c7"
+            : isHovered
+            ? "#f59e0b"
+            : isMarkingThis
+            ? "#d97706"
+            : "#0284c7";
 
-        return (
-          <g
-            key={pin.id}
-            onPointerEnter={() => setHoveredPinId(pin.id)}
-            onPointerLeave={() =>
-              setHoveredPinId((curr) => (curr === pin.id ? null : curr))
-            }
-            onPointerDown={(e) => {
-              if (isWireMode) {
-                e.stopPropagation();
-                onPinClick(e, pin.id);
+          return (
+            <g
+              key={pin.id}
+              onPointerEnter={() => setHoveredPinId(pin.id)}
+              onPointerLeave={() =>
+                setHoveredPinId((curr) => (curr === pin.id ? null : curr))
               }
-            }}
-            className={isWireMode ? "cursor-pointer" : undefined}
-          >
-            <circle
-              cx={px}
-              cy={py}
-              r={
-                isStartPin
-                  ? 2.6
-                  : isWireMode || isMarkingThis
-                  ? 2.3
-                  : isHovered
-                  ? 2.2
-                  : 1.9
-              }
-              fill={
-                isStartPin
-                  ? "rgba(245, 158, 11, 0.25)"
-                  : isActivePin
-                  ? "rgba(245, 158, 11, 0.14)"
-                  : "rgba(245, 158, 11, 0.08)"
-              }
-              stroke={ringStroke}
-              strokeOpacity={isActivePin ? 0.95 : 0.65}
-              strokeWidth={isActivePin ? 0.75 : 0.4}
-            />
-            <line
-              x1={px - 1.1}
-              y1={py}
-              x2={px + 1.1}
-              y2={py}
-              stroke={ringStroke}
-              strokeOpacity={isActivePin ? 0.9 : 0.55}
-              strokeWidth={0.3}
-              pointerEvents="none"
-            />
-            <line
-              x1={px}
-              y1={py - 1.1}
-              x2={px}
-              y2={py + 1.1}
-              stroke={ringStroke}
-              strokeOpacity={isActivePin ? 0.9 : 0.55}
-              strokeWidth={0.3}
-              pointerEvents="none"
-            />
-            <text
-              x={px + 2.4}
-              y={py + 1}
-              fontSize={isActivePin ? 3.5 : 2.8}
-              fontFamily="monospace"
-              fontWeight={isActivePin ? "bold" : "normal"}
-              fill={isWireMode ? "#0369a1" : "#92400e"}
-              fillOpacity={isActivePin ? 0.95 : 0.55}
-              textAnchor="start"
-              pointerEvents="none"
+              onPointerDown={(e) => {
+                if (isWireMode) {
+                  e.stopPropagation();
+                  onPinClick(e, pin.id);
+                }
+              }}
+              className={isWireMode ? "cursor-pointer" : undefined}
             >
-              {pin.label}
-            </text>
-          </g>
-        );
-      })}
+              {/* True 100% transparent hit ring with thin stroke */}
+              <circle
+                cx={px}
+                cy={py}
+                r={
+                  isStartPin
+                    ? 2.5
+                    : isWireMode || isMarkingThis
+                    ? 2.2
+                    : isHovered
+                    ? 2.1
+                    : 1.8
+                }
+                fill="transparent"
+                pointerEvents="all"
+                stroke={ringStroke}
+                strokeOpacity={isActivePin ? 0.95 : 0.45}
+                strokeWidth={isActivePin ? 0.55 : 0.35}
+              />
+              {/* Ultra-fine Crosshair lines (0.8mm span, strokeWidth 0.25) */}
+              <line
+                x1={px - 0.8}
+                y1={py}
+                x2={px + 0.8}
+                y2={py}
+                stroke={ringStroke}
+                strokeOpacity={isActivePin ? 0.95 : 0.45}
+                strokeWidth={0.25}
+                pointerEvents="none"
+              />
+              <line
+                x1={px}
+                y1={py - 0.8}
+                x2={px}
+                y2={py + 0.8}
+                stroke={ringStroke}
+                strokeOpacity={isActivePin ? 0.95 : 0.45}
+                strokeWidth={0.25}
+                pointerEvents="none"
+              />
+              {/* Crisp Pin Label with halo stroke - readable over CAD without clipping */}
+              <text
+                x={px + 2.4}
+                y={py + 1}
+                fontSize={isActivePin ? 3.6 : 3.0}
+                fontFamily="system-ui, -apple-system, BlinkMacSystemFont, monospace"
+                fontWeight={600}
+                fill={isWireMode ? "#0284c7" : isDark ? "#fbbf24" : "#b45309"}
+                fillOpacity={isActivePin ? 1.0 : 0.85}
+                stroke={isDark ? "#0b0f19" : "#ffffff"}
+                strokeWidth={0.9}
+                strokeLinejoin="round"
+                style={{ paintOrder: "stroke fill" }}
+                textAnchor="start"
+                pointerEvents="none"
+              >
+                {pin.label}
+              </text>
+            </g>
+          );
+        })}
+      </g>
     </g>
   );
 }
@@ -842,6 +889,11 @@ export function Panel2DCanvas() {
   const collisionReport = useMemo(
     () => detectCollisionsAndBounds(components, cadAssets, plateW, plateH),
     [components, cadAssets, plateW, plateH]
+  );
+
+  const cadObstacleBoxes = useMemo(
+    () => buildSvgObstacleBoxes(components, cadAssets),
+    [components, cadAssets]
   );
 
   // Sheet dimensions around backplate
@@ -2275,6 +2327,8 @@ export function Panel2DCanvas() {
                   isSelected={isSelected}
                   isMarkingThis={isMarkingThis}
                   isWireMode={canvasTool2D === "wire"}
+                  isDark={theme === "dark"}
+                  obstacleBoxes={cadObstacleBoxes}
                   activeWireStartPin={activeWireStartPin}
                   onPointerDown={(e) => {
                     if (e.button !== 0 || spacePressed) return;

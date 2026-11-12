@@ -7,6 +7,7 @@ import { getEffectiveCadBounds } from "@/lib/collision";
 import { snapToGrid } from "@/lib/snap";
 import { formatDim, fromMm, inputStepForUnit, toMm } from "@/lib/units";
 import { usePanelStore } from "@/store/usePanelStore";
+import type { CadLabelPosition } from "@/types/panel";
 
 interface RightInspectorProps {
   onClose?: () => void;
@@ -631,6 +632,27 @@ export function RightInspector({ onClose }: RightInspectorProps) {
               ))}
             </div>
           </div>
+
+          <label className="block space-y-1 border-t border-[#e2e8f0] dark:border-white/10 pt-2.5">
+            <span className="text-xs text-[#64748b] dark:text-slate-400">
+              Label Position
+            </span>
+            <select
+              value={cad.labelPosition ?? "auto"}
+              onChange={(e) =>
+                updateCadAsset(cad.id, {
+                  labelPosition: e.target.value as CadLabelPosition,
+                })
+              }
+              className={inputClass}
+            >
+              <option value="auto">Auto (Smart Shift)</option>
+              <option value="top">Top</option>
+              <option value="right">Right</option>
+              <option value="bottom">Bottom</option>
+              <option value="left">Left</option>
+            </select>
+          </label>
 
           <button
             type="button"

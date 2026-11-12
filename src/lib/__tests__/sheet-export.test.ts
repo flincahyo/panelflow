@@ -132,6 +132,8 @@ describe("sheet-export", () => {
     });
     expect(svg).toContain('data-id="cad-1"');
     expect(svg).toContain("PLC-Module-FX3U");
+    expect(svg).not.toContain("[DXF]");
+    expect(svg).toContain('fill="transparent"');
     expect(svg).toContain("24V");
   });
 });

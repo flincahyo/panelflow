@@ -132,6 +132,8 @@ export interface CadCropMm {
   right: number;
 }
 
+export type CadLabelPosition = "auto" | "top" | "bottom" | "right" | "left";
+
 export interface CustomCadAsset {
   id: string;
   name: string;
@@ -144,6 +146,7 @@ export interface CustomCadAsset {
   rotationDeg?: RotationDeg;
   boundingBoxMm: { w: number; h: number; d: number };
   cropMm?: CadCropMm;
+  labelPosition?: CadLabelPosition;
   pins: PinTerminal[];
   objectUrl?: string;
   dataUrl?: string;
