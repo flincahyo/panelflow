@@ -209,25 +209,25 @@ export function TopToolbar({
   };
 
   const dropdownPanelClass =
-    "absolute top-8 left-0 z-50 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white/98 dark:bg-[#111318]/98 p-1 shadow-xl dark:shadow-2xl backdrop-blur-xl text-xs";
+    "absolute top-9 left-0 z-50 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white/98 dark:bg-[#111318]/98 p-1.5 shadow-xl dark:shadow-2xl backdrop-blur-xl text-[13px]";
   const dropdownItemClass =
     "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white";
   const dropdownSectionLabelClass =
-    "px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider text-[#64748b] dark:text-slate-500";
+    "px-2.5 py-1 text-[11px] font-mono uppercase tracking-wider text-[#64748b] dark:text-slate-500 font-medium";
   const dropdownDividerClass = "my-1 border-t border-[#e2e8f0] dark:border-white/10";
 
   return (
-    <header className="relative z-40 flex h-13 shrink-0 items-center justify-between border-b border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#0c0e14]/95 px-3.5 text-xs text-[#0f172a] dark:text-slate-200 shadow-sm dark:shadow-none backdrop-blur-xl select-none">
+    <header className="relative z-40 flex h-14 shrink-0 items-center justify-between border-b border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#0c0e14]/95 px-4 text-xs text-[#0f172a] dark:text-slate-200 shadow-sm dark:shadow-none backdrop-blur-xl select-none">
       {/* LEFT SECTION: Logo Badge + Brand + File/Edit/View Menus */}
-      <div className="flex items-center gap-3" ref={menuBarRef}>
+      <div className="flex items-center gap-3.5" ref={menuBarRef}>
         {/* Brand Badge */}
         <div className="flex items-center gap-2.5">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-[#e2e8f0] dark:border-white/15 bg-[#f8fafc] dark:bg-[#171a21] shadow-xs">
-            <Zap className="h-4 w-4 text-amber-500 dark:text-amber-400 fill-amber-400/20" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e2e8f0] dark:border-white/15 bg-[#f8fafc] dark:bg-[#171a21] shadow-xs">
+            <Zap className="h-4.5 w-4.5 text-amber-500 dark:text-amber-400 fill-amber-400/20" />
           </div>
-          <div className="flex items-center gap-1.5 font-bold tracking-tight text-[#0f172a] dark:text-white text-sm">
+          <div className="flex items-center gap-1.5 font-bold tracking-tight text-[#0f172a] dark:text-white text-[15px]">
             <span>PanelFlow</span>
-            <span className="rounded-md border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-white/5 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-[#64748b] dark:text-slate-400">
+            <span className="rounded-md border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-white/5 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#64748b] dark:text-slate-400">
               CAD
             </span>
           </div>
@@ -236,7 +236,7 @@ export function TopToolbar({
         <div className="h-4 w-px bg-[#e2e8f0] dark:bg-white/10" />
 
         {/* Dropdown Menus (RelayFlow style) */}
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-1">
           {/* FILE MENU */}
           <div className="relative">
             <button
@@ -244,14 +244,14 @@ export function TopToolbar({
               onClick={() =>
                 setActiveMenu(activeMenu === "file" ? null : "file")
               }
-              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              className={`flex items-center gap-1 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
                 activeMenu === "file"
                   ? "bg-[#e2e8f0] dark:bg-white/10 text-[#0f172a] dark:text-white"
                   : "text-[#64748b] dark:text-slate-400 hover:bg-[#f1f5f9] dark:hover:bg-white/5 hover:text-[#0f172a] dark:hover:text-slate-200"
               }`}
             >
               File
-              <ChevronDown className="h-3 w-3 text-[#64748b] dark:text-slate-500" />
+              <ChevronDown className="h-3.5 w-3.5 text-[#64748b] dark:text-slate-500" />
             </button>
 
             {activeMenu === "file" && (
@@ -344,18 +344,18 @@ export function TopToolbar({
               onClick={() =>
                 setActiveMenu(activeMenu === "edit" ? null : "edit")
               }
-              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              className={`flex items-center gap-1 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
                 activeMenu === "edit"
                   ? "bg-[#e2e8f0] dark:bg-white/10 text-[#0f172a] dark:text-white"
                   : "text-[#64748b] dark:text-slate-400 hover:bg-[#f1f5f9] dark:hover:bg-white/5 hover:text-[#0f172a] dark:hover:text-slate-200"
               }`}
             >
               Edit
-              <ChevronDown className="h-3 w-3 text-[#64748b] dark:text-slate-500" />
+              <ChevronDown className="h-3.5 w-3.5 text-[#64748b] dark:text-slate-500" />
             </button>
 
             {activeMenu === "edit" && (
-              <div className={`${dropdownPanelClass} w-60`}>
+              <div className={`${dropdownPanelClass} w-64`}>
                 <button
                   type="button"
                   disabled={!canUndo}
@@ -369,7 +369,7 @@ export function TopToolbar({
                     <Undo2 className="h-3.5 w-3.5" />
                     Undo
                   </span>
-                  <span className="font-mono text-[10px] text-[#64748b] dark:text-slate-500">
+                  <span className="font-mono text-[11px] text-[#64748b] dark:text-slate-500">
                     Ctrl+Z
                   </span>
                 </button>
@@ -386,7 +386,7 @@ export function TopToolbar({
                     <Redo2 className="h-3.5 w-3.5" />
                     Redo
                   </span>
-                  <span className="font-mono text-[10px] text-[#64748b] dark:text-slate-500">
+                  <span className="font-mono text-[11px] text-[#64748b] dark:text-slate-500">
                     Ctrl+Y
                   </span>
                 </button>
@@ -416,14 +416,14 @@ export function TopToolbar({
               onClick={() =>
                 setActiveMenu(activeMenu === "view" ? null : "view")
               }
-              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              className={`flex items-center gap-1 rounded-md px-3 py-1.5 text-[13px] font-medium transition-colors ${
                 activeMenu === "view"
                   ? "bg-[#e2e8f0] dark:bg-white/10 text-[#0f172a] dark:text-white"
                   : "text-[#64748b] dark:text-slate-400 hover:bg-[#f1f5f9] dark:hover:bg-white/5 hover:text-[#0f172a] dark:hover:text-slate-200"
               }`}
             >
               View
-              <ChevronDown className="h-3 w-3 text-[#64748b] dark:text-slate-500" />
+              <ChevronDown className="h-3.5 w-3.5 text-[#64748b] dark:text-slate-500" />
             </button>
 
             {activeMenu === "view" && (
@@ -487,14 +487,14 @@ export function TopToolbar({
       </div>
 
       {/* RIGHT SECTION: Project Pill (.PFLOW) + Viewport Switcher + Unit Switcher + Theme Toggle + Inspector Toggle */}
-      <div className="flex items-center gap-2 sm:gap-2.5">
+      <div className="flex items-center gap-2.5">
         {/* Active Project Pill */}
-        <div className="hidden items-center gap-2 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] px-3 py-1 font-mono text-[11px] md:flex">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400" />
+        <div className="hidden items-center gap-2 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] px-3.5 py-1.5 font-mono text-xs md:flex">
+          <span className="h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400" />
           <span className="max-w-[160px] truncate text-[#334155] dark:text-slate-300 font-medium">
             {titleBlock.projectName}
           </span>
-          <span className="rounded-md border border-[#e2e8f0] dark:border-white/10 bg-[#e2e8f0]/70 dark:bg-white/10 px-1.5 py-0.2 font-mono text-[9px] font-bold tracking-wider text-[#0f172a] dark:text-slate-200">
+          <span className="rounded-md border border-[#e2e8f0] dark:border-white/10 bg-[#e2e8f0]/70 dark:bg-white/10 px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-[#0f172a] dark:text-slate-200">
             .PFLOW
           </span>
         </div>
@@ -504,7 +504,7 @@ export function TopToolbar({
           <button
             type="button"
             onClick={() => setViewportMode("2d")}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium transition-all ${
+            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
               viewportMode === "2d"
                 ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-semibold shadow-xs"
                 : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
@@ -516,7 +516,7 @@ export function TopToolbar({
           <button
             type="button"
             onClick={() => setViewportMode("3d")}
-            className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium transition-all ${
+            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
               viewportMode === "3d"
                 ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-semibold shadow-xs"
                 : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
@@ -534,7 +534,7 @@ export function TopToolbar({
               key={u}
               type="button"
               onClick={() => setDisplayUnit(u)}
-              className={`rounded-full px-2 py-0.5 font-mono text-[11px] transition-all ${
+              className={`rounded-full px-2.5 py-1 font-mono text-xs transition-all ${
                 displayUnit === u
                   ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-bold shadow-xs"
                   : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
