@@ -7,12 +7,16 @@ import { usePanelStore } from "@/store/usePanelStore";
 
 export function Enclosure3D() {
   const enclosure = usePanelStore((s) => s.enclosure);
+  const plateConfig = usePanelStore((s) => s.plateConfig);
   const gridSnapMm = usePanelStore((s) => s.gridSnapMm);
   const setSelected = usePanelStore((s) => s.setSelected);
 
   const { widthMm: W, heightMm: H, depthMm: D, wallThicknessMm: T, backplateThicknessMm: BT, doorMode } =
     enclosure;
-  const { widthMm: plateW, heightMm: plateH } = getBackplateDimensions(enclosure);
+  const { widthMm: plateW, heightMm: plateH } = getBackplateDimensions(
+    enclosure,
+    plateConfig
+  );
 
   // Backplate front face is at z = 0.
   // Enclosure rear wall sits behind backplate (z = -18 - T/2).

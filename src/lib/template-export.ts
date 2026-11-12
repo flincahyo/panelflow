@@ -1,4 +1,4 @@
-import type { DinRail, EnclosureConfig, WireDuct } from "@/types/panel";
+import type { DinRail, EnclosureConfig, PlateConfig, WireDuct } from "@/types/panel";
 
 export interface DrillingHole {
   xMm: number; // 0 = backplate left edge
@@ -14,10 +14,32 @@ export interface BackplateLayoutSpec {
   holes: DrillingHole[];
 }
 
-export function getBackplateDimensions(enclosure: EnclosureConfig): {
+export function getBackplateDimensions(
+  enclosure: EnclosureConfig,
+  plateConfig?: PlateConfig
+): {
   widthMm: number;
   heightMm: number;
 } {
+  const mode = plateConfig?.mode ?? enclosure.plateMode ?? "auto";
+  if (mode === "manual") {
+    const manualW = plateConfig?.manualWidthMm ?? enclosure.manualPlateWidthMm;
+    const manualH = plateConfig?.manualHeightMm ?? enclosure.manualPlateHeightMm;
+    return {
+      widthMm: Math.max(
+        100,
+        Number.isFinite(manualW)
+          ? (manualW as number)
+          : enclosure.widthMm - enclosure.backplateInsetMm * 2
+      ),
+      heightMm: Math.max(
+        100,
+        Number.isFinite(manualH)
+          ? (manualH as number)
+          : enclosure.heightMm - enclosure.backplateInsetMm * 2
+      ),
+    };
+  }
   return {
     widthMm: Math.max(100, enclosure.widthMm - enclosure.backplateInsetMm * 2),
     heightMm: Math.max(100, enclosure.heightMm - enclosure.backplateInsetMm * 2),
@@ -27,10 +49,11 @@ export function getBackplateDimensions(enclosure: EnclosureConfig): {
 export function computeDrillingHoles(
   enclosure: EnclosureConfig,
   rails: DinRail[],
-  ducts: WireDuct[]
+  ducts: WireDuct[],
+  plateConfig?: PlateConfig
 ): BackplateLayoutSpec {
   const { widthMm: backplateWidthMm, heightMm: backplateHeightMm } =
-    getBackplateDimensions(enclosure);
+    getBackplateDimensions(enclosure, plateConfig);
   const holes: DrillingHole[] = [];
 
   const toPlateX = (centerX: number) => centerX + backplateWidthMm / 2;
@@ -122,12 +145,14 @@ export function computeDrillingHoles(
 export function generateDrillingSvg(
   enclosure: EnclosureConfig,
   rails: DinRail[],
-  ducts: WireDuct[]
+  ducts: WireDuct[],
+  plateConfig?: PlateConfig
 ): string {
   const { backplateWidthMm, backplateHeightMm, holes } = computeDrillingHoles(
     enclosure,
     rails,
-    ducts
+    ducts,
+    plateConfig
   );
 
   // SVG Y axis points down, so flip Y: svgY = backplateHeightMm - hole.yMm
@@ -173,12 +198,14 @@ ${holeElements}
 export function generateDrillingDxf(
   enclosure: EnclosureConfig,
   rails: DinRail[],
-  ducts: WireDuct[]
+  ducts: WireDuct[],
+  plateConfig?: PlateConfig
 ): string {
   const { backplateWidthMm, backplateHeightMm, holes } = computeDrillingHoles(
     enclosure,
     rails,
-    ducts
+    ducts,
+    plateConfig
   );
 
   const lines: string[] = [

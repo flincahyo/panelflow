@@ -6,15 +6,23 @@ import {
   Hand,
   Maximize2,
   MousePointer2,
+  Ruler,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
 import { ContextMenu } from "@/components/ui/ContextMenu";
+import { detectCollisionsAndBounds } from "@/lib/collision";
 import { getBackplateDimensions } from "@/lib/template-export";
 import { parseDxfToMmSegments } from "@/lib/dxf-parser";
 import { WIRE_COLOR_MAP } from "@/lib/sheet-export";
 import { rotateLocalPoint, snapToGrid } from "@/lib/snap";
-import { pointsToSvgPath, routeOrthogonalWire } from "@/lib/wire-router";
+import { formatDim } from "@/lib/units";
+import {
+  getWireOuterDiameterMm,
+  pointsToRoundedSvgPath,
+  pointsToSvgPath,
+  routeOrthogonalWire,
+} from "@/lib/wire-router";
 import { usePanelStore } from "@/store/usePanelStore";
 import type {
   CustomCadAsset,
@@ -91,6 +99,8 @@ function Component2DSymbol({
   onPointerDown,
   onContextMenu,
   onPinClick,
+  hasCollision,
+  isOutOfBounds,
 }: {
   comp: PlacedComponent;
   isSelected: boolean;
@@ -99,6 +109,8 @@ function Component2DSymbol({
   onPointerDown: (e: React.PointerEvent) => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onPinClick: (e: React.PointerEvent, pinId: string) => void;
+  hasCollision?: boolean;
+  isOutOfBounds?: boolean;
 }) {
   // SVG Y is down, world Y is up
   const x = comp.xMm - comp.widthMm / 2;
@@ -134,6 +146,43 @@ function Component2DSymbol({
       transform={rot ? `rotate(${rot} ${comp.xMm} ${-comp.yMm})` : undefined}
       className={isWireMode ? "cursor-crosshair" : "cursor-grab active:cursor-grabbing"}
     >
+      {/* Collision / Out-of-Bounds Warning Highlight */}
+      {(hasCollision || isOutOfBounds) && (
+        <g className="pointer-events-none">
+          <rect
+            x={x - 1.5}
+            y={y - 1.5}
+            width={comp.widthMm + 3}
+            height={comp.heightMm + 3}
+            fill="#ef4444"
+            fillOpacity={0.12}
+            stroke="#ef4444"
+            strokeWidth={1.6}
+            strokeDasharray={isOutOfBounds ? "4,2" : undefined}
+            rx={1}
+          />
+          <rect
+            x={x + comp.widthMm - 18}
+            y={y - 6}
+            width={18}
+            height={6}
+            rx={1}
+            fill="#dc2626"
+          />
+          <text
+            x={x + comp.widthMm - 9}
+            y={y - 1.5}
+            fontSize={3.8}
+            fontFamily="monospace"
+            fontWeight="bold"
+            fill="#ffffff"
+            textAnchor="middle"
+          >
+            {isOutOfBounds ? "! OOB" : "! OVL"}
+          </text>
+        </g>
+      )}
+
       {/* Selection halo */}
       {isSelected && (
         <rect
@@ -453,6 +502,8 @@ export function Panel2DCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const enclosure = usePanelStore((s) => s.enclosure);
+  const plateConfig = usePanelStore((s) => s.plateConfig);
+  const displayUnit = usePanelStore((s) => s.displayUnit);
   const rails = usePanelStore((s) => s.rails);
   const ducts = usePanelStore((s) => s.ducts);
   const components = usePanelStore((s) => s.components);
@@ -493,11 +544,25 @@ export function Panel2DCanvas() {
   const [cursorWorld, setCursorWorld] = useState<{ xMm: number; yMm: number } | null>(
     null
   );
+  const [measureStart, setMeasureStart] = useState<{ xMm: number; yMm: number } | null>(
+    null
+  );
+  const [measureEnd, setMeasureEnd] = useState<{ xMm: number; yMm: number } | null>(
+    null
+  );
+  const [measureHover, setMeasureHover] = useState<{ xMm: number; yMm: number } | null>(
+    null
+  );
   const [viewportSize, setViewportSize] = useState({ width: 960, height: 760 });
 
   const { widthMm: plateW, heightMm: plateH } = useMemo(
-    () => getBackplateDimensions(enclosure),
-    [enclosure]
+    () => getBackplateDimensions(enclosure, plateConfig),
+    [enclosure, plateConfig]
+  );
+
+  const collisionReport = useMemo(
+    () => detectCollisionsAndBounds(components, cadAssets, plateW, plateH),
+    [components, cadAssets, plateW, plateH]
   );
 
   // Sheet dimensions around backplate
@@ -542,6 +607,9 @@ export function Panel2DCanvas() {
       }
       if (e.code === "Escape") {
         setActiveWireStartPin(null);
+        setMeasureStart(null);
+        setMeasureEnd(null);
+        setMeasureHover(null);
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -601,6 +669,23 @@ export function Panel2DCanvas() {
       });
       return;
     }
+    if (e.button === 0 && canvasTool2D === "measure") {
+      e.stopPropagation();
+      const raw = screenToWorld(e.clientX, e.clientY);
+      const pt = {
+        xMm: snapToGrid(raw.xMm, gridSnapMm),
+        yMm: snapToGrid(raw.yMm, gridSnapMm),
+      };
+      if (!measureStart || (measureStart && measureEnd)) {
+        setMeasureStart(pt);
+        setMeasureEnd(null);
+        setMeasureHover(pt);
+      } else {
+        setMeasureEnd(pt);
+        setMeasureHover(null);
+      }
+      return;
+    }
     if (e.button === 0) {
       setSelected(null);
     }
@@ -609,6 +694,12 @@ export function Panel2DCanvas() {
   const handlePointerMove = (e: React.PointerEvent) => {
     const world = screenToWorld(e.clientX, e.clientY);
     setCursorWorld(world);
+    if (canvasTool2D === "measure" && measureStart && !measureEnd) {
+      setMeasureHover({
+        xMm: snapToGrid(world.xMm, gridSnapMm),
+        yMm: snapToGrid(world.yMm, gridSnapMm),
+      });
+    }
 
     if (!dragState) return;
 
@@ -865,6 +956,19 @@ export function Panel2DCanvas() {
           </button>
           <button
             type="button"
+            onClick={() => setCanvasTool2D("measure")}
+            className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium ${
+              canvasTool2D === "measure"
+                ? "bg-sky-600 text-white"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+            title="Measure Dimension Tool (Click Point A -> Point B, Esc to clear)"
+          >
+            <Ruler className="h-3.5 w-3.5" />
+            Measure
+          </button>
+          <button
+            type="button"
             onClick={() => setCanvasTool2D("pan")}
             className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium ${
               canvasTool2D === "pan"
@@ -906,18 +1010,47 @@ export function Panel2DCanvas() {
               onChange={(e) => setActiveWireGauge(e.target.value)}
               className="rounded border border-slate-300 bg-white px-1.5 py-0.5 font-mono text-[10px] text-slate-700"
             >
-              <option value="0.75">0.75 mm²</option>
-              <option value="1.5">1.5 mm²</option>
-              <option value="2.5">2.5 mm²</option>
-              <option value="4.0">4.0 mm²</option>
-              <option value="6.0">6.0 mm²</option>
-              <option value="10">10 mm²</option>
+              <option value="0.75">0.75 mm² (Ø2.4)</option>
+              <option value="1.0">1.0 mm² (Ø2.7)</option>
+              <option value="1.5">1.5 mm² (Ø3.0)</option>
+              <option value="2.5">2.5 mm² (Ø3.7)</option>
+              <option value="4.0">4.0 mm² (Ø4.4)</option>
+              <option value="6.0">6.0 mm² (Ø5.2)</option>
+              <option value="10.0">10.0 mm² (Ø6.5)</option>
+              <option value="16.0">16.0 mm² (Ø8.0)</option>
             </select>
             {activeWireStartPin && (
               <span className="font-mono text-[10px] font-semibold text-amber-600">
                 Select target pin... (Esc to cancel)
               </span>
             )}
+          </div>
+        )}
+
+        {canvasTool2D === "measure" && (
+          <div className="flex items-center gap-2 border-l border-slate-200 pl-2">
+            <span className="font-mono text-[10px] font-semibold text-sky-700">
+              {!measureStart
+                ? "Click start point A"
+                : !measureEnd
+                ? "Click end point B (Esc to cancel)"
+                : "Click to measure again (Esc to clear)"}
+            </span>
+          </div>
+        )}
+
+        {(collisionReport.overlappingIds.size > 0 ||
+          collisionReport.outOfBoundsIds.size > 0) && (
+          <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2">
+            <span className="rounded bg-rose-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-rose-700">
+              {collisionReport.overlappingIds.size > 0 &&
+                `${collisionReport.overlapPairs.length} overlap`}
+              {collisionReport.overlappingIds.size > 0 &&
+                collisionReport.outOfBoundsIds.size > 0 &&
+                " · "}
+              {collisionReport.outOfBoundsIds.size > 0 &&
+                `${collisionReport.outOfBoundsIds.size} out-of-bounds`}
+            </span>
           </div>
         )}
 
@@ -999,6 +1132,17 @@ export function Panel2DCanvas() {
           >
             <line x1="0" y1="0" x2="0" y2="6" stroke="#94a3b8" strokeWidth="1" />
           </pattern>
+          <marker
+            id="measure-arrow"
+            viewBox="0 0 10 10"
+            refX="8"
+            refY="5"
+            markerWidth="5"
+            markerHeight="5"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#0284c7" />
+          </marker>
         </defs>
 
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
@@ -1310,6 +1454,8 @@ export function Panel2DCanvas() {
                 }
                 isWireMode={canvasTool2D === "wire"}
                 activeWireStartPin={activeWireStartPin}
+                hasCollision={collisionReport.overlappingIds.has(comp.id)}
+                isOutOfBounds={collisionReport.outOfBoundsIds.has(comp.id)}
                 onPointerDown={(e) => {
                   if (e.button !== 0 || canvasTool2D !== "select" || spacePressed) return;
                   e.stopPropagation();
@@ -1406,8 +1552,9 @@ export function Panel2DCanvas() {
               if (!p1 || !p2) return null;
 
               const waypoints = routeOrthogonalWire(p1, p2, "horizontal-first");
-              const pathD = pointsToSvgPath(waypoints);
+              const pathD = pointsToRoundedSvgPath(waypoints, 4);
               const stroke = WIRE_COLOR_MAP[w.colorCode] || "#2563eb";
+              const wireDiaMm = getWireOuterDiameterMm(w.gaugeMm2);
               const isSelected =
                 selected?.kind === "wire" && selected.id === w.id;
               const mid = waypoints[Math.floor(waypoints.length / 2)] || p1;
@@ -1436,13 +1583,24 @@ export function Panel2DCanvas() {
                     d={pathD}
                     fill="none"
                     stroke="transparent"
-                    strokeWidth={6}
+                    strokeWidth={Math.max(8, wireDiaMm + 4)}
                   />
+                  {isSelected && (
+                    <path
+                      d={pathD}
+                      fill="none"
+                      stroke="#0284c7"
+                      strokeWidth={wireDiaMm + 2.2}
+                      strokeOpacity={0.35}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  )}
                   <path
                     d={pathD}
                     fill="none"
                     stroke={stroke}
-                    strokeWidth={isSelected ? 2 : 1.1}
+                    strokeWidth={wireDiaMm}
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
@@ -1494,6 +1652,93 @@ export function Panel2DCanvas() {
               );
             })()}
           </g>
+
+          {/* Measuring Dimension Overlay */}
+          {measureStart && (measureEnd || measureHover) && (() => {
+            const b = measureEnd ?? measureHover!;
+            const sx1 = measureStart.xMm;
+            const sy1 = -measureStart.yMm;
+            const sx2 = b.xMm;
+            const sy2 = -b.yMm;
+            const dx = Math.abs(b.xMm - measureStart.xMm);
+            const dy = Math.abs(b.yMm - measureStart.yMm);
+            const dist = Math.hypot(dx, dy);
+            const midX = (sx1 + sx2) / 2;
+            const midY = (sy1 + sy2) / 2;
+            return (
+              <g className="pointer-events-none">
+                {/* Orthogonal ΔX & ΔY guides */}
+                {dx > 0.1 && dy > 0.1 && (
+                  <>
+                    <line
+                      x1={sx1}
+                      y1={sy1}
+                      x2={sx2}
+                      y2={sy1}
+                      stroke="#64748b"
+                      strokeWidth={0.7}
+                      strokeDasharray="3,2"
+                    />
+                    <line
+                      x1={sx2}
+                      y1={sy1}
+                      x2={sx2}
+                      y2={sy2}
+                      stroke="#64748b"
+                      strokeWidth={0.7}
+                      strokeDasharray="3,2"
+                    />
+                  </>
+                )}
+                {/* Main dimension line */}
+                <line
+                  x1={sx1}
+                  y1={sy1}
+                  x2={sx2}
+                  y2={sy2}
+                  stroke="#0284c7"
+                  strokeWidth={1.2}
+                  markerStart="url(#measure-arrow)"
+                  markerEnd="url(#measure-arrow)"
+                />
+                <circle cx={sx1} cy={sy1} r={2.2} fill="#0284c7" />
+                <circle cx={sx2} cy={sy2} r={2.2} fill="#0284c7" />
+                {/* Dimension Label */}
+                <rect
+                  x={midX - 42}
+                  y={midY - 12}
+                  width={84}
+                  height={16}
+                  rx={2.5}
+                  fill="#0f172a"
+                  fillOpacity={0.92}
+                  stroke="#0284c7"
+                  strokeWidth={0.7}
+                />
+                <text
+                  x={midX}
+                  y={midY - 5}
+                  fontSize={5}
+                  fontFamily="monospace"
+                  fontWeight="bold"
+                  fill="#f8fafc"
+                  textAnchor="middle"
+                >
+                  L={formatDim(dist, displayUnit)}
+                </text>
+                <text
+                  x={midX}
+                  y={midY + 1.5}
+                  fontSize={3.8}
+                  fontFamily="monospace"
+                  fill="#93c5fd"
+                  textAnchor="middle"
+                >
+                  ΔX:{formatDim(dx, displayUnit)} ΔY:{formatDim(dy, displayUnit)}
+                </text>
+              </g>
+            );
+          })()}
 
           {/* ISO/IEC Title Block (Plot Frame) */}
           <g>

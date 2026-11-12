@@ -6,18 +6,32 @@ describe("usePanelStore - Default 2D & Context Menu Actions", () => {
   const initialSnapshot = usePanelStore.getState();
 
   beforeEach(() => {
-    usePanelStore.setState({
-      viewportMode: "2d",
-      canvasTool2D: "select",
-      gridSnapMm: 10,
-      rails: initialSnapshot.rails.map((r) => ({ ...r })),
-      ducts: initialSnapshot.ducts.map((d) => ({ ...d })),
-      components: initialSnapshot.components.map((c) => ({
+    const freshSheet = initialSnapshot.sheets[0];
+    const clonedSheet = {
+      ...freshSheet,
+      rails: freshSheet.rails.map((r) => ({ ...r })),
+      ducts: freshSheet.ducts.map((d) => ({ ...d })),
+      components: freshSheet.components.map((c) => ({
         ...c,
         pins: c.pins.map((p) => ({ ...p })),
       })),
       cadAssets: [],
-      wires: initialSnapshot.wires.map((w) => ({ ...w })),
+      wires: freshSheet.wires.map((w) => ({ ...w })),
+    };
+    usePanelStore.setState({
+      sheets: [clonedSheet],
+      activeSheetId: clonedSheet.id,
+      viewportMode: "2d",
+      canvasTool2D: "select",
+      gridSnapMm: 10,
+      enclosure: clonedSheet.enclosure,
+      plateConfig: clonedSheet.plateConfig,
+      rails: clonedSheet.rails,
+      ducts: clonedSheet.ducts,
+      components: clonedSheet.components,
+      cadAssets: clonedSheet.cadAssets,
+      wires: clonedSheet.wires,
+      titleBlock: clonedSheet.titleBlock,
       selected: null,
     });
   });
@@ -146,5 +160,69 @@ describe("usePanelStore - Default 2D & Context Menu Actions", () => {
     const added = afterComps[afterComps.length - 1];
     expect(added.railId).toBe("rail-1");
     expect(added.xMm).toBe(120); // snapped to 10mm grid
+  });
+
+  it("supports multi-sheet add, switch, rename, duplicate, and delete (min 1 sheet)", () => {
+    const store = usePanelStore.getState();
+    expect(store.sheets.length).toBe(1);
+    const firstId = store.activeSheetId;
+
+    // Cannot delete the last remaining sheet
+    store.deleteSheet(firstId);
+    expect(usePanelStore.getState().sheets.length).toBe(1);
+
+    // Add a schematic sheet and switch to it automatically
+    const secId = store.addSheet("schematic", "Control Schematic");
+    let state = usePanelStore.getState();
+    expect(state.sheets.length).toBe(2);
+    expect(state.activeSheetId).toBe(secId);
+    expect(state.components.length).toBe(0); // new sheet starts clean
+
+    // Rename sheet
+    state.renameSheet(secId, "Main Schematic");
+    expect(usePanelStore.getState().sheets.find((s) => s.id === secId)?.name).toBe("Main Schematic");
+
+    // Duplicate first sheet
+    const dupId = state.duplicateSheet(firstId)!;
+    state = usePanelStore.getState();
+    expect(state.sheets.length).toBe(3);
+    expect(state.activeSheetId).toBe(dupId);
+    expect(state.components.length).toBeGreaterThan(0);
+
+    // Switch back to first sheet
+    state.setActiveSheet(firstId);
+    expect(usePanelStore.getState().activeSheetId).toBe(firstId);
+
+    // Delete duplicated sheet
+    state.deleteSheet(dupId);
+    expect(usePanelStore.getState().sheets.length).toBe(2);
+  });
+
+  it("supports undo and redo with max 30 history steps", () => {
+    const store = usePanelStore.getState();
+    const initialCount = store.components.length;
+
+    store.addComponent("mcb-1p");
+    expect(usePanelStore.getState().components.length).toBe(initialCount + 1);
+    expect(usePanelStore.getState().canUndo).toBe(true);
+
+    store.undo();
+    expect(usePanelStore.getState().components.length).toBe(initialCount);
+    expect(usePanelStore.getState().canRedo).toBe(true);
+
+    store.redo();
+    expect(usePanelStore.getState().components.length).toBe(initialCount + 1);
+
+    // Exceed 30 steps: cap at 30 undos
+    for (let i = 0; i < 35; i++) {
+      usePanelStore.getState().addRail();
+    }
+    let undoCount = 0;
+    while (usePanelStore.getState().canUndo && undoCount < 40) {
+      usePanelStore.getState().undo();
+      undoCount += 1;
+    }
+    expect(undoCount).toBe(30);
+    expect(usePanelStore.getState().canUndo).toBe(false);
   });
 });

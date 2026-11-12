@@ -25,6 +25,7 @@ export function LeftSidebar() {
 
   const displayUnit = usePanelStore((s) => s.displayUnit);
   const enclosure = usePanelStore((s) => s.enclosure);
+  const plateConfig = usePanelStore((s) => s.plateConfig);
   const rails = usePanelStore((s) => s.rails);
   const ducts = usePanelStore((s) => s.ducts);
   const cadAssets = usePanelStore((s) => s.cadAssets);
@@ -33,6 +34,7 @@ export function LeftSidebar() {
   const activeMarkingAssetId = usePanelStore((s) => s.activeMarkingAssetId);
 
   const updateEnclosure = usePanelStore((s) => s.updateEnclosure);
+  const updatePlateConfig = usePanelStore((s) => s.updatePlateConfig);
   const setSelected = usePanelStore((s) => s.setSelected);
   const addRail = usePanelStore((s) => s.addRail);
   const removeRail = usePanelStore((s) => s.removeRail);
@@ -43,8 +45,10 @@ export function LeftSidebar() {
   const removeCadAsset = usePanelStore((s) => s.removeCadAsset);
   const setPinMarkingMode = usePanelStore((s) => s.setPinMarkingMode);
 
-  const { widthMm: plateW, heightMm: plateH } =
-    getBackplateDimensions(enclosure);
+  const { widthMm: plateW, heightMm: plateH } = getBackplateDimensions(
+    enclosure,
+    plateConfig
+  );
   const step = inputStepForUnit(displayUnit);
 
   const handleCadUpload = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -152,14 +156,98 @@ export function LeftSidebar() {
               </label>
             ))}
 
-            <div className="rounded border border-slate-800 bg-slate-900/60 p-2.5 font-mono text-[11px] text-slate-300 space-y-1">
-              <div className="text-[10px] uppercase text-slate-500">
-                Mounting Backplate
+            <div className="rounded border border-slate-800 bg-slate-900/60 p-2.5 space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[10px] uppercase text-slate-400">
+                  Mounting Backplate
+                </span>
+                <div className="flex rounded border border-slate-700 bg-slate-950 p-0.5 text-[10px] font-mono">
+                  <button
+                    type="button"
+                    onClick={() => updatePlateConfig({ mode: "auto" })}
+                    className={`rounded-xs px-2 py-0.5 transition-colors ${
+                      plateConfig.mode === "auto"
+                        ? "bg-sky-600 font-semibold text-white"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    Auto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updatePlateConfig({
+                        mode: "manual",
+                        manualWidthMm:
+                          plateConfig.mode === "auto"
+                            ? Math.max(100, enclosure.widthMm - enclosure.backplateInsetMm * 2)
+                            : plateConfig.manualWidthMm,
+                        manualHeightMm:
+                          plateConfig.mode === "auto"
+                            ? Math.max(100, enclosure.heightMm - enclosure.backplateInsetMm * 2)
+                            : plateConfig.manualHeightMm,
+                      })
+                    }
+                    className={`rounded-xs px-2 py-0.5 transition-colors ${
+                      plateConfig.mode === "manual"
+                        ? "bg-sky-600 font-semibold text-white"
+                        : "text-slate-400 hover:text-slate-200"
+                    }`}
+                  >
+                    Manual
+                  </button>
+                </div>
               </div>
-              <div>
-                {formatDim(plateW, displayUnit)} ×{" "}
-                {formatDim(plateH, displayUnit)}
-              </div>
+
+              {plateConfig.mode === "manual" ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block space-y-1">
+                    <span className="text-[10px] text-slate-400">
+                      Plate W ({displayUnit})
+                    </span>
+                    <input
+                      type="number"
+                      step={step}
+                      value={Number(
+                        fromMm(plateConfig.manualWidthMm, displayUnit).toFixed(3)
+                      )}
+                      onChange={(e) => {
+                        const mm = toMm(
+                          Number.parseFloat(e.target.value) || 0,
+                          displayUnit
+                        );
+                        updatePlateConfig({ manualWidthMm: Math.max(100, mm) });
+                      }}
+                      className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-xs text-slate-100 focus:border-sky-500 focus:outline-none"
+                    />
+                  </label>
+                  <label className="block space-y-1">
+                    <span className="text-[10px] text-slate-400">
+                      Plate H ({displayUnit})
+                    </span>
+                    <input
+                      type="number"
+                      step={step}
+                      value={Number(
+                        fromMm(plateConfig.manualHeightMm, displayUnit).toFixed(3)
+                      )}
+                      onChange={(e) => {
+                        const mm = toMm(
+                          Number.parseFloat(e.target.value) || 0,
+                          displayUnit
+                        );
+                        updatePlateConfig({ manualHeightMm: Math.max(100, mm) });
+                      }}
+                      className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 font-mono text-xs text-slate-100 focus:border-sky-500 focus:outline-none"
+                    />
+                  </label>
+                </div>
+              ) : (
+                <div className="font-mono text-[11px] text-slate-300">
+                  {formatDim(plateW, displayUnit)} ×{" "}
+                  {formatDim(plateH, displayUnit)}
+                </div>
+              )}
             </div>
           </div>
         )}

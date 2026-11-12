@@ -5,7 +5,7 @@ import {
   generateDrillingSvg,
   getBackplateDimensions,
 } from "@/lib/template-export";
-import type { DinRail, EnclosureConfig, WireDuct } from "@/types/panel";
+import type { DinRail, EnclosureConfig, PlateConfig, WireDuct } from "@/types/panel";
 
 const enclosure: EnclosureConfig = {
   widthMm: 600,
@@ -39,6 +39,30 @@ describe("2D Drilling Template Generator (1:1 mm SVG & DXF)", () => {
     expect(getBackplateDimensions(enclosure)).toEqual({
       widthMm: 520,
       heightMm: 720,
+    });
+  });
+
+  it("uses manual plate dimensions when plate mode is manual", () => {
+    expect(
+      getBackplateDimensions(enclosure, {
+        mode: "manual",
+        manualWidthMm: 450,
+        manualHeightMm: 620,
+      })
+    ).toEqual({
+      widthMm: 450,
+      heightMm: 620,
+    });
+    expect(
+      getBackplateDimensions({
+        ...enclosure,
+        plateMode: "manual",
+        manualPlateWidthMm: 380,
+        manualPlateHeightMm: 540,
+      })
+    ).toEqual({
+      widthMm: 380,
+      heightMm: 540,
     });
   });
 
@@ -78,5 +102,31 @@ describe("2D Drilling Template Generator (1:1 mm SVG & DXF)", () => {
     expect(dxf).toContain("WIRE_DUCT_HOLES");
     expect(dxf).toContain("CIRCLE");
     expect(dxf.trim().endsWith("EOF")).toBe(true);
+  });
+
+  it("uses manualWidthMm and manualHeightMm when plateConfig mode is manual", () => {
+    const manualPlate: PlateConfig = {
+      mode: "manual",
+      manualWidthMm: 450,
+      manualHeightMm: 610,
+    };
+    expect(getBackplateDimensions(enclosure, manualPlate)).toEqual({
+      widthMm: 450,
+      heightMm: 610,
+    });
+
+    const autoPlate: PlateConfig = {
+      mode: "auto",
+      manualWidthMm: 450,
+      manualHeightMm: 610,
+    };
+    expect(getBackplateDimensions(enclosure, autoPlate)).toEqual({
+      widthMm: 520,
+      heightMm: 720,
+    });
+
+    const svg = generateDrillingSvg(enclosure, rails, ducts, manualPlate);
+    expect(svg).toContain('width="450mm"');
+    expect(svg).toContain('height="610mm"');
   });
 });

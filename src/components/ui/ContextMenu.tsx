@@ -50,7 +50,7 @@ const WIRE_COLORS: { code: WireColorCode; label: string; hex: string }[] = [
   { code: "DC-", label: "0V GND (Dark)", hex: "#1e293b" },
 ];
 
-const WIRE_GAUGES = ["0.75", "1.5", "2.5", "4.0", "6.0", "10"];
+const WIRE_GAUGES = ["0.75", "1.0", "1.5", "2.5", "4.0", "6.0", "10.0", "16.0"];
 
 export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);

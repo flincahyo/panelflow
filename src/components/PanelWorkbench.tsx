@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { LeftSidebar } from "@/components/ui/LeftSidebar";
 import { RightInspector } from "@/components/ui/RightInspector";
+import { SheetTabs } from "@/components/ui/SheetTabs";
 import { TopToolbar } from "@/components/ui/TopToolbar";
 import { Panel2DCanvas } from "@/components/viewport/Panel2DCanvas";
 import { usePanelStore } from "@/store/usePanelStore";
@@ -30,8 +31,11 @@ export function PanelWorkbench() {
       <TopToolbar />
       <main className="flex min-h-0 flex-1">
         <LeftSidebar />
-        <section className="relative min-w-0 flex-1">
-          {viewportMode === "3d" ? <PanelViewport /> : <Panel2DCanvas />}
+        <section className="relative flex min-w-0 flex-1 flex-col">
+          <div className="relative min-h-0 flex-1">
+            {viewportMode === "3d" ? <PanelViewport /> : <Panel2DCanvas />}
+          </div>
+          <SheetTabs />
         </section>
         <RightInspector />
       </main>

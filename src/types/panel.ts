@@ -4,6 +4,15 @@ export type GridSnapMm = 5 | 10 | 25;
 export type DoorMode = "open" | "transparent" | "hidden";
 export type RotationDeg = 0 | 90 | 180 | 270;
 
+export type SheetType = "mounting-plate" | "door-cutout" | "schematic";
+export type PlateMode = "auto" | "manual";
+
+export interface PlateConfig {
+  mode: PlateMode;
+  manualWidthMm: number;
+  manualHeightMm: number;
+}
+
 export interface EnclosureConfig {
   widthMm: number;
   heightMm: number;
@@ -12,6 +21,9 @@ export interface EnclosureConfig {
   backplateThicknessMm: number;
   wallThicknessMm: number;
   doorMode: DoorMode;
+  plateMode?: PlateMode;
+  manualPlateWidthMm?: number;
+  manualPlateHeightMm?: number;
 }
 
 export interface DinRail {
@@ -100,7 +112,7 @@ export interface CustomCadAsset {
 }
 
 export type ViewportMode = "3d" | "2d";
-export type CanvasTool2D = "select" | "wire" | "pan";
+export type CanvasTool2D = "select" | "wire" | "pan" | "measure";
 export type WireColorCode = "R" | "S" | "T" | "N" | "PE" | "DC+" | "DC-";
 
 export interface WireConnection {
@@ -121,6 +133,20 @@ export interface TitleBlockMeta {
   date: string;
   scale: string;
   rev: string;
+}
+
+export interface PanelSheet {
+  id: string;
+  name: string;
+  sheetType: SheetType;
+  enclosure: EnclosureConfig;
+  plateConfig: PlateConfig;
+  rails: DinRail[];
+  ducts: WireDuct[];
+  components: PlacedComponent[];
+  cadAssets: CustomCadAsset[];
+  wires: WireConnection[];
+  titleBlock: TitleBlockMeta;
 }
 
 export type SelectionTarget =

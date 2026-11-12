@@ -3,16 +3,23 @@ import type {
   DinRail,
   EnclosureConfig,
   PlacedComponent,
+  PlateConfig,
   TitleBlockMeta,
   WireConnection,
   WireDuct,
 } from "@/types/panel";
 import { parseDxfToMmSegments } from "./dxf-parser";
 import { getBackplateDimensions } from "./template-export";
-import { pointsToSvgPath, routeOrthogonalWire } from "./wire-router";
+import {
+  getWireOuterDiameterMm,
+  pointsToRoundedSvgPath,
+  pointsToSvgPath,
+  routeOrthogonalWire,
+} from "./wire-router";
 
 export interface EplanSheetParams {
   enclosure: EnclosureConfig;
+  plateConfig?: PlateConfig;
   rails: DinRail[];
   ducts: WireDuct[];
   components: PlacedComponent[];
@@ -36,6 +43,7 @@ export { type TitleBlockMeta };
 export function generateEplanSheetSvg(params: EplanSheetParams): string {
   const {
     enclosure,
+    plateConfig,
     rails,
     ducts,
     components,
@@ -43,7 +51,10 @@ export function generateEplanSheetSvg(params: EplanSheetParams): string {
     wires,
     meta,
   } = params;
-  const { widthMm: plateW, heightMm: plateH } = getBackplateDimensions(enclosure);
+  const { widthMm: plateW, heightMm: plateH } = getBackplateDimensions(
+    enclosure,
+    plateConfig
+  );
 
   // Outer Sheet geometry (Standard Drawing Sheet with Margins & Title Block)
   const marginMm = 40;
@@ -195,14 +206,15 @@ export function generateEplanSheetSvg(params: EplanSheetParams): string {
       if (!p1 || !p2) return "";
 
       const waypoints = routeOrthogonalWire(p1, p2, "horizontal-first");
-      const pathD = pointsToSvgPath(waypoints);
+      const pathD = pointsToRoundedSvgPath(waypoints, 4);
       const stroke = WIRE_COLOR_MAP[w.colorCode] || "#2563eb";
+      const wireDiameterMm = getWireOuterDiameterMm(w.gaugeMm2);
       const midIdx = Math.floor(waypoints.length / 2);
       const labelPos = waypoints[midIdx] || p1;
 
       return `
     <g class="wire-net" data-id="${w.id}">
-      <path d="${pathD}" fill="none" stroke="${stroke}" stroke-width="0.9" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="${pathD}" fill="none" stroke="${stroke}" stroke-width="${wireDiameterMm.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" />
       <rect x="${(labelPos.x - 8).toFixed(2)}" y="${(labelPos.y - 4).toFixed(2)}" width="16" height="8" rx="1.5" fill="#ffffff" stroke="${stroke}" stroke-width="0.4" />
       <text x="${labelPos.x.toFixed(2)}" y="${(labelPos.y + 1.5).toFixed(2)}" font-family="monospace" font-size="4" font-weight="bold" fill="#0f172a" text-anchor="middle">${w.label} (${w.gaugeMm2}mm²)</text>
     </g>`;

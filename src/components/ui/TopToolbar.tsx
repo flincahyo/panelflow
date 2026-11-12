@@ -1,6 +1,7 @@
 "use client";
 
-import { Box, Download, Eye, FileImage, FileText, Grid, Layers, Ruler } from "lucide-react";
+import { useEffect } from "react";
+import { Box, Download, Eye, FileImage, FileText, Grid, Layers, Redo2, Ruler, Undo2 } from "lucide-react";
 import { generateEplanSheetSvg } from "@/lib/sheet-export";
 import { generateDrillingDxf, generateDrillingSvg } from "@/lib/template-export";
 import { formatDim } from "@/lib/units";
@@ -24,12 +25,18 @@ export function TopToolbar() {
   const displayUnit = usePanelStore((s) => s.displayUnit);
   const gridSnapMm = usePanelStore((s) => s.gridSnapMm);
   const enclosure = usePanelStore((s) => s.enclosure);
+  const plateConfig = usePanelStore((s) => s.plateConfig);
   const rails = usePanelStore((s) => s.rails);
   const ducts = usePanelStore((s) => s.ducts);
   const components = usePanelStore((s) => s.components);
   const cadAssets = usePanelStore((s) => s.cadAssets);
   const wires = usePanelStore((s) => s.wires);
   const titleBlock = usePanelStore((s) => s.titleBlock);
+
+  const undo = usePanelStore((s) => s.undo);
+  const redo = usePanelStore((s) => s.redo);
+  const canUndo = usePanelStore((s) => s.canUndo);
+  const canRedo = usePanelStore((s) => s.canRedo);
 
   const setViewportMode = usePanelStore((s) => s.setViewportMode);
   const setDisplayUnit = usePanelStore((s) => s.setDisplayUnit);
@@ -57,6 +64,7 @@ export function TopToolbar() {
   const get2DSheetSvg = () =>
     generateEplanSheetSvg({
       enclosure,
+      plateConfig,
       rails,
       ducts,
       components,
@@ -64,6 +72,33 @@ export function TopToolbar() {
       wires,
       meta: titleBlock,
     });
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const key = e.key.toLowerCase();
+      if (key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if (key === "y" || (key === "z" && e.shiftKey)) {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [undo, redo]);
 
   const handleExport2DSheetSvg = () => {
     triggerDownload("panel-pro-2d-sheet.svg", get2DSheetSvg(), "image/svg+xml");
@@ -154,6 +189,28 @@ export function TopToolbar() {
           >
             <Box className="h-3.5 w-3.5" />
             3D View
+          </button>
+        </div>
+
+        {/* Undo / Redo */}
+        <div className="flex rounded border border-slate-700 bg-slate-900 p-0.5">
+          <button
+            type="button"
+            onClick={undo}
+            disabled={!canUndo}
+            title="Undo (Ctrl+Z)"
+            className="flex items-center gap-1 rounded-xs px-2 py-1 text-[11px] text-slate-300 transition-colors hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={redo}
+            disabled={!canRedo}
+            title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
+            className="flex items-center gap-1 rounded-xs px-2 py-1 text-[11px] text-slate-300 transition-colors hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            <Redo2 className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
