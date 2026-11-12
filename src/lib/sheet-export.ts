@@ -205,7 +205,10 @@ export function generateEplanSheetSvg(params: EplanSheetParams): string {
       const p2 = pinCoordMap.get(`${w.toComponentId}:${w.toPinId}`);
       if (!p1 || !p2) return "";
 
-      const waypoints = routeOrthogonalWire(p1, p2, "horizontal-first");
+      const waypoints =
+        w.waypoints && w.waypoints.length >= 2
+          ? w.waypoints.map((pt) => ({ x: toSvgX(pt.xMm), y: toSvgY(pt.yMm) }))
+          : routeOrthogonalWire(p1, p2, "horizontal-first");
       const pathD = pointsToRoundedSvgPath(waypoints, 4);
       const stroke = WIRE_COLOR_MAP[w.colorCode] || "#2563eb";
       const wireDiameterMm = getWireOuterDiameterMm(w.gaugeMm2);

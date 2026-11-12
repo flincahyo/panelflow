@@ -65,17 +65,36 @@ function Wires3D({
         if (!p1 || !p2) return null;
 
         const liftZ = Math.max(p1.z, p2.z) + 18;
-        const midX = (p1.x + p2.x) / 2;
-        const midY = (p1.y + p2.y) / 2;
-        const curve = new THREE.CatmullRomCurve3([
-          p1,
-          new THREE.Vector3(p1.x, p1.y, liftZ),
-          new THREE.Vector3(midX, midY, liftZ + 6),
-          new THREE.Vector3(p2.x, p2.y, liftZ),
-          p2,
-        ]);
+        let curvePoints: THREE.Vector3[];
+        if (w.waypoints && w.waypoints.length >= 2) {
+          const raw3D: THREE.Vector3[] = [
+            p1,
+            new THREE.Vector3(p1.x, p1.y, liftZ),
+            ...w.waypoints.map((pt) => new THREE.Vector3(pt.xMm, pt.yMm, liftZ)),
+            new THREE.Vector3(p2.x, p2.y, liftZ),
+            p2,
+          ];
+          curvePoints = [raw3D[0]];
+          for (let i = 1; i < raw3D.length; i++) {
+            if (raw3D[i].distanceTo(curvePoints[curvePoints.length - 1]) > 0.1) {
+              curvePoints.push(raw3D[i]);
+            }
+          }
+        } else {
+          const midX = (p1.x + p2.x) / 2;
+          const midY = (p1.y + p2.y) / 2;
+          curvePoints = [
+            p1,
+            new THREE.Vector3(p1.x, p1.y, liftZ),
+            new THREE.Vector3(midX, midY, liftZ + 6),
+            new THREE.Vector3(p2.x, p2.y, liftZ),
+            p2,
+          ];
+        }
+        const curve = new THREE.CatmullRomCurve3(curvePoints, false, "catmullrom", 0.15);
         const radius = Math.max(1.2, getWireOuterDiameterMm(w.gaugeMm2) / 2);
-        const geometry = new THREE.TubeGeometry(curve, 24, radius, 8, false);
+        const segments = Math.max(24, curvePoints.length * 8);
+        const geometry = new THREE.TubeGeometry(curve, segments, radius, 8, false);
         const color = WIRE_COLOR_MAP[w.colorCode] || "#2563eb";
         return { id: w.id, geometry, color };
       })

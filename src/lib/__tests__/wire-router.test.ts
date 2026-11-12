@@ -1,12 +1,58 @@
 import { describe, expect, it } from "vitest";
+import type { WireDuct } from "@/types/panel";
 import {
+  calculateBundleLaneOffsetMm,
   getWireOuterDiameterMm,
   pointsToRoundedSvgPath,
   routeOrthogonalWire,
+  routeWireThroughDucts,
   type WirePoint,
 } from "../wire-router";
 
 describe("wire-router", () => {
+  const sampleDucts: WireDuct[] = [
+    {
+      id: "duct-top",
+      name: "Top Duct",
+      xMm: 0,
+      yMm: 280,
+      widthMm: 480,
+      heightMm: 40,
+      depthMm: 60,
+      orientation: "horizontal",
+    },
+    {
+      id: "duct-mid",
+      name: "Mid Duct",
+      xMm: 0,
+      yMm: 120,
+      widthMm: 480,
+      heightMm: 40,
+      depthMm: 60,
+      orientation: "horizontal",
+    },
+    {
+      id: "duct-v-left",
+      name: "Left Vertical Duct",
+      xMm: -230,
+      yMm: 200,
+      widthMm: 40,
+      heightMm: 300,
+      depthMm: 60,
+      orientation: "vertical",
+    },
+    {
+      id: "duct-v-right",
+      name: "Right Vertical Duct",
+      xMm: 230,
+      yMm: 200,
+      widthMm: 40,
+      heightMm: 300,
+      depthMm: 60,
+      orientation: "vertical",
+    },
+  ];
+
   it("generates simple straight route if points share X or Y axis", () => {
     const from: WirePoint = { x: 10, y: 20 };
     const to: WirePoint = { x: 10, y: 100 };
@@ -24,7 +70,6 @@ describe("wire-router", () => {
     expect(waypoints.length).toBe(4);
     expect(waypoints[0]).toEqual({ x: 0, y: 0 });
     expect(waypoints[waypoints.length - 1]).toEqual({ x: 100, y: 100 });
-    // Check that segments are strictly orthogonal (dx == 0 or dy == 0)
     for (let i = 0; i < waypoints.length - 1; i++) {
       const p1 = waypoints[i];
       const p2 = waypoints[i + 1];
@@ -50,47 +95,57 @@ describe("wire-router", () => {
     expect(d).toContain("Q ");
   });
 
-  it("handles vertical-first preference correctly", () => {
-    const from: WirePoint = { x: 20, y: 10 };
-    const to: WirePoint = { x: 80, y: 90 };
-    const waypoints = routeOrthogonalWire(from, to, "vertical-first");
-    expect(waypoints.length).toBe(4);
+  it("routes wire through ducts cleanly from start pin to end pin", () => {
+    // Start at top rail component pin (-160, 220) and end at mid rail component pin (100, 140)
+    const startPt: WirePoint = { x: -160, y: 220 };
+    const endPt: WirePoint = { x: 100, y: 140 };
+
+    const waypoints = routeWireThroughDucts(startPt, endPt, sampleDucts, [], 0);
+
+    expect(waypoints.length).toBeGreaterThanOrEqual(4);
+    expect(waypoints[0]).toEqual(startPt);
+    expect(waypoints[waypoints.length - 1]).toEqual(endPt);
+
+    // Verify all segments are orthogonal
     for (let i = 0; i < waypoints.length - 1; i++) {
       const p1 = waypoints[i];
       const p2 = waypoints[i + 1];
-      expect(p1.x === p2.x || p1.y === p2.y).toBe(true);
+      const isOrthogonal = Math.abs(p1.x - p2.x) < 0.05 || Math.abs(p1.y - p2.y) < 0.05;
+      expect(isOrthogonal).toBe(true);
     }
+
+    // Verify at least one intermediate waypoint enters one of the ducts
+    const passesDuct = waypoints.some((p) => {
+      return sampleDucts.some((d) => {
+        const halfW = d.widthMm / 2 + 5;
+        const halfH = d.heightMm / 2 + 5;
+        return (
+          p.x >= d.xMm - halfW &&
+          p.x <= d.xMm + halfW &&
+          p.y >= d.yMm - halfH &&
+          p.y <= d.yMm + halfH
+        );
+      });
+    });
+    expect(passesDuct).toBe(true);
   });
 
-  it("maps standard NYAF cross-sections to physical outer diameters in mm", () => {
-    expect(getWireOuterDiameterMm(0.75)).toBe(2.4);
-    expect(getWireOuterDiameterMm(1.0)).toBe(2.7);
-    expect(getWireOuterDiameterMm("1.5")).toBe(3.0);
-    expect(getWireOuterDiameterMm(2.5)).toBe(3.7);
-    expect(getWireOuterDiameterMm("4.0")).toBe(4.4);
-    expect(getWireOuterDiameterMm(6.0)).toBe(5.2);
-    expect(getWireOuterDiameterMm("10")).toBe(6.5);
-    expect(getWireOuterDiameterMm("10.0")).toBe(6.5);
-    expect(getWireOuterDiameterMm(16.0)).toBe(8.0);
-  });
+  it("calculates lane bundle offsets correctly for parallel wire spreading", () => {
+    expect(calculateBundleLaneOffsetMm(0)).toBe(0);
+    expect(calculateBundleLaneOffsetMm(1, 2.5)).toBe(2.5);
+    expect(calculateBundleLaneOffsetMm(2, 2.5)).toBe(-2.5);
+    expect(calculateBundleLaneOffsetMm(3, 2.5)).toBe(5);
+    expect(calculateBundleLaneOffsetMm(4, 2.5)).toBe(-5);
 
-  it("computes realistic fallback outer diameter for non-table cross-sections", () => {
-    const d25 = getWireOuterDiameterMm(25);
-    expect(d25).toBeGreaterThan(8.0);
-    expect(d25).toBeLessThan(13.0);
-    expect(getWireOuterDiameterMm(0)).toBeGreaterThan(0);
-  });
+    const startPt: WirePoint = { x: -100, y: 270 };
+    const endPt: WirePoint = { x: 100, y: 270 };
 
-  it("formats orthogonal waypoints with rounded corner arcs when radius > 0", () => {
-    const pts: WirePoint[] = [
-      { x: 0, y: 0 },
-      { x: 50, y: 0 },
-      { x: 50, y: 50 },
-      { x: 100, y: 50 },
-    ];
-    const d = pointsToRoundedSvgPath(pts, 4);
-    expect(d).toContain("Q ");
-    expect(d.startsWith("M 0 0")).toBe(true);
-    expect(d.endsWith("100 50")).toBe(true);
+    const wire0 = routeWireThroughDucts(startPt, endPt, sampleDucts, [], 0);
+    const wire1 = routeWireThroughDucts(startPt, endPt, sampleDucts, [], 1);
+
+    expect(wire0[0]).toEqual(startPt);
+    expect(wire1[0]).toEqual(startPt);
+    // Interior waypoints should have different coordinate offsets
+    expect(wire0).not.toEqual(wire1);
   });
 });

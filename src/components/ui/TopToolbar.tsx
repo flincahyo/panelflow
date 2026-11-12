@@ -15,6 +15,7 @@ import {
   FolderOpen,
   Grid,
   Layers,
+  Network,
   PanelRightClose,
   PanelRightOpen,
   Plus,
@@ -72,6 +73,7 @@ export function TopToolbar({
   const redo = usePanelStore((s) => s.redo);
   const canUndo = usePanelStore((s) => s.canUndo);
   const canRedo = usePanelStore((s) => s.canRedo);
+  const autoRouteAllWires = usePanelStore((s) => s.autoRouteAllWires);
 
   const setViewportMode = usePanelStore((s) => s.setViewportMode);
   const setDisplayUnit = usePanelStore((s) => s.setDisplayUnit);
@@ -353,7 +355,7 @@ export function TopToolbar({
             </button>
 
             {activeMenu === "edit" && (
-              <div className={`${dropdownPanelClass} w-48`}>
+              <div className={`${dropdownPanelClass} w-60`}>
                 <button
                   type="button"
                   disabled={!canUndo}
@@ -386,6 +388,21 @@ export function TopToolbar({
                   </span>
                   <span className="font-mono text-[10px] text-[#64748b] dark:text-slate-500">
                     Ctrl+Y
+                  </span>
+                </button>
+                <div className="my-1 border-t border-[#e2e8f0] dark:border-white/10" />
+                <button
+                  type="button"
+                  disabled={wires.length === 0}
+                  onClick={() => {
+                    autoRouteAllWires();
+                    setActiveMenu(null);
+                  }}
+                  className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white disabled:opacity-40"
+                >
+                  <span className="flex items-center gap-2">
+                    <Network className="h-3.5 w-3.5 text-sky-500" />
+                    Auto-Route All Wires via Ducts
                   </span>
                 </button>
               </div>

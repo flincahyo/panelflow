@@ -13,6 +13,7 @@ import {
   Focus,
   Magnet,
   Maximize2,
+  Network,
   Plus,
   RotateCw,
   Sliders,
@@ -88,6 +89,8 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
 
   const updateWire = usePanelStore((s) => s.updateWire);
   const removeWire = usePanelStore((s) => s.removeWire);
+  const autoRouteWire = usePanelStore((s) => s.autoRouteWire);
+  const autoRouteAllWires = usePanelStore((s) => s.autoRouteAllWires);
 
   const addRail = usePanelStore((s) => s.addRail);
   const addDuct = usePanelStore((s) => s.addDuct);
@@ -605,6 +608,19 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
                 </div>
               )}
             </div>
+
+            {/* Auto-Route via Duct */}
+            <button
+              type="button"
+              onClick={() => {
+                autoRouteWire(currentWire.id);
+                onClose();
+              }}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+            >
+              <Network className="h-3.5 w-3.5 text-sky-500" />
+              <span>Auto-Route via Duct</span>
+            </button>
           </div>
 
           <div className="border-t border-[#e2e8f0] dark:border-slate-800/80 pt-1">
@@ -834,6 +850,20 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
                 <span>Fit to Screen / Reset View</span>
               </button>
             )}
+
+            {/* Auto-Route All Wires */}
+            <button
+              type="button"
+              disabled={wires.length === 0}
+              onClick={() => {
+                autoRouteAllWires();
+                onClose();
+              }}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300 disabled:opacity-40"
+            >
+              <Network className="h-3.5 w-3.5 text-sky-500" />
+              <span>Auto-Route All Wires</span>
+            </button>
 
             {/* Switch Grid Snap Submenu */}
             <div
