@@ -3,6 +3,7 @@ import { COMPONENT_CATALOG } from "@/lib/components-catalog";
 import { clampToBackplate, snapComponentToNearestRail, snapToGrid } from "@/lib/snap";
 import { getBackplateDimensions } from "@/lib/template-export";
 import type {
+  CanvasTool2D,
   ComponentTemplateId,
   CustomCadAsset,
   DinRail,
@@ -13,10 +14,16 @@ import type {
   PinTerminal,
   PlacedComponent,
   SelectionTarget,
+  TitleBlockMeta,
+  ViewportMode,
+  WireColorCode,
+  WireConnection,
   WireDuct,
 } from "@/types/panel";
 
 interface PanelStore {
+  viewportMode: ViewportMode;
+  canvasTool2D: CanvasTool2D;
   displayUnit: LengthUnit;
   gridSnapMm: GridSnapMm;
   enclosure: EnclosureConfig;
@@ -24,9 +31,25 @@ interface PanelStore {
   ducts: WireDuct[];
   components: PlacedComponent[];
   cadAssets: CustomCadAsset[];
+  wires: WireConnection[];
+  titleBlock: TitleBlockMeta;
+  activeWireColor: WireColorCode;
+  activeWireGauge: string;
+  activeWireStartPin: { componentId: string; pinId: string } | null;
   selected: SelectionTarget;
   isPinMarkingMode: boolean;
   activeMarkingAssetId: string | null;
+
+  setViewportMode: (mode: ViewportMode) => void;
+  setCanvasTool2D: (tool: CanvasTool2D) => void;
+  setActiveWireColor: (color: WireColorCode) => void;
+  setActiveWireGauge: (gauge: string) => void;
+  setActiveWireStartPin: (pin: { componentId: string; pinId: string } | null) => void;
+  updateTitleBlock: (partial: Partial<TitleBlockMeta>) => void;
+
+  addWire: (wire: Omit<WireConnection, "id">) => void;
+  updateWire: (id: string, partial: Partial<WireConnection>) => void;
+  removeWire: (id: string) => void;
 
   setDisplayUnit: (unit: LengthUnit) => void;
   setGridSnapMm: (snap: GridSnapMm) => void;
@@ -57,6 +80,8 @@ interface PanelStore {
 }
 
 export const usePanelStore = create<PanelStore>((set, get) => ({
+  viewportMode: "3d",
+  canvasTool2D: "select",
   displayUnit: "mm",
   gridSnapMm: 10,
   enclosure: {
@@ -200,9 +225,69 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     },
   ],
   cadAssets: [],
+  wires: [
+    {
+      id: "wire-1",
+      label: "F01",
+      colorCode: "R",
+      gaugeMm2: "4.0",
+      fromComponentId: "comp-1",
+      fromPinId: "comp-1-pin-4",
+      toComponentId: "comp-4",
+      toPinId: "comp-4-pin-1",
+    },
+    {
+      id: "wire-2",
+      label: "K01",
+      colorCode: "DC+",
+      gaugeMm2: "1.5",
+      fromComponentId: "comp-3",
+      fromPinId: "comp-3-pin-4",
+      toComponentId: "comp-4",
+      toPinId: "comp-4-pin-5",
+    },
+  ],
+  titleBlock: {
+    projectName: "MAIN CONTROL PANEL - MDP-01",
+    drawer: "Flints Studio",
+    sheetNo: "1 / 1",
+    date: new Date().toISOString().slice(0, 10),
+    scale: "1:1",
+    rev: "A",
+  },
+  activeWireColor: "R",
+  activeWireGauge: "2.5",
+  activeWireStartPin: null,
   selected: null,
   isPinMarkingMode: false,
   activeMarkingAssetId: null,
+
+  setViewportMode: (mode) => set({ viewportMode: mode }),
+  setCanvasTool2D: (tool) => set({ canvasTool2D: tool, activeWireStartPin: null }),
+  setActiveWireColor: (color) => set({ activeWireColor: color }),
+  setActiveWireGauge: (gauge) => set({ activeWireGauge: gauge }),
+  setActiveWireStartPin: (pin) => set({ activeWireStartPin: pin }),
+  updateTitleBlock: (partial) =>
+    set((state) => ({ titleBlock: { ...state.titleBlock, ...partial } })),
+
+  addWire: (wire) => {
+    const id = `wire-${Date.now()}`;
+    set((state) => ({
+      wires: [...state.wires, { ...wire, id }],
+      selected: { kind: "wire", id },
+    }));
+  },
+
+  updateWire: (id, partial) =>
+    set((state) => ({
+      wires: state.wires.map((w) => (w.id === id ? { ...w, ...partial } : w)),
+    })),
+
+  removeWire: (id) =>
+    set((state) => ({
+      wires: state.wires.filter((w) => w.id !== id),
+      selected: state.selected?.id === id ? null : state.selected,
+    })),
 
   setDisplayUnit: (unit) => set({ displayUnit: unit }),
   setGridSnapMm: (snap) => set({ gridSnapMm: snap }),

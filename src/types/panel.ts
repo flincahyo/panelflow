@@ -94,9 +94,34 @@ export interface CustomCadAsset {
   rawText?: string;
 }
 
+export type ViewportMode = "3d" | "2d";
+export type CanvasTool2D = "select" | "wire" | "pan";
+export type WireColorCode = "R" | "S" | "T" | "N" | "PE" | "DC+" | "DC-";
+
+export interface WireConnection {
+  id: string;
+  label: string;
+  colorCode: WireColorCode;
+  gaugeMm2: string;
+  fromComponentId: string;
+  fromPinId: string;
+  toComponentId: string;
+  toPinId: string;
+}
+
+export interface TitleBlockMeta {
+  projectName: string;
+  drawer: string;
+  sheetNo: string;
+  date: string;
+  scale: string;
+  rev: string;
+}
+
 export type SelectionTarget =
   | { kind: "rail"; id: string }
   | { kind: "duct"; id: string }
   | { kind: "component"; id: string }
   | { kind: "cad"; id: string }
+  | { kind: "wire"; id: string }
   | null;

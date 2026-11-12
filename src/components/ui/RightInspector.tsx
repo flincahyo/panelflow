@@ -13,6 +13,9 @@ export function RightInspector() {
   const ducts = usePanelStore((s) => s.ducts);
   const components = usePanelStore((s) => s.components);
   const cadAssets = usePanelStore((s) => s.cadAssets);
+  const wires = usePanelStore((s) => s.wires);
+  const titleBlock = usePanelStore((s) => s.titleBlock);
+  const viewportMode = usePanelStore((s) => s.viewportMode);
   const isPinMarkingMode = usePanelStore((s) => s.isPinMarkingMode);
   const activeMarkingAssetId = usePanelStore((s) => s.activeMarkingAssetId);
 
@@ -25,6 +28,9 @@ export function RightInspector() {
   const removeComponent = usePanelStore((s) => s.removeComponent);
   const updateCadAsset = usePanelStore((s) => s.updateCadAsset);
   const removeCadAsset = usePanelStore((s) => s.removeCadAsset);
+  const updateWire = usePanelStore((s) => s.updateWire);
+  const removeWire = usePanelStore((s) => s.removeWire);
+  const updateTitleBlock = usePanelStore((s) => s.updateTitleBlock);
   const setPinMarkingMode = usePanelStore((s) => s.setPinMarkingMode);
   const removePinFromAsset = usePanelStore((s) => s.removePinFromAsset);
 
@@ -46,6 +52,10 @@ export function RightInspector() {
     selected?.kind === "cad"
       ? cadAssets.find((a) => a.id === selected.id)
       : undefined;
+  const wire =
+    selected?.kind === "wire"
+      ? wires.find((w) => w.id === selected.id)
+      : undefined;
 
   return (
     <aside className="flex w-72 shrink-0 flex-col border-l border-slate-800 bg-[#12161f] p-3 text-xs text-slate-200 overflow-y-auto">
@@ -54,11 +64,138 @@ export function RightInspector() {
       </div>
 
       {!selected && (
-        <div className="space-y-2 text-[11px] text-slate-400">
-          <p>Select a DIN rail, wire duct, component, or imported CAD mesh in the 3D viewport.</p>
-          <p className="font-mono text-[10px] text-slate-500">
-            Drag items directly on the mounting plate to snap to grid or nearest DIN rail.
-          </p>
+        <div className="space-y-4 text-[11px] text-slate-400">
+          <div className="space-y-1.5">
+            <p>
+              Select a DIN rail, wire duct, component, or wire in the{" "}
+              {viewportMode.toUpperCase()} viewport.
+            </p>
+            <p className="font-mono text-[10px] text-slate-500">
+              Drag items directly on the mounting plate to snap to grid or nearest DIN rail.
+            </p>
+          </div>
+
+          {viewportMode === "2d" && (
+            <div className="space-y-2 border-t border-slate-800 pt-3">
+              <div className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
+                2D Plot Frame / Title Block
+              </div>
+              <label className="block space-y-1">
+                <span className="text-[10px] text-slate-400">Project Name</span>
+                <input
+                  type="text"
+                  value={titleBlock.projectName}
+                  onChange={(e) =>
+                    updateTitleBlock({ projectName: e.target.value })
+                  }
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                />
+              </label>
+              <label className="block space-y-1">
+                <span className="text-[10px] text-slate-400">Drawer</span>
+                <input
+                  type="text"
+                  value={titleBlock.drawer}
+                  onChange={(e) => updateTitleBlock({ drawer: e.target.value })}
+                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                />
+              </label>
+              <div className="grid grid-cols-3 gap-1.5">
+                <label className="space-y-1">
+                  <span className="text-[10px] text-slate-400">Sheet</span>
+                  <input
+                    type="text"
+                    value={titleBlock.sheetNo}
+                    onChange={(e) =>
+                      updateTitleBlock({ sheetNo: e.target.value })
+                    }
+                    className="w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 font-mono text-slate-100"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] text-slate-400">Scale</span>
+                  <input
+                    type="text"
+                    value={titleBlock.scale}
+                    onChange={(e) =>
+                      updateTitleBlock({ scale: e.target.value })
+                    }
+                    className="w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 font-mono text-slate-100"
+                  />
+                </label>
+                <label className="space-y-1">
+                  <span className="text-[10px] text-slate-400">Rev</span>
+                  <input
+                    type="text"
+                    value={titleBlock.rev}
+                    onChange={(e) => updateTitleBlock({ rev: e.target.value })}
+                    className="w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 font-mono text-slate-100"
+                  />
+                </label>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {wire && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="font-semibold text-slate-100">
+              Wire {wire.label}
+            </span>
+            <button
+              type="button"
+              onClick={() => removeWire(wire.id)}
+              className="text-slate-500 hover:text-rose-400"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+
+          <label className="block space-y-1">
+            <span className="text-[11px] text-slate-400">Wire Tag / Code</span>
+            <input
+              type="text"
+              value={wire.label}
+              onChange={(e) => updateWire(wire.id, { label: e.target.value })}
+              className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono"
+            />
+          </label>
+
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1">
+              <span className="text-[11px] text-slate-400">Phase / Color</span>
+              <select
+                value={wire.colorCode}
+                onChange={(e) =>
+                  updateWire(wire.id, {
+                    colorCode: e.target.value as typeof wire.colorCode,
+                  })
+                }
+                className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono"
+              >
+                <option value="R">R (L1)</option>
+                <option value="S">S (L2)</option>
+                <option value="T">T (L3)</option>
+                <option value="N">N (Neutral)</option>
+                <option value="PE">PE (Earth)</option>
+                <option value="DC+">DC+ (24V)</option>
+                <option value="DC-">DC- (0V)</option>
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-[11px] text-slate-400">Gauge (mm²)</span>
+              <input
+                type="text"
+                value={wire.gaugeMm2}
+                onChange={(e) =>
+                  updateWire(wire.id, { gaugeMm2: e.target.value })
+                }
+                className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono"
+              />
+            </label>
+          </div>
         </div>
       )}
 
