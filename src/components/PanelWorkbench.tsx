@@ -38,8 +38,20 @@ export function PanelWorkbench() {
   const loadProjectState = usePanelStore((s) => s.loadProjectState);
   const inspectorOpen = usePanelStore((s) => s.inspectorOpen);
   const setInspectorOpen = usePanelStore((s) => s.setInspectorOpen);
+  const setLeftSidebarOpen = usePanelStore((s) => s.setLeftSidebarOpen);
   const fetchMe = useAuthStore((s) => s.fetchMe);
   const restoredRef = useRef(false);
+
+  // Auto-collapse sidebars on mobile/tablet viewports on initial mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (window.innerWidth < 768) {
+      setLeftSidebarOpen(false);
+    }
+    if (window.innerWidth < 1024) {
+      setInspectorOpen(false);
+    }
+  }, [setLeftSidebarOpen, setInspectorOpen]);
 
   // Hydrate authenticated user & cloud preferences/library on mount
   useEffect(() => {
@@ -183,7 +195,7 @@ export function PanelWorkbench() {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#f8fafc] dark:bg-[#090b10] text-[#0f172a] dark:text-slate-100 antialiased select-none">
+    <div className="flex h-[100dvh] w-screen flex-col overflow-hidden bg-[#f8fafc] dark:bg-[#090b10] text-[#0f172a] dark:text-slate-100 antialiased select-none">
       <TopToolbar
         inspectorOpen={inspectorOpen}
         onToggleInspector={() => setInspectorOpen(!inspectorOpen)}

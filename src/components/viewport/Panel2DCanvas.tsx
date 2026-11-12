@@ -739,6 +739,15 @@ export function Panel2DCanvas() {
     null
   );
   const [viewportSize, setViewportSize] = useState({ width: 960, height: 760 });
+  const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchRef = useRef<{
+    dist: number;
+    midX: number;
+    midY: number;
+    zoom: number;
+    panX: number;
+    panY: number;
+  } | null>(null);
 
   const { widthMm: plateW, heightMm: plateH } = useMemo(
     () => getBackplateDimensions(enclosure, plateConfig),
@@ -867,7 +876,28 @@ export function Panel2DCanvas() {
     setZoom(nextZoom);
   };
 
+  const handleContainerPointerDownCapture = (e: React.PointerEvent) => {
+    activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (activePointersRef.current.size === 2) {
+      const pts = Array.from(activePointersRef.current.values());
+      const dist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      const rect = containerRef.current?.getBoundingClientRect();
+      const midX = (pts[0].x + pts[1].x) / 2 - (rect?.left ?? 0);
+      const midY = (pts[0].y + pts[1].y) / 2 - (rect?.top ?? 0);
+      pinchRef.current = {
+        dist,
+        midX,
+        midY,
+        zoom,
+        panX: pan.x,
+        panY: pan.y,
+      };
+      setDragState(null);
+    }
+  };
+
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
+    if (activePointersRef.current.size >= 2) return;
     if (e.button === 1 || spacePressed || canvasTool2D === "pan") {
       e.preventDefault();
       setDragState({
@@ -913,6 +943,28 @@ export function Panel2DCanvas() {
   };
 
   const handlePointerMove = (e: React.PointerEvent) => {
+    if (activePointersRef.current.has(e.pointerId)) {
+      activePointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
+    if (activePointersRef.current.size === 2 && pinchRef.current) {
+      const pts = Array.from(activePointersRef.current.values());
+      const newDist = Math.hypot(pts[1].x - pts[0].x, pts[1].y - pts[0].y);
+      const rect = containerRef.current?.getBoundingClientRect();
+      const newMidX = (pts[0].x + pts[1].x) / 2 - (rect?.left ?? 0);
+      const newMidY = (pts[0].y + pts[1].y) / 2 - (rect?.top ?? 0);
+      const start = pinchRef.current;
+      if (start.dist > 0) {
+        const nextZoom = Math.max(0.2, Math.min(8, start.zoom * (newDist / start.dist)));
+        const scaleRatio = nextZoom / start.zoom;
+        setZoom(nextZoom);
+        setPan({
+          x: newMidX - (start.midX - start.panX) * scaleRatio,
+          y: newMidY - (start.midY - start.panY) * scaleRatio,
+        });
+      }
+      return;
+    }
+
     const world = screenToWorld(e.clientX, e.clientY);
     setCursorWorld(world);
     if (canvasTool2D === "measure" && measureStart && !measureEnd) {
@@ -1040,7 +1092,16 @@ export function Panel2DCanvas() {
     }
   };
 
-  const handlePointerUp = () => {
+  const handlePointerUp = (e?: React.PointerEvent) => {
+    if (e) {
+      activePointersRef.current.delete(e.pointerId);
+    } else {
+      activePointersRef.current.clear();
+    }
+    if (activePointersRef.current.size < 2) {
+      pinchRef.current = null;
+    }
+
     if (dragState?.type === "marquee") {
       const minX = Math.min(dragState.startWorldXMm, dragState.currentWorldXMm);
       const maxX = Math.max(dragState.startWorldXMm, dragState.currentWorldXMm);
@@ -1198,10 +1259,12 @@ export function Panel2DCanvas() {
   return (
     <div
       ref={containerRef}
-      className="relative h-full w-full overflow-hidden bg-white dark:bg-[#090b10] select-none"
+      className="relative h-full w-full overflow-hidden bg-white dark:bg-[#090b10] select-none touch-none"
       onWheel={handleWheel}
+      onPointerDownCapture={handleContainerPointerDownCapture}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
       onPointerLeave={() => {
         setCursorWorld(null);
         handlePointerUp();
@@ -1404,8 +1467,8 @@ export function Panel2DCanvas() {
       </div>
 
       {/* Top Floating Pill Toolbar (Centered ala RelayFlow) */}
-      <div className="absolute top-9 left-1/2 -translate-x-1/2 z-20 flex max-w-[94%] flex-wrap items-center gap-2 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#171a21]/95 px-3 py-1.5 shadow-sm dark:shadow-2xl backdrop-blur-xl">
-        <div className="flex items-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#0c0e14] p-0.5">
+      <div className="absolute top-8 sm:top-9 left-1/2 -translate-x-1/2 z-20 flex max-w-[95vw] sm:max-w-[94%] flex-nowrap sm:flex-wrap items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#171a21]/95 px-2 sm:px-3 py-1 sm:py-1.5 shadow-sm dark:shadow-2xl backdrop-blur-xl">
+        <div className="flex shrink-0 items-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#0c0e14] p-0.5">
           <button
             type="button"
             onClick={() => setCanvasTool2D("select")}
@@ -1461,7 +1524,7 @@ export function Panel2DCanvas() {
         </div>
 
         {/* Undo / Redo in Toolbar */}
-        <div className="flex items-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#0c0e14] p-0.5">
+        <div className="flex shrink-0 items-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#0c0e14] p-0.5">
           <button
             type="button"
             onClick={undo}
@@ -1483,7 +1546,7 @@ export function Panel2DCanvas() {
         </div>
 
         {/* Grid Snap Selector Pill */}
-        <div className="flex items-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#0c0e14] p-0.5">
+        <div className="flex shrink-0 items-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#0c0e14] p-0.5">
           {([5, 10, 25] as GridSnapMm[]).map((snap) => (
             <button
               key={snap}
@@ -1587,8 +1650,8 @@ export function Panel2DCanvas() {
 
       {/* Bottom Floating Status Pills (Senada RelayFlow) */}
       {/* Bottom Left / Center: Cursor & Snap Coordinates + Zoom Controls */}
-      <div className="absolute bottom-3 left-9 z-20 flex flex-wrap items-center gap-2">
-        <div className="rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#171a21]/95 px-3 py-1 font-mono text-[11px] tabular-nums text-[#0f172a] dark:text-slate-300 shadow-sm dark:shadow-xl backdrop-blur-xl">
+      <div className="absolute bottom-2 sm:bottom-3 left-7 sm:left-9 z-20 flex max-w-[calc(100vw-3.5rem)] flex-wrap items-center gap-1.5 sm:gap-2">
+        <div className="hidden sm:inline-flex rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#171a21]/95 px-3 py-1 font-mono text-[11px] tabular-nums text-[#0f172a] dark:text-slate-300 shadow-sm dark:shadow-xl backdrop-blur-xl">
           {cursorPlate
             ? `X: ${Math.round(cursorPlate.xMm)}mm | Y: ${Math.round(
                 cursorPlate.yMm
@@ -1596,7 +1659,7 @@ export function Panel2DCanvas() {
             : `Snap: ${gridSnapMm}mm`}
         </div>
 
-        <div className="flex items-center gap-1 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#171a21]/95 p-0.5 shadow-sm dark:shadow-xl backdrop-blur-xl">
+        <div className="flex items-center gap-0.5 sm:gap-1 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#171a21]/95 p-0.5 shadow-sm dark:shadow-xl backdrop-blur-xl">
           <button
             type="button"
             onClick={() => setZoom((z) => Math.max(0.2, z / 1.2))}
@@ -1605,7 +1668,7 @@ export function Panel2DCanvas() {
           >
             <ZoomOut className="h-3.5 w-3.5" />
           </button>
-          <span className="min-w-[42px] text-center font-mono text-[11px] font-medium tabular-nums text-[#0f172a] dark:text-slate-200">
+          <span className="min-w-[36px] sm:min-w-[42px] text-center font-mono text-[10px] sm:text-[11px] font-medium tabular-nums text-[#0f172a] dark:text-slate-200">
             {Math.round(zoom * 100)}%
           </span>
           <button
@@ -1619,17 +1682,17 @@ export function Panel2DCanvas() {
           <button
             type="button"
             onClick={fitToView}
-            className="flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] text-[#64748b] dark:text-slate-400 hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white transition-colors"
+            className="flex items-center gap-1 rounded-full px-1.5 sm:px-2 py-0.5 font-mono text-[10px] text-[#64748b] dark:text-slate-400 hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white transition-colors"
             title="Fit Sheet to View"
           >
             <Maximize2 className="h-3 w-3" />
-            Fit
+            <span className="hidden sm:inline">Fit</span>
           </button>
         </div>
       </div>
 
       {/* Bottom Right: Parts & Wires Count & Collisions Pill */}
-      <div className="pointer-events-none absolute right-4 bottom-3 z-20 flex items-center gap-2 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#171a21]/95 px-3 py-1 font-mono text-[11px] text-[#0f172a] dark:text-slate-300 shadow-sm dark:shadow-xl backdrop-blur-xl">
+      <div className="pointer-events-none absolute right-2 sm:right-4 bottom-2 sm:bottom-3 z-20 flex items-center gap-1.5 sm:gap-2 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#171a21]/95 px-2.5 sm:px-3 py-1 font-mono text-[10px] sm:text-[11px] text-[#0f172a] dark:text-slate-300 shadow-sm dark:shadow-xl backdrop-blur-xl">
         <span>Parts: {components.length + cadAssets.length}</span>
         <span className="text-[#cbd5e1] dark:text-white/20">|</span>
         <span>Wires: {wires.length}</span>
@@ -1637,7 +1700,7 @@ export function Panel2DCanvas() {
           <>
             <span className="text-[#cbd5e1] dark:text-white/20">|</span>
             <span className="text-rose-600 dark:text-rose-400 font-semibold">
-              {collisionReport.overlapPairs.length} Overlaps
+              {collisionReport.overlapPairs.length} <span className="hidden sm:inline">Overlaps</span><span className="sm:hidden">Ovl</span>
             </span>
           </>
         )}
@@ -1645,7 +1708,7 @@ export function Panel2DCanvas() {
 
       {/* Main Interactive SVG Canvas */}
       <svg
-        className={`h-full w-full ${
+        className={`h-full w-full touch-none ${
           spacePressed || canvasTool2D === "pan"
             ? "cursor-grab active:cursor-grabbing"
             : canvasTool2D === "wire"

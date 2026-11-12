@@ -346,6 +346,7 @@ interface PanelStore {
   activeMarkingAssetId: string | null;
   inspectorFocusNonce: number;
   inspectorOpen: boolean;
+  leftSidebarOpen: boolean;
   rightPanelTab: RightPanelTab;
 
   // History Stack
@@ -365,6 +366,8 @@ interface PanelStore {
   setTheme: (theme: ThemeMode) => void;
   toggleTheme: () => void;
   setInspectorOpen: (open: boolean) => void;
+  setLeftSidebarOpen: (open: boolean) => void;
+  toggleLeftSidebar: () => void;
   setRightPanelTab: (tab: RightPanelTab) => void;
   requestInspectorFocus: () => void;
   setViewportMode: (mode: ViewportMode) => void;
@@ -514,6 +517,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   activeMarkingAssetId: null,
   inspectorFocusNonce: 0,
   inspectorOpen: true,
+  leftSidebarOpen: true,
   rightPanelTab: "inspector",
   canUndo: false,
   canRedo: false,
@@ -762,6 +766,8 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     set({ theme: next });
   },
   setInspectorOpen: (open) => set({ inspectorOpen: open }),
+  setLeftSidebarOpen: (open) => set({ leftSidebarOpen: open }),
+  toggleLeftSidebar: () => set((s) => ({ leftSidebarOpen: !s.leftSidebarOpen })),
   setRightPanelTab: (tab) => set({ rightPanelTab: tab }),
   requestInspectorFocus: () =>
     set((state) => ({

@@ -5,6 +5,7 @@ import {
   Box,
   ChevronDown,
   ClipboardList,
+  Cpu,
   Download,
   Eye,
   FileCheck2,
@@ -16,6 +17,7 @@ import {
   FolderOpen,
   Grid,
   Layers,
+  Menu,
   Network,
   PanelRightClose,
   PanelRightOpen,
@@ -103,6 +105,8 @@ export function TopToolbar({
   const rightPanelTab = usePanelStore((s) => s.rightPanelTab);
   const setRightPanelTab = usePanelStore((s) => s.setRightPanelTab);
   const setInspectorOpen = usePanelStore((s) => s.setInspectorOpen);
+  const leftSidebarOpen = usePanelStore((s) => s.leftSidebarOpen);
+  const toggleLeftSidebar = usePanelStore((s) => s.toggleLeftSidebar);
 
   const user = useAuthStore((s) => s.user);
   const setAuthModalOpen = useAuthStore((s) => s.setAuthModalOpen);
@@ -112,7 +116,7 @@ export function TopToolbar({
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
 
-  const [activeMenu, setActiveMenu] = useState<"file" | "edit" | "view" | null>(
+  const [activeMenu, setActiveMenu] = useState<"file" | "edit" | "view" | "mobile" | null>(
     null
   );
   const menuBarRef = useRef<HTMLDivElement>(null);
@@ -328,26 +332,235 @@ export function TopToolbar({
   const dropdownDividerClass = "my-1 border-t border-[#e2e8f0] dark:border-white/10";
 
   return (
-    <header className="relative z-40 flex h-14 shrink-0 items-center justify-between border-b border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#0c0e14]/95 px-4 text-xs text-[#0f172a] dark:text-slate-200 shadow-sm dark:shadow-none backdrop-blur-xl select-none">
+    <header className="relative z-40 flex h-14 shrink-0 items-center justify-between border-b border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#0c0e14]/95 px-2.5 sm:px-4 text-xs text-[#0f172a] dark:text-slate-200 shadow-sm dark:shadow-none backdrop-blur-xl select-none">
       {/* LEFT SECTION: Logo Badge + Brand + File/Edit/View Menus */}
-      <div className="flex items-center gap-3.5" ref={menuBarRef}>
+      <div className="flex items-center gap-2 sm:gap-3.5" ref={menuBarRef}>
+        {/* Mobile Parts Drawer Toggle Button */}
+        <button
+          type="button"
+          onClick={toggleLeftSidebar}
+          aria-label={leftSidebarOpen ? "Close Parts Drawer" : "Open Parts Drawer"}
+          title={leftSidebarOpen ? "Close Parts Drawer" : "Open Parts Drawer"}
+          className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-all md:hidden ${
+            leftSidebarOpen
+              ? "border-sky-300 dark:border-sky-500/40 bg-sky-50 dark:bg-sky-500/15 text-sky-600 dark:text-sky-400"
+              : "border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-white"
+          }`}
+        >
+          <Cpu className="h-4 w-4" />
+        </button>
+
         {/* Brand Badge */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-1.5 sm:gap-2.5">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e2e8f0] dark:border-white/15 bg-[#f8fafc] dark:bg-[#171a21] shadow-xs">
             <Zap className="h-4.5 w-4.5 text-amber-500 dark:text-amber-400 fill-amber-400/20" />
           </div>
-          <div className="flex items-center gap-1.5 font-bold tracking-tight text-[#0f172a] dark:text-white text-[15px]">
+          <div className="flex items-center gap-1.5 font-bold tracking-tight text-[#0f172a] dark:text-white text-[14px] sm:text-[15px]">
             <span>PanelFlow</span>
-            <span className="rounded-md border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-white/5 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#64748b] dark:text-slate-400">
+            <span className="hidden sm:inline-block rounded-md border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-white/5 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#64748b] dark:text-slate-400">
               CAD
             </span>
           </div>
         </div>
 
-        <div className="h-4 w-px bg-[#e2e8f0] dark:bg-white/10" />
+        {/* Mobile Hamburger / Quick Actions Menu */}
+        <div className="relative md:hidden">
+          <button
+            type="button"
+            onClick={() =>
+              setActiveMenu(activeMenu === "mobile" ? null : "mobile")
+            }
+            aria-label="Open Mobile Menu"
+            className={`flex h-8 items-center gap-1 rounded-lg border px-2 text-xs font-medium transition-colors ${
+              activeMenu === "mobile"
+                ? "border-sky-400 bg-sky-50 dark:bg-white/10 text-sky-600 dark:text-white"
+                : "border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] text-[#64748b] dark:text-slate-400"
+            }`}
+          >
+            <Menu className="h-4 w-4" />
+            <span className="font-mono text-[11px]">Menu</span>
+          </button>
+
+          {activeMenu === "mobile" && (
+            <div className="absolute top-10 left-0 z-50 w-72 max-h-[80vh] overflow-y-auto rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white/98 dark:bg-[#111318]/98 p-2 shadow-2xl backdrop-blur-xl text-xs">
+              <div className="px-2 py-1 text-[11px] font-mono uppercase tracking-wider text-[#64748b] dark:text-slate-500 font-medium">
+                Active Project
+              </div>
+              <div className="mb-2 px-2 py-1 font-mono text-xs text-[#0f172a] dark:text-slate-200 truncate">
+                {titleBlock.projectName}
+              </div>
+              <div className={dropdownDividerClass} />
+
+              <div className={dropdownSectionLabelClass}>Project Actions</div>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveMenu(null);
+                  handleSavePflow();
+                }}
+                className={dropdownItemClass}
+              >
+                <Save className="h-4 w-4 text-emerald-500" />
+                Save Project (.pflow)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveMenu(null);
+                  openPflowInputRef.current?.click();
+                }}
+                className={dropdownItemClass}
+              >
+                <FolderOpen className="h-4 w-4 text-amber-500" />
+                Open .pflow Project...
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveMenu(null);
+                  handleNewProject();
+                }}
+                className={dropdownItemClass}
+              >
+                <RotateCcw className="h-4 w-4 text-rose-500" />
+                New Project (Reset)
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  addSheet("mounting-plate");
+                  setActiveMenu(null);
+                }}
+                className={dropdownItemClass}
+              >
+                <Plus className="h-4 w-4 text-sky-500" />
+                New Mounting Sheet
+              </button>
+
+              <div className={dropdownDividerClass} />
+              <div className={dropdownSectionLabelClass}>Edit &amp; History</div>
+              <button
+                type="button"
+                disabled={!canUndo}
+                onClick={() => {
+                  undo();
+                  setActiveMenu(null);
+                }}
+                className={dropdownItemClass}
+              >
+                <Undo2 className="h-4 w-4" />
+                Undo
+              </button>
+              <button
+                type="button"
+                disabled={!canRedo}
+                onClick={() => {
+                  redo();
+                  setActiveMenu(null);
+                }}
+                className={dropdownItemClass}
+              >
+                <Redo2 className="h-4 w-4" />
+                Redo
+              </button>
+              <button
+                type="button"
+                disabled={wires.length === 0}
+                onClick={() => {
+                  autoRouteAllWires();
+                  setActiveMenu(null);
+                }}
+                className={dropdownItemClass}
+              >
+                <Network className="h-4 w-4 text-sky-500" />
+                Auto-Route All Wires
+              </button>
+
+              <div className={dropdownDividerClass} />
+              <div className={dropdownSectionLabelClass}>Export Options</div>
+              <button
+                type="button"
+                onClick={() => {
+                  handleExport2DSheetSvg();
+                  setActiveMenu(null);
+                }}
+                className={dropdownItemClass}
+              >
+                <Download className="h-4 w-4 text-sky-500" />
+                Export 2D SVG
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleExport2DSheetPng();
+                  setActiveMenu(null);
+                }}
+                className={dropdownItemClass}
+              >
+                <FileImage className="h-4 w-4 text-emerald-500" />
+                Export High-Res PNG
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  handleExportDxf();
+                  setActiveMenu(null);
+                }}
+                className={dropdownItemClass}
+              >
+                <Download className="h-4 w-4 text-indigo-500" />
+                Export Drilling DXF
+              </button>
+
+              <div className={dropdownDividerClass} />
+              <div className={dropdownSectionLabelClass}>Units &amp; Theme</div>
+              <div className="flex items-center gap-2 px-2 py-1">
+                <span className="text-[#64748b] dark:text-slate-400">Unit:</span>
+                <div className="flex rounded-md border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#171a21] p-0.5">
+                  {units.map((u) => (
+                    <button
+                      key={u}
+                      type="button"
+                      onClick={() => setDisplayUnit(u)}
+                      className={`px-2 py-0.5 rounded text-[11px] font-mono ${
+                        displayUnit === u
+                          ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-bold"
+                          : "text-[#64748b] dark:text-slate-400"
+                      }`}
+                    >
+                      {u}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  toggleTheme();
+                  setActiveMenu(null);
+                }}
+                className={dropdownItemClass}
+              >
+                {theme === "dark" ? (
+                  <>
+                    <Sun className="h-4 w-4 text-amber-400" />
+                    Switch to Light Mode
+                  </>
+                ) : (
+                  <>
+                    <Moon className="h-4 w-4 text-[#0f172a]" />
+                    Switch to Dark Mode
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="hidden h-4 w-px bg-[#e2e8f0] dark:bg-white/10 md:block" />
 
         {/* Dropdown Menus (RelayFlow style) */}
-        <div className="flex items-center gap-1">
+        <div className="hidden items-center gap-1 md:flex">
           {/* FILE MENU */}
           <div className="relative">
             <button
@@ -672,38 +885,39 @@ export function TopToolbar({
       </div>
 
       {/* RIGHT SECTION: Viewport Switcher + Unit Switcher + BOM Report + Theme Toggle + Inspector Toggle */}
-      <div className="flex items-center gap-2.5">
-
+      <div className="flex items-center gap-1.5 sm:gap-2.5">
         {/* Viewport Switcher Pill: [2D Layout] / [3D View] */}
         <div className="flex items-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#171a21] p-0.5 shadow-inner">
           <button
             type="button"
             onClick={() => setViewportMode("2d")}
-            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
+            className={`flex items-center gap-1 sm:gap-1.5 rounded-full px-2.5 sm:px-3.5 py-1 sm:py-1.5 text-xs font-medium transition-all ${
               viewportMode === "2d"
                 ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-semibold shadow-xs"
                 : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
             }`}
           >
             <Layers className="h-3.5 w-3.5" />
-            2D Layout
+            <span className="hidden sm:inline">2D Layout</span>
+            <span className="sm:hidden text-[11px]">2D</span>
           </button>
           <button
             type="button"
             onClick={() => setViewportMode("3d")}
-            className={`flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-all ${
+            className={`flex items-center gap-1 sm:gap-1.5 rounded-full px-2.5 sm:px-3.5 py-1 sm:py-1.5 text-xs font-medium transition-all ${
               viewportMode === "3d"
                 ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-semibold shadow-xs"
                 : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
             }`}
           >
             <Box className="h-3.5 w-3.5" />
-            3D View
+            <span className="hidden sm:inline">3D View</span>
+            <span className="sm:hidden text-[11px]">3D</span>
           </button>
         </div>
 
-        {/* Unit Switcher Pill (mm/cm/m) */}
-        <div className="flex items-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#171a21] p-0.5">
+        {/* Unit Switcher Pill (mm/cm/m) - Desktop only (in mobile drawer menu) */}
+        <div className="hidden sm:flex items-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#171a21] p-0.5">
           {units.map((u) => (
             <button
               key={u}
@@ -729,23 +943,23 @@ export function TopToolbar({
           }}
           aria-label="BOM & Wire Cutting Schedule"
           title="BOM & Wire Cutting Schedule"
-          className={`flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-all ${
+          className={`flex h-8 items-center gap-1 sm:gap-1.5 rounded-full border px-2 sm:px-3 text-xs font-medium transition-all ${
             inspectorOpen && rightPanelTab === "bom"
               ? "border-sky-300 dark:border-sky-500/40 bg-sky-50 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300 shadow-xs"
               : "border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#171a21] text-[#334155] dark:text-slate-200 shadow-xs dark:shadow-none hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white"
           }`}
         >
           <ClipboardList className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400" />
-          <span className="hidden lg:inline">BOM</span>
+          <span className="hidden md:inline">BOM</span>
         </button>
 
-        {/* Theme Toggle Button (Sun / Moon) */}
+        {/* Theme Toggle Button (Sun / Moon) - desktop only in toolbar, mobile has it in menu */}
         <button
           type="button"
           onClick={toggleTheme}
           aria-label={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
           title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
-          className="flex h-8 w-8 items-center justify-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#171a21] text-[#64748b] dark:text-slate-400 shadow-xs dark:shadow-none transition-all hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white"
+          className="hidden sm:flex h-8 w-8 items-center justify-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#171a21] text-[#64748b] dark:text-slate-400 shadow-xs dark:shadow-none transition-all hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white"
         >
           {theme === "dark" ? (
             <Sun className="h-3.5 w-3.5 text-amber-400" />
@@ -779,22 +993,23 @@ export function TopToolbar({
           <button
             type="button"
             onClick={() => setAuthModalOpen(true)}
-            className="flex h-8 items-center gap-1.5 rounded-full border border-[#e2e8f0] dark:border-white/15 bg-white text-[#0f172a] dark:bg-white dark:text-black px-3.5 text-xs font-semibold shadow-xs transition-all hover:bg-[#f8fafc] dark:hover:bg-slate-100"
+            aria-label="Login"
+            className="flex h-8 items-center gap-1.5 rounded-full border border-[#e2e8f0] dark:border-white/15 bg-white text-[#0f172a] dark:bg-white dark:text-black px-2.5 sm:px-3.5 text-xs font-semibold shadow-xs transition-all hover:bg-[#f8fafc] dark:hover:bg-slate-100"
           >
             <LogIn className="h-3.5 w-3.5" />
-            Login
+            <span className="hidden sm:inline">Login</span>
           </button>
         ) : (
           <div className="relative" ref={accountMenuRef}>
             <button
               type="button"
               onClick={() => setAccountMenuOpen((o) => !o)}
-              className="flex h-8 items-center gap-2 rounded-full border border-[#e2e8f0] dark:border-white/15 bg-white dark:bg-[#171a21] pr-2.5 pl-1.5 text-xs font-medium text-[#0f172a] dark:text-slate-200 shadow-xs hover:bg-[#f8fafc] dark:hover:bg-white/10"
+              className="flex h-8 items-center gap-1.5 sm:gap-2 rounded-full border border-[#e2e8f0] dark:border-white/15 bg-white dark:bg-[#171a21] pr-2 sm:pr-2.5 pl-1.5 text-xs font-medium text-[#0f172a] dark:text-slate-200 shadow-xs hover:bg-[#f8fafc] dark:hover:bg-white/10"
             >
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#0f172a] dark:bg-white text-[10px] font-bold text-white dark:text-black">
                 {(user.name || user.email).charAt(0).toUpperCase()}
               </span>
-              <span className="max-w-[110px] truncate">
+              <span className="hidden sm:inline max-w-[110px] truncate">
                 {user.name || user.email.split("@")[0]}
               </span>
               <span

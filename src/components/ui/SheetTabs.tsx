@@ -71,7 +71,7 @@ export function SheetTabs() {
   return (
     <div className="relative flex h-10 w-full select-none items-center justify-between border-t border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14] px-3 text-xs">
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar py-1">
+        <div className="flex min-w-0 items-center space-x-1.5 overflow-x-auto no-scrollbar py-1">
           {sheets.map((sheet) => {
           const isActive = sheet.id === activeSheetId;
           const isEditing = sheet.id === editingSheetId;
@@ -80,7 +80,7 @@ export function SheetTabs() {
             <div
               key={sheet.id}
               onClick={() => setActiveSheet(sheet.id)}
-              className={`group flex items-center gap-1.5 rounded-lg px-2.5 py-1 transition-all cursor-pointer border ${
+              className={`group flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1 transition-all cursor-pointer border ${
                 isActive
                   ? "border-[#e2e8f0] dark:border-white/15 bg-white dark:bg-[#171a21] text-[#0f172a] dark:text-white shadow-xs"
                   : "border-transparent bg-transparent text-[#64748b] dark:text-slate-400 hover:bg-[#e2e8f0]/60 dark:hover:bg-white/5 hover:text-[#0f172a] dark:hover:text-slate-200"
@@ -160,13 +160,13 @@ export function SheetTabs() {
           <button
             type="button"
             onClick={() => setShowTypeMenu((v) => !v)}
-            className="flex items-center gap-1.5 rounded-lg border border-dashed border-[#cbd5e1] dark:border-white/15 bg-white dark:bg-[#171a21]/60 px-2.5 py-1 text-xs font-medium text-[#334155] dark:text-slate-300 hover:border-[#94a3b8] dark:hover:border-white/30 hover:bg-[#f1f5f9] dark:hover:bg-[#171a21] hover:text-[#0f172a] dark:hover:text-white transition-colors"
+            className="flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-dashed border-[#cbd5e1] dark:border-white/15 bg-white dark:bg-[#171a21]/60 px-2.5 py-1.5 sm:py-1 text-xs font-medium text-[#334155] dark:text-slate-300 hover:border-[#94a3b8] dark:hover:border-white/30 hover:bg-[#f1f5f9] dark:hover:bg-[#171a21] hover:text-[#0f172a] dark:hover:text-white transition-colors"
           >
             <Plus className="h-3.5 w-3.5" /> New Sheet
           </button>
 
           {showTypeMenu && (
-            <div className="absolute bottom-10 left-0 z-50 w-56 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white/98 dark:bg-[#111318]/98 p-1 shadow-xl dark:shadow-2xl backdrop-blur-xl text-xs">
+            <div className="absolute bottom-10 right-0 sm:right-auto sm:left-0 z-50 w-56 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white/98 dark:bg-[#111318]/98 p-1 shadow-xl dark:shadow-2xl backdrop-blur-xl text-xs">
               <button
                 type="button"
                 onClick={() => {

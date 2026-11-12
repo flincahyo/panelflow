@@ -342,7 +342,14 @@ describe("usePanelStore - Default 2D & Context Menu Actions", () => {
   it("controls inspector visibility and tab switching between inspector and bom", () => {
     const store = usePanelStore.getState();
     expect(store.inspectorOpen).toBe(true);
+    expect(store.leftSidebarOpen).toBe(true);
     expect(store.rightPanelTab).toBe("inspector");
+
+    store.setLeftSidebarOpen(false);
+    expect(usePanelStore.getState().leftSidebarOpen).toBe(false);
+
+    store.toggleLeftSidebar();
+    expect(usePanelStore.getState().leftSidebarOpen).toBe(true);
 
     store.setRightPanelTab("bom");
     expect(usePanelStore.getState().rightPanelTab).toBe("bom");
@@ -354,6 +361,20 @@ describe("usePanelStore - Default 2D & Context Menu Actions", () => {
     store.requestInspectorFocus();
     expect(usePanelStore.getState().inspectorOpen).toBe(true);
     expect(usePanelStore.getState().rightPanelTab).toBe("inspector");
+  });
+
+  it("controls leftSidebarOpen state via setLeftSidebarOpen and toggleLeftSidebar", () => {
+    const store = usePanelStore.getState();
+    expect(store.leftSidebarOpen).toBe(true);
+
+    store.setLeftSidebarOpen(false);
+    expect(usePanelStore.getState().leftSidebarOpen).toBe(false);
+
+    store.toggleLeftSidebar();
+    expect(usePanelStore.getState().leftSidebarOpen).toBe(true);
+
+    store.toggleLeftSidebar();
+    expect(usePanelStore.getState().leftSidebarOpen).toBe(false);
   });
 
   it("manages favorite and recent parts with max limit of 8 items", () => {

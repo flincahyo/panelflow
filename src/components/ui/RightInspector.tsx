@@ -82,8 +82,14 @@ export function RightInspector({ onClose }: RightInspectorProps) {
     "rounded-lg border border-[#e2e8f0] dark:border-white/5 bg-[#f8fafc] dark:bg-[#090b10]";
 
   return (
-    <aside className="flex w-[340px] shrink-0 flex-col overflow-hidden border-l border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14]/95 text-xs text-[#0f172a] dark:text-slate-200 backdrop-blur-xl">
-      {/* Tabbed Sidebar Header */}
+    <>
+      <div
+        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[1px] lg:hidden"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <aside className="fixed inset-y-0 right-0 z-50 flex w-[90vw] max-w-[360px] shrink-0 flex-col overflow-hidden border-l border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14]/95 text-xs text-[#0f172a] dark:text-slate-200 shadow-2xl backdrop-blur-xl lg:relative lg:inset-y-auto lg:right-auto lg:z-auto lg:w-[340px] lg:max-w-none lg:shadow-none">
+        {/* Tabbed Sidebar Header */}
       <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#e2e8f0] dark:border-white/10 px-3 py-2.5">
         <div className="flex flex-1 items-center rounded-lg border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#171a21] p-0.5">
           <button
@@ -592,5 +598,6 @@ export function RightInspector({ onClose }: RightInspectorProps) {
         </div>
       )}
     </aside>
+    </>
   );
 }

@@ -277,6 +277,8 @@ export function LeftSidebar() {
   const addDuct = usePanelStore((s) => s.addDuct);
   const removeDuct = usePanelStore((s) => s.removeDuct);
   const addComponent = usePanelStore((s) => s.addComponent);
+  const leftSidebarOpen = usePanelStore((s) => s.leftSidebarOpen);
+  const setLeftSidebarOpen = usePanelStore((s) => s.setLeftSidebarOpen);
   const recentPartIds = usePanelStore((s) => s.recentPartIds);
   const favoritePartIds = usePanelStore((s) => s.favoritePartIds);
   const toggleFavoritePart = usePanelStore((s) => s.toggleFavoritePart);
@@ -462,9 +464,43 @@ export function LeftSidebar() {
     { id: "cad", label: "CAD", icon: FileUp },
   ];
 
+  const handleAddComponent = (templateId: ComponentTemplateId) => {
+    addComponent(templateId);
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setLeftSidebarOpen(false);
+    }
+  };
+
+  if (!leftSidebarOpen) {
+    return null;
+  }
+
   return (
-    <aside className="flex w-[300px] shrink-0 flex-col border-r border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14]/90 text-[#0f172a] dark:text-slate-200 backdrop-blur-xl">
-      {/* Search Bar Pill */}
+    <>
+      <div
+        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-[1px] md:hidden"
+        onClick={() => setLeftSidebarOpen(false)}
+        aria-hidden="true"
+      />
+      <aside className="fixed inset-y-0 left-0 z-50 flex w-[86vw] max-w-[320px] flex-col border-r border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14]/95 text-[#0f172a] dark:text-slate-200 shadow-2xl backdrop-blur-xl md:relative md:inset-y-auto md:left-auto md:z-auto md:w-[300px] md:max-w-none md:shrink-0 md:translate-x-0 md:shadow-none md:bg-[#f8fafc] md:dark:bg-[#0c0e14]/90">
+        {/* Mobile Drawer Header */}
+        <div className="flex shrink-0 items-center justify-between border-b border-[#e2e8f0] dark:border-white/10 px-3 py-2 md:hidden">
+          <div className="flex items-center gap-2">
+            <Cpu className="h-4 w-4 text-sky-600 dark:text-sky-400" />
+            <span className="text-xs font-semibold tracking-tight text-[#0f172a] dark:text-white">
+              Parts &amp; Library
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setLeftSidebarOpen(false)}
+            aria-label="Close Parts Drawer"
+            className="rounded-lg p-1.5 text-[#64748b] dark:text-slate-400 hover:bg-[#e2e8f0] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        {/* Search Bar Pill */}
       <div className="p-2.5 pb-2">
         <div className="flex items-center gap-2 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#171a21] px-3 py-2 focus-within:border-[#cbd5e1] dark:focus-within:border-white/25 transition-colors shadow-xs">
           <Search className="h-4 w-4 shrink-0 text-[#64748b] dark:text-slate-500" />
@@ -558,7 +594,7 @@ export function LeftSidebar() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => addComponent(tpl.id)}
+                          onClick={() => handleAddComponent(tpl.id)}
                           title={`Add ${tpl.name} (${tpl.widthMm}×${tpl.heightMm}mm)`}
                           className="w-full flex flex-col items-center"
                         >
@@ -637,7 +673,7 @@ export function LeftSidebar() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => addComponent(tpl.id)}
+                            onClick={() => handleAddComponent(tpl.id)}
                             title={`Add ${tpl.name} (${tpl.widthMm}×${tpl.heightMm}mm)`}
                             className="w-full flex flex-col items-center"
                           >
@@ -793,7 +829,7 @@ export function LeftSidebar() {
                             </button>
                             <button
                               type="button"
-                              onClick={() => addComponent(tpl.id)}
+                              onClick={() => handleAddComponent(tpl.id)}
                               title={`Add ${tpl.name} (${tpl.widthMm}×${tpl.heightMm}mm)`}
                               className="w-full flex flex-col items-center active:scale-[0.98]"
                             >
@@ -1242,5 +1278,6 @@ export function LeftSidebar() {
         )}
       </div>
     </aside>
+    </>
   );
 }
