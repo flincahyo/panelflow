@@ -183,7 +183,7 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
         left: `${adjustedPos.x}px`,
         top: `${adjustedPos.y}px`,
       }}
-      className="fixed z-50 min-w-[210px] rounded-lg border border-slate-700/80 bg-[#12161f]/95 p-1.5 font-sans text-xs text-slate-200 shadow-2xl backdrop-blur-md select-none animate-in fade-in-50 zoom-in-95 duration-100"
+      className="fixed z-50 min-w-[210px] rounded-xl border border-white/10 bg-[#111318]/98 p-1.5 font-sans text-xs text-slate-200 shadow-2xl backdrop-blur-xl select-none animate-in fade-in-50 zoom-in-95 duration-100"
       onContextMenu={(e) => e.preventDefault()}
     >
       {/* COMPONENT TARGET */}

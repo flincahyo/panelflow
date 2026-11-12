@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Panel Pro — 3D Electrical Panel CAD Workbench",
-  description: "3D Electrical Panel Layout, DIN Rail Snap & 1:1 Drilling Template",
+  title: "PanelFlow — 3D Electrical Panel CAD Workbench",
+  description:
+    "Industrial 3D & 2D Electrical Panel Layout, DIN Rail Snap & 1:1 Drilling Template (.pflow)",
 };
 
 export default function RootLayout({
@@ -13,7 +14,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
-      <body className="antialiased selection:bg-sky-500/30 selection:text-sky-200">
+      <body className="bg-[#090b10] text-slate-100 antialiased selection:bg-white/20 selection:text-white">
         {children}
       </body>
     </html>

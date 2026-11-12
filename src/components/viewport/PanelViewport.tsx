@@ -2,14 +2,22 @@
 
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, type ThreeEvent } from "@react-three/fiber";
-import { useCallback, useRef, useState } from "react";
-import { ContextMenu, type ContextMenuState, type ContextMenuTarget } from "@/components/ui/ContextMenu";
+import { Redo2, Undo2 } from "lucide-react";
+import { useCallback, useMemo, useRef, useState } from "react";
+import {
+  ContextMenu,
+  type ContextMenuState,
+  type ContextMenuTarget,
+} from "@/components/ui/ContextMenu";
 import { Components3D } from "@/components/viewport/Components3D";
 import { CustomCad3D } from "@/components/viewport/CustomCad3D";
 import { Enclosure3D } from "@/components/viewport/Enclosure3D";
 import { RailsAndDucts3D } from "@/components/viewport/RailsAndDucts3D";
+import { detectCollisionsAndBounds } from "@/lib/collision";
+import { getBackplateDimensions } from "@/lib/template-export";
 import { formatDim } from "@/lib/units";
 import { usePanelStore } from "@/store/usePanelStore";
+import type { DoorMode, GridSnapMm } from "@/types/panel";
 
 export function PanelViewport() {
   const [isDraggingItem, setIsDraggingItem] = useState(false);
@@ -19,8 +27,30 @@ export function PanelViewport() {
   const displayUnit = usePanelStore((s) => s.displayUnit);
   const gridSnapMm = usePanelStore((s) => s.gridSnapMm);
   const enclosure = usePanelStore((s) => s.enclosure);
+  const plateConfig = usePanelStore((s) => s.plateConfig);
+  const components = usePanelStore((s) => s.components);
+  const cadAssets = usePanelStore((s) => s.cadAssets);
+  const wires = usePanelStore((s) => s.wires);
   const isPinMarkingMode = usePanelStore((s) => s.isPinMarkingMode);
   const setSelected = usePanelStore((s) => s.setSelected);
+  const setDoorMode = usePanelStore((s) => s.setDoorMode);
+  const setGridSnapMm = usePanelStore((s) => s.setGridSnapMm);
+  const undo = usePanelStore((s) => s.undo);
+  const redo = usePanelStore((s) => s.redo);
+  const canUndo = usePanelStore((s) => s.canUndo);
+  const canRedo = usePanelStore((s) => s.canRedo);
+
+  const { widthMm: plateW, heightMm: plateH } = useMemo(
+    () => getBackplateDimensions(enclosure, plateConfig),
+    [enclosure, plateConfig]
+  );
+
+  const collisionReport = useMemo(
+    () => detectCollisionsAndBounds(components, cadAssets, plateW, plateH),
+    [components, cadAssets, plateW, plateH]
+  );
+  const totalCollisions =
+    collisionReport.overlapPairs.length + collisionReport.outOfBoundsIds.size;
 
   const handle3DContextMenu = useCallback(
     (e: ThreeEvent<MouseEvent>, target: ContextMenuTarget) => {
@@ -43,9 +73,16 @@ export function PanelViewport() {
     [setSelected]
   );
 
+  const doorModes: { value: DoorMode; label: string }[] = [
+    { value: "open", label: "Open" },
+    { value: "transparent", label: "Glass" },
+    { value: "hidden", label: "Hidden" },
+  ];
+  const snaps: GridSnapMm[] = [5, 10, 25];
+
   return (
     <div
-      className="relative h-full w-full bg-[#0d1016] select-none"
+      className="relative h-full w-full bg-[#090b10] select-none"
       onContextMenu={(e) => {
         e.preventDefault();
         if (meshContextHandledRef.current) {
@@ -65,7 +102,7 @@ export function PanelViewport() {
         shadows
         camera={{ position: [480, 180, 1180], fov: 38, near: 2, far: 25000 }}
       >
-        <color attach="background" args={["#0d1016"]} />
+        <color attach="background" args={["#090b10"]} />
         <ambientLight intensity={0.65} />
         <directionalLight
           position={[600, 900, 1000]}
@@ -95,21 +132,99 @@ export function PanelViewport() {
         />
       </Canvas>
 
-      {/* Crisp CAD HUD Status Bar */}
-      <div className="pointer-events-none absolute bottom-3 left-3 flex flex-wrap items-center gap-2 font-mono text-[11px] text-slate-300">
-        <span className="rounded border border-slate-700/80 bg-slate-900/85 px-2 py-1">
+      {/* Top Floating Pill Toolbar (3D Controls) */}
+      <div className="absolute top-3 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-white/10 bg-[#171a21]/95 px-2.5 py-1 shadow-xl backdrop-blur-xl">
+        {/* Undo / Redo */}
+        <div className="flex items-center gap-0.5">
+          <button
+            type="button"
+            onClick={undo}
+            disabled={!canUndo}
+            title="Undo (Ctrl+Z)"
+            className="rounded-full p-1.5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30"
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={redo}
+            disabled={!canRedo}
+            title="Redo (Ctrl+Y)"
+            className="rounded-full p-1.5 text-slate-300 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30"
+          >
+            <Redo2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        <div className="h-4 w-px bg-white/10" />
+
+        {/* Door Mode */}
+        <div className="flex items-center gap-0.5">
+          {doorModes.map((dm) => (
+            <button
+              key={dm.value}
+              type="button"
+              onClick={() => setDoorMode(dm.value)}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
+                enclosure.doorMode === dm.value
+                  ? "bg-white text-black font-semibold"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              {dm.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="h-4 w-px bg-white/10" />
+
+        {/* Grid Snap */}
+        <div className="flex items-center gap-0.5 font-mono text-[10px]">
+          {snaps.map((snap) => (
+            <button
+              key={snap}
+              type="button"
+              onClick={() => setGridSnapMm(snap)}
+              className={`rounded-full px-2 py-0.5 transition-colors ${
+                gridSnapMm === snap
+                  ? "bg-[#343842] text-white font-semibold"
+                  : "text-slate-400 hover:text-white"
+              }`}
+            >
+              {formatDim(snap, displayUnit)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom Left Status Pill */}
+      <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-[#171a21]/95 px-3 py-1 font-mono text-[11px] tabular-nums text-slate-300 shadow-lg backdrop-blur-xl">
+        <span>
           ENCLOSURE: {formatDim(enclosure.widthMm, displayUnit)} ×{" "}
           {formatDim(enclosure.heightMm, displayUnit)} ×{" "}
           {formatDim(enclosure.depthMm, displayUnit)}
         </span>
-        <span className="rounded border border-slate-700/80 bg-slate-900/85 px-2 py-1">
-          GRID SNAP: {formatDim(gridSnapMm, displayUnit)}
+        <span className="text-white/20">|</span>
+        <span className="text-slate-400">
+          Snap: {formatDim(gridSnapMm, displayUnit)}
         </span>
-        {isPinMarkingMode && (
-          <span className="rounded border border-amber-500/70 bg-amber-950/90 px-2 py-1 text-amber-300 font-semibold">
-            PIN MARKER ACTIVE — CLICK MESH SURFACE TO PLACE PIN
-          </span>
-        )}
+      </div>
+
+      {isPinMarkingMode && (
+        <div className="pointer-events-none absolute bottom-12 left-1/2 z-20 -translate-x-1/2 rounded-full border border-amber-500/50 bg-amber-950/90 px-3 py-1 font-mono text-[11px] font-semibold text-amber-300 shadow-lg">
+          PIN MARKER ACTIVE — CLICK MESH SURFACE TO PLACE PIN
+        </div>
+      )}
+
+      {/* Bottom Right Status Pill */}
+      <div className="pointer-events-none absolute bottom-3 right-3 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-[#171a21]/95 px-3 py-1 font-mono text-[11px] tabular-nums text-slate-300 shadow-lg backdrop-blur-xl">
+        <span>Parts: {components.length + cadAssets.length}</span>
+        <span className="text-white/20">|</span>
+        <span>Wires: {wires.length}</span>
+        <span className="text-white/20">|</span>
+        <span className={totalCollisions > 0 ? "text-rose-400 font-semibold" : "text-emerald-400"}>
+          Collisions: {totalCollisions}
+        </span>
       </div>
 
       <ContextMenu menu={contextMenu} onClose={() => setContextMenu(null)} />

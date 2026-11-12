@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useState } from "react";
 import { LeftSidebar } from "@/components/ui/LeftSidebar";
 import { RightInspector } from "@/components/ui/RightInspector";
 import { SheetTabs } from "@/components/ui/SheetTabs";
@@ -16,7 +17,7 @@ const PanelViewport = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-full w-full items-center justify-center bg-[#0d1016] font-mono text-xs text-slate-400">
+      <div className="flex h-full w-full items-center justify-center bg-[#090b10] font-mono text-xs text-slate-400">
         INITIALIZING 3D CAD ENGINE...
       </div>
     ),
@@ -25,19 +26,23 @@ const PanelViewport = dynamic(
 
 export function PanelWorkbench() {
   const viewportMode = usePanelStore((s) => s.viewportMode);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#0d1016]">
-      <TopToolbar />
-      <main className="flex min-h-0 flex-1">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#090b10] text-slate-100 antialiased select-none">
+      <TopToolbar
+        inspectorOpen={inspectorOpen}
+        onToggleInspector={() => setInspectorOpen((v) => !v)}
+      />
+      <main className="flex min-h-0 flex-1 overflow-hidden">
         <LeftSidebar />
-        <section className="relative flex min-w-0 flex-1 flex-col">
-          <div className="relative min-h-0 flex-1">
+        <section className="relative flex min-w-0 flex-1 flex-col overflow-hidden bg-[#090b10]">
+          <div className="relative min-h-0 flex-1 overflow-hidden">
             {viewportMode === "3d" ? <PanelViewport /> : <Panel2DCanvas />}
           </div>
           <SheetTabs />
         </section>
-        <RightInspector />
+        {inspectorOpen && <RightInspector onClose={() => setInspectorOpen(false)} />}
       </main>
     </div>
   );

@@ -178,7 +178,7 @@ export function generateDrillingSvg(
      width="${backplateWidthMm}mm"
      height="${backplateHeightMm}mm"
      viewBox="0 0 ${backplateWidthMm} ${backplateHeightMm}">
-  <title>Panel Pro Backplate Drilling Template (1:1 mm)</title>
+  <title>PanelFlow Backplate Drilling Template (1:1 mm)</title>
   <g id="plate-outline">
     <rect x="0" y="0" width="${backplateWidthMm}" height="${backplateHeightMm}" fill="none" stroke="#0f172a" stroke-width="0.6" />
   </g>
@@ -189,7 +189,7 @@ ${crosshairs}
 ${holeElements}
   </g>
   <g id="annotations">
-    <text x="8" y="14" font-family="monospace" font-size="8" fill="#0f172a">PANEL PRO 1:1 DRILLING TEMPLATE | PLATE: ${backplateWidthMm}x${backplateHeightMm} mm | HOLES: ${holes.length}</text>
+    <text x="8" y="14" font-family="monospace" font-size="8" fill="#0f172a">PANELFLOW 1:1 DRILLING TEMPLATE | PLATE: ${backplateWidthMm}x${backplateHeightMm} mm | HOLES: ${holes.length}</text>
   </g>
 </svg>
 `;

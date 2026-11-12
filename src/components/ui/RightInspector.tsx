@@ -1,12 +1,16 @@
 "use client";
 
-import { MapPin, Trash2 } from "lucide-react";
+import { MapPin, Trash2, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { snapToGrid } from "@/lib/snap";
 import { formatDim, fromMm, inputStepForUnit, toMm } from "@/lib/units";
 import { usePanelStore } from "@/store/usePanelStore";
 
-export function RightInspector() {
+interface RightInspectorProps {
+  onClose?: () => void;
+}
+
+export function RightInspector({ onClose }: RightInspectorProps) {
   const displayUnit = usePanelStore((s) => s.displayUnit);
   const gridSnapMm = usePanelStore((s) => s.gridSnapMm);
   const selected = usePanelStore((s) => s.selected);
@@ -67,26 +71,41 @@ export function RightInspector() {
       ? wires.find((w) => w.id === selected.id)
       : undefined;
 
+  const inputClass =
+    "w-full rounded-lg border border-white/10 bg-[#090b10] px-2.5 py-1.5 font-mono text-xs tabular-nums text-slate-100 focus:border-white/30 focus:outline-none";
+
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-l border-slate-800 bg-[#12161f] p-3 text-xs text-slate-200 overflow-y-auto">
-      <div className="mb-3 border-b border-slate-800 pb-2 font-mono text-[10px] uppercase tracking-wider text-slate-400">
-        Inspector ({displayUnit})
+    <aside className="flex w-72 shrink-0 flex-col border-l border-white/10 bg-[#0c0e14]/95 p-3 text-xs text-slate-200 overflow-y-auto backdrop-blur-xl">
+      <div className="mb-3 flex items-center justify-between border-b border-white/10 pb-2">
+        <span className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
+          Inspector ({displayUnit})
+        </span>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md p-0.5 text-slate-500 hover:bg-white/10 hover:text-white"
+            title="Collapse Inspector"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       {!selected && (
-        <div className="space-y-4 text-[11px] text-slate-400">
-          <div className="space-y-1.5">
-            <p>
+        <div className="space-y-3 text-[11px] text-slate-400">
+          <div className="rounded-xl border border-white/10 bg-[#171a21] p-3 space-y-1.5">
+            <p className="text-slate-300">
               Select a DIN rail, wire duct, component, or wire in the{" "}
               {viewportMode.toUpperCase()} viewport.
             </p>
             <p className="font-mono text-[10px] text-slate-500">
-              Drag items directly on the mounting plate to snap to grid or nearest DIN rail.
+              Drag items on the mounting plate to snap to grid or nearest DIN rail.
             </p>
           </div>
 
           {viewportMode === "2d" && (
-            <div className="space-y-2 border-t border-slate-800 pt-3">
+            <div className="rounded-xl border border-white/10 bg-[#171a21] p-3 space-y-2.5">
               <div className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
                 2D Plot Frame / Title Block
               </div>
@@ -98,7 +117,7 @@ export function RightInspector() {
                   onChange={(e) =>
                     updateTitleBlock({ projectName: e.target.value })
                   }
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                  className={inputClass}
                 />
               </label>
               <label className="block space-y-1">
@@ -107,7 +126,7 @@ export function RightInspector() {
                   type="text"
                   value={titleBlock.drawer}
                   onChange={(e) => updateTitleBlock({ drawer: e.target.value })}
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-slate-100"
+                  className={inputClass}
                 />
               </label>
               <div className="grid grid-cols-3 gap-1.5">
@@ -119,7 +138,7 @@ export function RightInspector() {
                     onChange={(e) =>
                       updateTitleBlock({ sheetNo: e.target.value })
                     }
-                    className="w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 font-mono text-slate-100"
+                    className={inputClass}
                   />
                 </label>
                 <label className="space-y-1">
@@ -130,7 +149,7 @@ export function RightInspector() {
                     onChange={(e) =>
                       updateTitleBlock({ scale: e.target.value })
                     }
-                    className="w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 font-mono text-slate-100"
+                    className={inputClass}
                   />
                 </label>
                 <label className="space-y-1">
@@ -139,7 +158,7 @@ export function RightInspector() {
                     type="text"
                     value={titleBlock.rev}
                     onChange={(e) => updateTitleBlock({ rev: e.target.value })}
-                    className="w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 font-mono text-slate-100"
+                    className={inputClass}
                   />
                 </label>
               </div>
@@ -149,11 +168,9 @@ export function RightInspector() {
       )}
 
       {wire && (
-        <div className="space-y-3">
+        <div className="rounded-xl border border-white/10 bg-[#171a21] p-3 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-slate-100">
-              Wire {wire.label}
-            </span>
+            <span className="font-semibold text-white">Wire {wire.label}</span>
             <button
               type="button"
               onClick={() => removeWire(wire.id)}
@@ -169,7 +186,7 @@ export function RightInspector() {
               type="text"
               value={wire.label}
               onChange={(e) => updateWire(wire.id, { label: e.target.value })}
-              className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono"
+              className={inputClass}
             />
           </label>
 
@@ -183,7 +200,7 @@ export function RightInspector() {
                     colorCode: e.target.value as typeof wire.colorCode,
                   })
                 }
-                className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono"
+                className={inputClass}
               >
                 <option value="R">R (L1)</option>
                 <option value="S">S (L2)</option>
@@ -202,7 +219,7 @@ export function RightInspector() {
                 onChange={(e) =>
                   updateWire(wire.id, { gaugeMm2: e.target.value })
                 }
-                className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono"
+                className={inputClass}
               />
             </label>
           </div>
@@ -210,9 +227,9 @@ export function RightInspector() {
       )}
 
       {rail && (
-        <div className="space-y-3">
+        <div className="rounded-xl border border-white/10 bg-[#171a21] p-3 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-slate-100">{rail.name}</span>
+            <span className="font-semibold text-white">{rail.name}</span>
             <button
               type="button"
               onClick={() => removeRail(rail.id)}
@@ -224,7 +241,9 @@ export function RightInspector() {
 
           <div className="grid grid-cols-2 gap-2">
             <label className="space-y-1">
-              <span className="text-[11px] text-slate-400">X ({displayUnit})</span>
+              <span className="text-[11px] text-slate-400">
+                X ({displayUnit})
+              </span>
               <input
                 type="number"
                 step={step}
@@ -237,11 +256,13 @@ export function RightInspector() {
                     ),
                   })
                 }
-                className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono"
+                className={inputClass}
               />
             </label>
             <label className="space-y-1">
-              <span className="text-[11px] text-slate-400">Y ({displayUnit})</span>
+              <span className="text-[11px] text-slate-400">
+                Y ({displayUnit})
+              </span>
               <input
                 type="number"
                 step={step}
@@ -254,7 +275,7 @@ export function RightInspector() {
                     ),
                   })
                 }
-                className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono"
+                className={inputClass}
               />
             </label>
           </div>
@@ -275,16 +296,16 @@ export function RightInspector() {
                   ),
                 })
               }
-              className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono"
+              className={inputClass}
             />
           </label>
         </div>
       )}
 
       {duct && (
-        <div className="space-y-3">
+        <div className="rounded-xl border border-white/10 bg-[#171a21] p-3 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-slate-100">{duct.name}</span>
+            <span className="font-semibold text-white">{duct.name}</span>
             <button
               type="button"
               onClick={() => removeDuct(duct.id)}
@@ -323,7 +344,7 @@ export function RightInspector() {
                           : snapToGrid(mm, gridSnapMm),
                     });
                   }}
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono"
+                  className={inputClass}
                 />
               </label>
             ))}
@@ -333,77 +354,83 @@ export function RightInspector() {
 
       {comp && (
         <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <input
-              ref={compNameInputRef}
-              type="text"
-              value={comp.name}
-              onChange={(e) =>
-                updateComponent(comp.id, { name: e.target.value })
-              }
-              className="w-48 rounded border border-transparent bg-transparent font-semibold text-slate-100 hover:border-slate-700 focus:border-sky-500 focus:bg-slate-900 focus:outline-none px-1 py-0.5"
-            />
-            <button
-              type="button"
-              onClick={() => removeComponent(comp.id)}
-              className="text-slate-500 hover:text-rose-400"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div className="rounded border border-slate-800 bg-slate-900/50 p-2 font-mono text-[10px] text-slate-400">
-            BBox: {formatDim(comp.widthMm, displayUnit)} ×{" "}
-            {formatDim(comp.heightMm, displayUnit)} ×{" "}
-            {formatDim(comp.depthMm, displayUnit)}
-            <br />
-            Rail: {rails.find((r) => r.id === comp.railId)?.name ?? "Unmounted"}
-          </div>
-
-          <div className="grid grid-cols-2 gap-2">
-            <label className="space-y-1">
-              <span className="text-[11px] text-slate-400">X ({displayUnit})</span>
+          <div className="rounded-xl border border-white/10 bg-[#171a21] p-3 space-y-3">
+            <div className="flex items-center justify-between gap-2">
               <input
-                type="number"
-                step={step}
-                value={Number(fromMm(comp.xMm, displayUnit).toFixed(3))}
+                ref={compNameInputRef}
+                type="text"
+                value={comp.name}
                 onChange={(e) =>
-                  moveComponent(
-                    comp.id,
-                    toMm(Number.parseFloat(e.target.value) || 0, displayUnit),
-                    comp.yMm
-                  )
+                  updateComponent(comp.id, { name: e.target.value })
                 }
-                className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono"
+                className="w-full rounded-lg border border-transparent bg-transparent px-1.5 py-0.5 font-semibold text-white hover:border-white/15 focus:border-white/30 focus:bg-[#090b10] focus:outline-none"
               />
-            </label>
-            <label className="space-y-1">
-              <span className="text-[11px] text-slate-400">Y ({displayUnit})</span>
-              <input
-                type="number"
-                step={step}
-                value={Number(fromMm(comp.yMm, displayUnit).toFixed(3))}
-                onChange={(e) =>
-                  moveComponent(
-                    comp.id,
-                    comp.xMm,
-                    toMm(Number.parseFloat(e.target.value) || 0, displayUnit)
-                  )
-                }
-                className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 font-mono"
-              />
-            </label>
+              <button
+                type="button"
+                onClick={() => removeComponent(comp.id)}
+                className="shrink-0 text-slate-500 hover:text-rose-400"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="rounded-lg border border-white/5 bg-[#090b10] p-2 font-mono text-[10px] tabular-nums text-slate-400">
+              BBox: {formatDim(comp.widthMm, displayUnit)} ×{" "}
+              {formatDim(comp.heightMm, displayUnit)} ×{" "}
+              {formatDim(comp.depthMm, displayUnit)}
+              <br />
+              Rail: {rails.find((r) => r.id === comp.railId)?.name ?? "Unmounted"}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <label className="space-y-1">
+                <span className="text-[11px] text-slate-400">
+                  X ({displayUnit})
+                </span>
+                <input
+                  type="number"
+                  step={step}
+                  value={Number(fromMm(comp.xMm, displayUnit).toFixed(3))}
+                  onChange={(e) =>
+                    moveComponent(
+                      comp.id,
+                      toMm(Number.parseFloat(e.target.value) || 0, displayUnit),
+                      comp.yMm
+                    )
+                  }
+                  className={inputClass}
+                />
+              </label>
+              <label className="space-y-1">
+                <span className="text-[11px] text-slate-400">
+                  Y ({displayUnit})
+                </span>
+                <input
+                  type="number"
+                  step={step}
+                  value={Number(fromMm(comp.yMm, displayUnit).toFixed(3))}
+                  onChange={(e) =>
+                    moveComponent(
+                      comp.id,
+                      comp.xMm,
+                      toMm(Number.parseFloat(e.target.value) || 0, displayUnit)
+                    )
+                  }
+                  className={inputClass}
+                />
+              </label>
+            </div>
           </div>
 
-          <div className="space-y-1.5 border-t border-slate-800 pt-2">
-            <div className="font-mono text-[10px] uppercase text-slate-400">
+          <div className="rounded-xl border border-white/10 bg-[#171a21] p-3 space-y-2">
+            <div className="font-mono text-[10px] uppercase tracking-wider text-slate-400">
               Pin Terminals ({comp.pins.length})
             </div>
             <div className="max-h-48 space-y-1 overflow-y-auto">
               {comp.pins.map((pin) => (
                 <div
                   key={pin.id}
-                  className="flex items-center justify-between rounded border border-slate-800 bg-slate-900/50 px-2 py-1 font-mono text-[10px]"
+                  className="flex items-center justify-between rounded-lg border border-white/5 bg-[#090b10] px-2.5 py-1 font-mono text-[10px] tabular-nums"
                 >
                   <span className="font-semibold text-amber-300">
                     {pin.label}
@@ -419,9 +446,9 @@ export function RightInspector() {
       )}
 
       {cad && (
-        <div className="space-y-3">
+        <div className="rounded-xl border border-white/10 bg-[#171a21] p-3 space-y-3">
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-slate-100">{cad.name}</span>
+            <span className="font-semibold text-white">{cad.name}</span>
             <button
               type="button"
               onClick={() => removeCadAsset(cad.id)}
@@ -431,9 +458,8 @@ export function RightInspector() {
             </button>
           </div>
 
-          <div className="rounded border border-slate-800 bg-slate-900/50 p-2 font-mono text-[10px] text-slate-400">
-            Normalized BBox:{" "}
-            {formatDim(cad.boundingBoxMm.w, displayUnit)} ×{" "}
+          <div className="rounded-lg border border-white/5 bg-[#090b10] p-2 font-mono text-[10px] tabular-nums text-slate-400">
+            Normalized BBox: {formatDim(cad.boundingBoxMm.w, displayUnit)} ×{" "}
             {formatDim(cad.boundingBoxMm.h, displayUnit)} ×{" "}
             {formatDim(cad.boundingBoxMm.d, displayUnit)}
           </div>
@@ -460,7 +486,7 @@ export function RightInspector() {
                       ),
                     })
                   }
-                  className="w-full rounded border border-slate-700 bg-slate-900 px-1.5 py-1 font-mono text-[11px]"
+                  className={inputClass}
                 />
               </label>
             ))}
@@ -474,10 +500,10 @@ export function RightInspector() {
                 cad.id
               )
             }
-            className={`flex w-full items-center justify-center gap-1.5 rounded px-2 py-1.5 font-mono text-[11px] font-medium ${
+            className={`flex w-full items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 font-mono text-[11px] font-medium transition-colors ${
               isPinMarkingMode && activeMarkingAssetId === cad.id
-                ? "bg-amber-600 text-white"
-                : "border border-slate-700 bg-slate-800 text-slate-200 hover:border-amber-500"
+                ? "bg-amber-500 text-black font-semibold"
+                : "border border-white/10 bg-[#090b10] text-slate-200 hover:border-white/25"
             }`}
           >
             <MapPin className="h-3.5 w-3.5" />
@@ -486,14 +512,14 @@ export function RightInspector() {
               : "Mark Pins on Mesh"}
           </button>
 
-          <div className="space-y-1.5 border-t border-slate-800 pt-2">
+          <div className="space-y-1.5 border-t border-white/10 pt-2">
             <div className="font-mono text-[10px] uppercase text-slate-400">
               Marked Pins ({cad.pins.length})
             </div>
             {cad.pins.map((pin) => (
               <div
                 key={pin.id}
-                className="flex items-center justify-between gap-1 rounded border border-slate-800 bg-slate-900/50 px-2 py-1 font-mono text-[10px]"
+                className="flex items-center justify-between gap-1 rounded-lg border border-white/5 bg-[#090b10] px-2 py-1 font-mono text-[10px] tabular-nums"
               >
                 <input
                   type="text"
@@ -504,7 +530,7 @@ export function RightInspector() {
                     );
                     updateCadAsset(cad.id, { pins: nextPins });
                   }}
-                  className="w-16 rounded border border-slate-700 bg-slate-950 px-1 py-0.5 text-amber-300"
+                  className="w-16 rounded border border-white/10 bg-[#171a21] px-1 py-0.5 text-amber-300"
                 />
                 <span className="text-slate-400">
                   ({pin.localXMm},{pin.localYMm},{pin.localZMm})

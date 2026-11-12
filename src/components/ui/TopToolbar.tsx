@@ -1,12 +1,35 @@
 "use client";
 
-import { useEffect } from "react";
-import { Box, Download, Eye, FileImage, FileText, Grid, Layers, Redo2, Ruler, Undo2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Box,
+  ChevronDown,
+  Download,
+  Eye,
+  FileCheck2,
+  FileCode2,
+  FileImage,
+  FileSpreadsheet,
+  FileText,
+  FileUp,
+  FolderOpen,
+  Grid,
+  Layers,
+  PanelRightClose,
+  PanelRightOpen,
+  Plus,
+  Redo2,
+  RotateCcw,
+  Ruler,
+  Sliders,
+  Undo2,
+  Zap,
+} from "lucide-react";
 import { generateEplanSheetSvg } from "@/lib/sheet-export";
 import { generateDrillingDxf, generateDrillingSvg } from "@/lib/template-export";
 import { formatDim } from "@/lib/units";
 import { usePanelStore } from "@/store/usePanelStore";
-import type { DoorMode, GridSnapMm, LengthUnit } from "@/types/panel";
+import type { DoorMode, GridSnapMm, LengthUnit, SheetType } from "@/types/panel";
 
 function triggerDownload(filename: string, content: string, mime: string) {
   const blob = new Blob([content], { type: mime });
@@ -20,7 +43,15 @@ function triggerDownload(filename: string, content: string, mime: string) {
   URL.revokeObjectURL(url);
 }
 
-export function TopToolbar() {
+interface TopToolbarProps {
+  inspectorOpen?: boolean;
+  onToggleInspector?: () => void;
+}
+
+export function TopToolbar({
+  inspectorOpen = true,
+  onToggleInspector,
+}: TopToolbarProps) {
   const viewportMode = usePanelStore((s) => s.viewportMode);
   const displayUnit = usePanelStore((s) => s.displayUnit);
   const gridSnapMm = usePanelStore((s) => s.gridSnapMm);
@@ -42,23 +73,38 @@ export function TopToolbar() {
   const setDisplayUnit = usePanelStore((s) => s.setDisplayUnit);
   const setGridSnapMm = usePanelStore((s) => s.setGridSnapMm);
   const setDoorMode = usePanelStore((s) => s.setDoorMode);
+  const addSheet = usePanelStore((s) => s.addSheet);
+
+  const [activeMenu, setActiveMenu] = useState<"file" | "edit" | "view" | null>(
+    null
+  );
+  const menuBarRef = useRef<HTMLDivElement>(null);
 
   const units: LengthUnit[] = ["mm", "cm", "m"];
   const snaps: GridSnapMm[] = [5, 10, 25];
-  const doorModes: { value: DoorMode; label: string }[] = [
-    { value: "open", label: "Open" },
-    { value: "transparent", label: "Glass" },
-    { value: "hidden", label: "Hidden" },
-  ];
+
+  // Close menus on outside click
+  useEffect(() => {
+    const handleDown = (e: MouseEvent) => {
+      if (
+        menuBarRef.current &&
+        !menuBarRef.current.contains(e.target as Node)
+      ) {
+        setActiveMenu(null);
+      }
+    };
+    window.addEventListener("mousedown", handleDown);
+    return () => window.removeEventListener("mousedown", handleDown);
+  }, []);
 
   const handleExportSvg = () => {
-    const svg = generateDrillingSvg(enclosure, rails, ducts);
-    triggerDownload("panel-pro-drilling-1to1.svg", svg, "image/svg+xml");
+    const svg = generateDrillingSvg(enclosure, rails, ducts, plateConfig);
+    triggerDownload("panelflow-drilling-1to1.svg", svg, "image/svg+xml");
   };
 
   const handleExportDxf = () => {
-    const dxf = generateDrillingDxf(enclosure, rails, ducts);
-    triggerDownload("panel-pro-drilling-1to1.dxf", dxf, "application/dxf");
+    const dxf = generateDrillingDxf(enclosure, rails, ducts, plateConfig);
+    triggerDownload("panelflow-drilling-1to1.dxf", dxf, "application/dxf");
   };
 
   const get2DSheetSvg = () =>
@@ -101,7 +147,7 @@ export function TopToolbar() {
   }, [undo, redo]);
 
   const handleExport2DSheetSvg = () => {
-    triggerDownload("panel-pro-2d-sheet.svg", get2DSheetSvg(), "image/svg+xml");
+    triggerDownload("panelflow-2d-sheet.svg", get2DSheetSvg(), "image/svg+xml");
   };
 
   const handleExport2DSheetPng = () => {
@@ -124,7 +170,7 @@ export function TopToolbar() {
             const pngUrl = URL.createObjectURL(pngBlob);
             const a = document.createElement("a");
             a.href = pngUrl;
-            a.download = "panel-pro-2d-sheet.png";
+            a.download = "panelflow-2d-sheet.png";
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
@@ -157,21 +203,281 @@ export function TopToolbar() {
   };
 
   return (
-    <header className="flex h-12 shrink-0 items-center justify-between border-b border-slate-800 bg-[#12161f] px-4 text-xs text-slate-200">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 font-mono text-sm font-semibold tracking-wider text-slate-100">
-          <span className="inline-block h-2.5 w-2.5 rounded-xs bg-sky-500" />
-          PANEL PRO
+    <header className="relative z-40 flex h-13 shrink-0 items-center justify-between border-b border-white/10 bg-[#0c0e14]/95 px-3.5 text-xs text-slate-200 backdrop-blur-xl select-none">
+      {/* LEFT SECTION: Logo Badge + Brand + File/Edit/View Menus */}
+      <div className="flex items-center gap-3" ref={menuBarRef}>
+        {/* Brand Badge */}
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg border border-white/15 bg-[#171a21] shadow-xs">
+            <Zap className="h-4 w-4 text-amber-400 fill-amber-400/20" />
+          </div>
+          <div className="flex items-center gap-1.5 font-bold tracking-tight text-white text-sm">
+            <span>PanelFlow</span>
+            <span className="rounded-md border border-white/10 bg-white/5 px-1.5 py-0.5 font-mono text-[9px] font-semibold text-slate-400">
+              CAD
+            </span>
+          </div>
         </div>
 
-        {/* Viewport Mode Switcher: 2D Layout (Primary) vs 3D View */}
-        <div className="ml-2 flex rounded border border-slate-700 bg-slate-900 p-0.5">
+        <div className="h-4 w-px bg-white/10" />
+
+        {/* Dropdown Menus (RelayFlow style) */}
+        <div className="flex items-center gap-0.5">
+          {/* FILE MENU */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() =>
+                setActiveMenu(activeMenu === "file" ? null : "file")
+              }
+              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                activeMenu === "file"
+                  ? "bg-white/10 text-white"
+                  : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+              }`}
+            >
+              File
+              <ChevronDown className="h-3 w-3 text-slate-500" />
+            </button>
+
+            {activeMenu === "file" && (
+              <div className="absolute top-8 left-0 z-50 w-56 rounded-xl border border-white/10 bg-[#111318]/98 p-1 shadow-2xl backdrop-blur-xl text-xs">
+                <div className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-500">
+                  Project Sheets
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    addSheet("mounting-plate");
+                    setActiveMenu(null);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-slate-200 hover:bg-white/10 hover:text-white"
+                >
+                  <Plus className="h-3.5 w-3.5 text-sky-400" />
+                  New Mounting Sheet
+                </button>
+                <div className="my-1 border-t border-white/10" />
+                <div className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-500">
+                  Export 2D Drawing (.PFLOW)
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleExport2DSheetSvg();
+                    setActiveMenu(null);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-slate-200 hover:bg-white/10 hover:text-white"
+                >
+                  <Download className="h-3.5 w-3.5 text-sky-400" />
+                  Export 2D SVG
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleExport2DSheetPng();
+                    setActiveMenu(null);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-slate-200 hover:bg-white/10 hover:text-white"
+                >
+                  <FileImage className="h-3.5 w-3.5 text-emerald-400" />
+                  Export High-Res PNG
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleExport2DSheetPdf();
+                    setActiveMenu(null);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-slate-200 hover:bg-white/10 hover:text-white"
+                >
+                  <FileText className="h-3.5 w-3.5 text-amber-400" />
+                  Print / Export PDF
+                </button>
+                <div className="my-1 border-t border-white/10" />
+                <div className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-500">
+                  CNC Drilling Template
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleExportDxf();
+                    setActiveMenu(null);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-slate-200 hover:bg-white/10 hover:text-white"
+                >
+                  <Download className="h-3.5 w-3.5 text-indigo-400" />
+                  Export Drilling DXF (1:1)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleExportSvg();
+                    setActiveMenu(null);
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-slate-200 hover:bg-white/10 hover:text-white"
+                >
+                  <Download className="h-3.5 w-3.5 text-teal-400" />
+                  Export Drilling SVG (1:1)
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* EDIT MENU */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() =>
+                setActiveMenu(activeMenu === "edit" ? null : "edit")
+              }
+              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                activeMenu === "edit"
+                  ? "bg-white/10 text-white"
+                  : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+              }`}
+            >
+              Edit
+              <ChevronDown className="h-3 w-3 text-slate-500" />
+            </button>
+
+            {activeMenu === "edit" && (
+              <div className="absolute top-8 left-0 z-50 w-48 rounded-xl border border-white/10 bg-[#111318]/98 p-1 shadow-2xl backdrop-blur-xl text-xs">
+                <button
+                  type="button"
+                  disabled={!canUndo}
+                  onClick={() => {
+                    undo();
+                    setActiveMenu(null);
+                  }}
+                  className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-slate-200 hover:bg-white/10 hover:text-white disabled:opacity-40"
+                >
+                  <span className="flex items-center gap-2">
+                    <Undo2 className="h-3.5 w-3.5" />
+                    Undo
+                  </span>
+                  <span className="font-mono text-[10px] text-slate-500">
+                    Ctrl+Z
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  disabled={!canRedo}
+                  onClick={() => {
+                    redo();
+                    setActiveMenu(null);
+                  }}
+                  className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-slate-200 hover:bg-white/10 hover:text-white disabled:opacity-40"
+                >
+                  <span className="flex items-center gap-2">
+                    <Redo2 className="h-3.5 w-3.5" />
+                    Redo
+                  </span>
+                  <span className="font-mono text-[10px] text-slate-500">
+                    Ctrl+Y
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* VIEW MENU */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() =>
+                setActiveMenu(activeMenu === "view" ? null : "view")
+              }
+              className={`flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                activeMenu === "view"
+                  ? "bg-white/10 text-white"
+                  : "text-slate-400 hover:bg-white/5 hover:text-slate-200"
+              }`}
+            >
+              View
+              <ChevronDown className="h-3 w-3 text-slate-500" />
+            </button>
+
+            {activeMenu === "view" && (
+              <div className="absolute top-8 left-0 z-50 w-48 rounded-xl border border-white/10 bg-[#111318]/98 p-1 shadow-2xl backdrop-blur-xl text-xs">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewportMode("2d");
+                    setActiveMenu(null);
+                  }}
+                  className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-slate-200 hover:bg-white/10 hover:text-white"
+                >
+                  <span className="flex items-center gap-2">
+                    <Layers className="h-3.5 w-3.5" />
+                    2D Layout
+                  </span>
+                  {viewportMode === "2d" && (
+                    <span className="text-white text-xs">✓</span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setViewportMode("3d");
+                    setActiveMenu(null);
+                  }}
+                  className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-slate-200 hover:bg-white/10 hover:text-white"
+                >
+                  <span className="flex items-center gap-2">
+                    <Box className="h-3.5 w-3.5" />
+                    3D View
+                  </span>
+                  {viewportMode === "3d" && (
+                    <span className="text-white text-xs">✓</span>
+                  )}
+                </button>
+                <div className="my-1 border-t border-white/10" />
+                <div className="px-2.5 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-500">
+                  Door Enclosure
+                </div>
+                {(["transparent", "open", "hidden"] as DoorMode[]).map((dm) => (
+                  <button
+                    key={dm}
+                    type="button"
+                    onClick={() => {
+                      setDoorMode(dm);
+                      setActiveMenu(null);
+                    }}
+                    className="flex w-full items-center justify-between rounded-lg px-2.5 py-1 text-left capitalize text-slate-200 hover:bg-white/10 hover:text-white"
+                  >
+                    <span>{dm}</span>
+                    {enclosure.doorMode === dm && (
+                      <span className="text-white text-xs">✓</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* RIGHT SECTION: Project Pill (.PFLOW) + Viewport Switcher + Unit Switcher + Inspector Toggle */}
+      <div className="flex items-center gap-2 sm:gap-2.5">
+        {/* Active Project Pill */}
+        <div className="hidden items-center gap-2 rounded-full border border-white/10 bg-[#171a21] px-3 py-1 font-mono text-[11px] md:flex">
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+          <span className="max-w-[160px] truncate text-slate-300 font-medium">
+            {titleBlock.projectName}
+          </span>
+          <span className="rounded-md border border-white/10 bg-white/10 px-1.5 py-0.2 font-mono text-[9px] font-bold tracking-wider text-slate-200">
+            .PFLOW
+          </span>
+        </div>
+
+        {/* Viewport Switcher Pill: [2D Layout] / [3D View] */}
+        <div className="flex items-center rounded-full border border-white/10 bg-[#171a21] p-0.5 shadow-inner">
           <button
             type="button"
             onClick={() => setViewportMode("2d")}
-            className={`flex items-center gap-1.5 rounded-xs px-2.5 py-1 font-mono text-[11px] transition-colors ${
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium transition-all ${
               viewportMode === "2d"
-                ? "bg-sky-600 font-semibold text-white"
+                ? "bg-white text-black font-semibold shadow-xs"
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
@@ -181,9 +487,9 @@ export function TopToolbar() {
           <button
             type="button"
             onClick={() => setViewportMode("3d")}
-            className={`flex items-center gap-1.5 rounded-xs px-2.5 py-1 font-mono text-[11px] transition-colors ${
+            className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-medium transition-all ${
               viewportMode === "3d"
-                ? "bg-sky-600 font-semibold text-white"
+                ? "bg-white text-black font-semibold shadow-xs"
                 : "text-slate-400 hover:text-slate-200"
             }`}
           >
@@ -192,146 +498,43 @@ export function TopToolbar() {
           </button>
         </div>
 
-        {/* Undo / Redo */}
-        <div className="flex rounded border border-slate-700 bg-slate-900 p-0.5">
+        {/* Unit Switcher Pill (mm/cm/m) */}
+        <div className="flex items-center rounded-full border border-white/10 bg-[#171a21] p-0.5">
+          {units.map((u) => (
+            <button
+              key={u}
+              type="button"
+              onClick={() => setDisplayUnit(u)}
+              className={`rounded-full px-2 py-0.5 font-mono text-[11px] transition-all ${
+                displayUnit === u
+                  ? "bg-white text-black font-bold shadow-xs"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              {u}
+            </button>
+          ))}
+        </div>
+
+        {/* Toggle Inspector Button */}
+        {onToggleInspector && (
           <button
             type="button"
-            onClick={undo}
-            disabled={!canUndo}
-            title="Undo (Ctrl+Z)"
-            className="flex items-center gap-1 rounded-xs px-2 py-1 text-[11px] text-slate-300 transition-colors hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent"
+            onClick={onToggleInspector}
+            className={`flex h-8 w-8 items-center justify-center rounded-full border transition-all ${
+              inspectorOpen
+                ? "border-white/20 bg-white/10 text-white"
+                : "border-white/10 bg-[#171a21] text-slate-400 hover:text-white"
+            }`}
+            title={inspectorOpen ? "Hide Inspector" : "Show Inspector"}
           >
-            <Undo2 className="h-3.5 w-3.5" />
+            {inspectorOpen ? (
+              <PanelRightClose className="h-3.5 w-3.5" />
+            ) : (
+              <PanelRightOpen className="h-3.5 w-3.5" />
+            )}
           </button>
-          <button
-            type="button"
-            onClick={redo}
-            disabled={!canRedo}
-            title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
-            className="flex items-center gap-1 rounded-xs px-2 py-1 text-[11px] text-slate-300 transition-colors hover:bg-slate-800 disabled:opacity-30 disabled:hover:bg-transparent"
-          >
-            <Redo2 className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </div>
-
-      <div className="flex items-center gap-4">
-        {/* Unit Switcher */}
-        <div className="flex items-center gap-1.5">
-          <Ruler className="h-3.5 w-3.5 text-slate-400" />
-          <div className="flex rounded border border-slate-700 bg-slate-900 p-0.5">
-            {units.map((u) => (
-              <button
-                key={u}
-                type="button"
-                onClick={() => setDisplayUnit(u)}
-                className={`rounded-xs px-2 py-0.5 font-mono text-[11px] transition-colors ${
-                  displayUnit === u
-                    ? "bg-sky-600 font-semibold text-white"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                {u}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Grid Snap */}
-        <div className="flex items-center gap-1.5">
-          <Grid className="h-3.5 w-3.5 text-slate-400" />
-          <div className="flex rounded border border-slate-700 bg-slate-900 p-0.5">
-            {snaps.map((snap) => (
-              <button
-                key={snap}
-                type="button"
-                onClick={() => setGridSnapMm(snap)}
-                className={`rounded-xs px-2 py-0.5 font-mono text-[11px] transition-colors ${
-                  gridSnapMm === snap
-                    ? "bg-sky-600 font-semibold text-white"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                {formatDim(snap, displayUnit)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Door Mode */}
-        <div className="flex items-center gap-1.5">
-          <Eye className="h-3.5 w-3.5 text-slate-400" />
-          <div className="flex rounded border border-slate-700 bg-slate-900 p-0.5">
-            {doorModes.map((dm) => (
-              <button
-                key={dm.value}
-                type="button"
-                onClick={() => setDoorMode(dm.value)}
-                className={`rounded-xs px-2 py-0.5 text-[11px] transition-colors ${
-                  enclosure.doorMode === dm.value
-                    ? "bg-slate-700 font-medium text-white"
-                    : "text-slate-400 hover:text-slate-200"
-                }`}
-              >
-                {dm.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Export Controls */}
-        <div className="flex items-center gap-1.5 border-l border-slate-800 pl-3">
-          {viewportMode === "2d" ? (
-            <>
-              <button
-                type="button"
-                onClick={handleExport2DSheetSvg}
-                className="flex items-center gap-1 rounded border border-slate-700 bg-slate-800/80 px-2 py-1 font-mono text-[11px] text-slate-200 hover:border-sky-500/60 hover:bg-slate-800"
-                title="Export 2D Engineering Sheet (SVG)"
-              >
-                <Download className="h-3 w-3 text-sky-400" />
-                2D SVG
-              </button>
-              <button
-                type="button"
-                onClick={handleExport2DSheetPng}
-                className="flex items-center gap-1 rounded border border-slate-700 bg-slate-800/80 px-2 py-1 font-mono text-[11px] text-slate-200 hover:border-sky-500/60 hover:bg-slate-800"
-                title="Export 2D Engineering Sheet (High-Res PNG)"
-              >
-                <FileImage className="h-3 w-3 text-emerald-400" />
-                PNG
-              </button>
-              <button
-                type="button"
-                onClick={handleExport2DSheetPdf}
-                className="flex items-center gap-1 rounded border border-slate-700 bg-slate-800/80 px-2 py-1 font-mono text-[11px] text-slate-200 hover:border-sky-500/60 hover:bg-slate-800"
-                title="Print / Save 2D Engineering Sheet as PDF"
-              >
-                <FileText className="h-3 w-3 text-amber-400" />
-                PDF
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={handleExportSvg}
-                className="flex items-center gap-1.5 rounded border border-slate-700 bg-slate-800/80 px-2.5 py-1 font-mono text-[11px] text-slate-200 hover:border-sky-500/60 hover:bg-slate-800"
-              >
-                <Download className="h-3 w-3 text-sky-400" />
-                SVG 1:1
-              </button>
-              <button
-                type="button"
-                onClick={handleExportDxf}
-                className="flex items-center gap-1.5 rounded border border-slate-700 bg-slate-800/80 px-2.5 py-1 font-mono text-[11px] text-slate-200 hover:border-sky-500/60 hover:bg-slate-800"
-              >
-                <Download className="h-3 w-3 text-emerald-400" />
-                DXF 1:1
-              </button>
-            </>
-          )}
-        </div>
+        )}
       </div>
     </header>
   );

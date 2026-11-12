@@ -39,7 +39,7 @@ export function TopBar({ onOpenExport }: { onOpenExport: () => void }) {
           <div className="w-6 h-6 rounded bg-sky-600/20 border border-sky-500/40 flex items-center justify-center text-sky-400">
             <Box className="w-3.5 h-3.5" />
           </div>
-          <span>PANEL PRO</span>
+          <span>PanelFlow</span>
           <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-800 text-zinc-400 uppercase tracking-wider">
             CAD Phase 1
           </span>

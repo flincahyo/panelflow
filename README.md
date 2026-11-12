@@ -1,4 +1,4 @@
-# Panel Pro — Web-Based 3D Electrical Panel Layout & CAD Engineering
+# PanelFlow — Web-Based 3D Electrical Panel Layout & CAD Engineering (.PFLOW)
 
 Web software untuk merancang tata letak panel kontrol listrik industri berbasis 3D/2D dengan dukungan impor file CAD komponen (STEP/STP/DXF/GLB) dan konversi satuan fleksibel (`mm`, `cm`, `m`).
 

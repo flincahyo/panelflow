@@ -6,7 +6,9 @@ import {
   Hand,
   Maximize2,
   MousePointer2,
+  Redo2,
   Ruler,
+  Undo2,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -27,6 +29,7 @@ import { usePanelStore } from "@/store/usePanelStore";
 import type {
   CustomCadAsset,
   DinRail,
+  GridSnapMm,
   PlacedComponent,
   WireColorCode,
   WireDuct,
@@ -530,6 +533,11 @@ export function Panel2DCanvas() {
   const updateRail = usePanelStore((s) => s.updateRail);
   const updateDuct = usePanelStore((s) => s.updateDuct);
   const addWire = usePanelStore((s) => s.addWire);
+  const setGridSnapMm = usePanelStore((s) => s.setGridSnapMm);
+  const undo = usePanelStore((s) => s.undo);
+  const redo = usePanelStore((s) => s.redo);
+  const canUndo = usePanelStore((s) => s.canUndo);
+  const canRedo = usePanelStore((s) => s.canRedo);
 
   // Camera state: zoom (px per mm), pan (px offset of world origin (0,0) from top-left of container)
   const [zoom, setZoom] = useState(1.1);
@@ -873,7 +881,7 @@ export function Panel2DCanvas() {
   return (
     <div
       ref={containerRef}
-      className="relative h-full w-full overflow-hidden bg-[#e2e8f0] select-none"
+      className="relative h-full w-full overflow-hidden bg-[#090b10] select-none"
       onWheel={handleWheel}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -889,14 +897,14 @@ export function Panel2DCanvas() {
       }}
     >
       {/* Top Engineering Ruler */}
-      <div className="pointer-events-none absolute top-0 right-0 left-6 z-20 h-6 overflow-hidden border-b border-slate-300 bg-slate-100/95 font-mono text-[9px] text-slate-600">
+      <div className="pointer-events-none absolute top-0 right-0 left-6 z-20 h-6 overflow-hidden border-b border-white/10 bg-[#0c0e14]/90 font-mono text-[9px] text-slate-400 backdrop-blur-md">
         {xTicks.map((xMm) => {
           const left = pan.x + xMm * zoom - 24;
           return (
             <div
               key={xMm}
               style={{ transform: `translateX(${left}px)` }}
-              className="absolute top-0 bottom-0 border-l border-slate-400 pl-1"
+              className="absolute top-0 bottom-0 border-l border-white/10 pl-1"
             >
               {xMm}
             </div>
@@ -905,14 +913,14 @@ export function Panel2DCanvas() {
       </div>
 
       {/* Left Engineering Ruler */}
-      <div className="pointer-events-none absolute top-6 bottom-0 left-0 z-20 w-6 overflow-hidden border-r border-slate-300 bg-slate-100/95 font-mono text-[9px] text-slate-600">
+      <div className="pointer-events-none absolute top-6 bottom-0 left-0 z-20 w-6 overflow-hidden border-r border-white/10 bg-[#0c0e14]/90 font-mono text-[9px] text-slate-400 backdrop-blur-md">
         {yTicks.map((yMm) => {
           const top = pan.y - yMm * zoom - 24;
           return (
             <div
               key={yMm}
               style={{ transform: `translateY(${top}px)` }}
-              className="absolute right-0 left-0 border-t border-slate-400 pt-0.5 text-center"
+              className="absolute right-0 left-0 border-t border-white/10 pt-0.5 text-center"
             >
               {yMm}
             </div>
@@ -921,20 +929,20 @@ export function Panel2DCanvas() {
       </div>
 
       {/* Corner Origin Badge */}
-      <div className="pointer-events-none absolute top-0 left-0 z-30 flex h-6 w-6 items-center justify-center border-r border-b border-slate-300 bg-slate-200 font-mono text-[8px] font-bold text-slate-700">
+      <div className="pointer-events-none absolute top-0 left-0 z-30 flex h-6 w-6 items-center justify-center border-r border-b border-white/10 bg-[#111318] font-mono text-[8px] font-bold text-slate-300">
         mm
       </div>
 
-      {/* 2D Floating Toolbar (Tools & Wire Drafter) */}
-      <div className="absolute top-9 left-9 z-20 flex flex-wrap items-center gap-2 rounded-md border border-slate-300 bg-white/95 px-2.5 py-1.5 shadow-sm backdrop-blur">
-        <div className="flex rounded border border-slate-200 bg-slate-100 p-0.5">
+      {/* Top Floating Pill Toolbar (Centered ala RelayFlow) */}
+      <div className="absolute top-9 left-1/2 -translate-x-1/2 z-20 flex max-w-[94%] flex-wrap items-center gap-2 rounded-full border border-white/10 bg-[#171a21]/95 px-3 py-1.5 shadow-2xl backdrop-blur-xl">
+        <div className="flex items-center rounded-full border border-white/10 bg-[#0c0e14] p-0.5">
           <button
             type="button"
             onClick={() => setCanvasTool2D("select")}
-            className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium ${
+            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
               canvasTool2D === "select"
-                ? "bg-sky-600 text-white"
-                : "text-slate-600 hover:text-slate-900"
+                ? "bg-white text-black font-semibold shadow-xs"
+                : "text-slate-400 hover:text-slate-200"
             }`}
             title="Select & Move (Click & Drag)"
           >
@@ -944,10 +952,10 @@ export function Panel2DCanvas() {
           <button
             type="button"
             onClick={() => setCanvasTool2D("wire")}
-            className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium ${
+            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
               canvasTool2D === "wire"
-                ? "bg-sky-600 text-white"
-                : "text-slate-600 hover:text-slate-900"
+                ? "bg-white text-black font-semibold shadow-xs"
+                : "text-slate-400 hover:text-slate-200"
             }`}
             title="Wire Connection Tool (Click Pin A -> Pin B)"
           >
@@ -957,10 +965,10 @@ export function Panel2DCanvas() {
           <button
             type="button"
             onClick={() => setCanvasTool2D("measure")}
-            className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium ${
+            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
               canvasTool2D === "measure"
-                ? "bg-sky-600 text-white"
-                : "text-slate-600 hover:text-slate-900"
+                ? "bg-white text-black font-semibold shadow-xs"
+                : "text-slate-400 hover:text-slate-200"
             }`}
             title="Measure Dimension Tool (Click Point A -> Point B, Esc to clear)"
           >
@@ -970,10 +978,10 @@ export function Panel2DCanvas() {
           <button
             type="button"
             onClick={() => setCanvasTool2D("pan")}
-            className={`flex items-center gap-1 rounded px-2 py-1 text-[11px] font-medium ${
+            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
               canvasTool2D === "pan"
-                ? "bg-sky-600 text-white"
-                : "text-slate-600 hover:text-slate-900"
+                ? "bg-white text-black font-semibold shadow-xs"
+                : "text-slate-400 hover:text-slate-200"
             }`}
             title="Pan Canvas (or Space + Drag)"
           >
@@ -982,19 +990,59 @@ export function Panel2DCanvas() {
           </button>
         </div>
 
+        {/* Undo / Redo in Toolbar */}
+        <div className="flex items-center rounded-full border border-white/10 bg-[#0c0e14] p-0.5">
+          <button
+            type="button"
+            onClick={undo}
+            disabled={!canUndo}
+            title="Undo (Ctrl+Z)"
+            className="flex items-center rounded-full p-1 text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            <Undo2 className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={redo}
+            disabled={!canRedo}
+            title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
+            className="flex items-center rounded-full p-1 text-slate-300 hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            <Redo2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {/* Grid Snap Selector Pill */}
+        <div className="flex items-center rounded-full border border-white/10 bg-[#0c0e14] p-0.5">
+          {([5, 10, 25] as GridSnapMm[]).map((snap) => (
+            <button
+              key={snap}
+              type="button"
+              onClick={() => setGridSnapMm(snap)}
+              className={`rounded-full px-2 py-0.5 font-mono text-[10px] transition-all ${
+                gridSnapMm === snap
+                  ? "bg-white font-bold text-black shadow-xs"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              {snap}mm
+            </button>
+          ))}
+        </div>
+
         {/* Wire Options when Wire Tool Active */}
         {canvasTool2D === "wire" && (
-          <div className="flex items-center gap-2 border-l border-slate-200 pl-2">
+          <div className="flex items-center gap-1.5 border-l border-white/10 pl-2">
             <div className="flex items-center gap-1">
               {WIRE_COLORS.map((wc) => (
                 <button
                   key={wc.code}
                   type="button"
                   onClick={() => setActiveWireColor(wc.code)}
-                  className={`flex items-center gap-1 rounded border px-1.5 py-0.5 font-mono text-[10px] ${
+                  className={`flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[10px] transition-all ${
                     activeWireColor === wc.code
-                      ? "border-slate-800 bg-slate-800 text-white"
-                      : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                      ? "border-white bg-white/20 text-white font-bold"
+                      : "border-white/10 bg-[#0c0e14] text-slate-400 hover:text-slate-200"
                   }`}
                 >
                   <span
@@ -1008,7 +1056,7 @@ export function Panel2DCanvas() {
             <select
               value={activeWireGauge}
               onChange={(e) => setActiveWireGauge(e.target.value)}
-              className="rounded border border-slate-300 bg-white px-1.5 py-0.5 font-mono text-[10px] text-slate-700"
+              className="rounded-full border border-white/10 bg-[#0c0e14] px-2 py-0.5 font-mono text-[10px] text-slate-200 outline-none"
             >
               <option value="0.75">0.75 mm² (Ø2.4)</option>
               <option value="1.0">1.0 mm² (Ø2.7)</option>
@@ -1020,87 +1068,97 @@ export function Panel2DCanvas() {
               <option value="16.0">16.0 mm² (Ø8.0)</option>
             </select>
             {activeWireStartPin && (
-              <span className="font-mono text-[10px] font-semibold text-amber-600">
-                Select target pin... (Esc to cancel)
+              <span className="font-mono text-[10px] font-semibold text-amber-400 animate-pulse">
+                Click target pin...
               </span>
             )}
           </div>
         )}
 
         {canvasTool2D === "measure" && (
-          <div className="flex items-center gap-2 border-l border-slate-200 pl-2">
-            <span className="font-mono text-[10px] font-semibold text-sky-700">
+          <div className="flex items-center gap-2 border-l border-white/10 pl-2">
+            <span className="font-mono text-[10px] font-semibold text-sky-400">
               {!measureStart
-                ? "Click start point A"
+                ? "Click point A"
                 : !measureEnd
-                ? "Click end point B (Esc to cancel)"
-                : "Click to measure again (Esc to clear)"}
+                ? "Click point B"
+                : "Measured (Esc clear)"}
             </span>
           </div>
         )}
 
         {(collisionReport.overlappingIds.size > 0 ||
           collisionReport.outOfBoundsIds.size > 0) && (
-          <div className="flex items-center gap-1.5 border-l border-slate-200 pl-2">
-            <span className="rounded bg-rose-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-rose-700">
+          <div className="flex items-center gap-1.5 border-l border-white/10 pl-2">
+            <span className="rounded-full border border-rose-500/40 bg-rose-950/80 px-2 py-0.5 font-mono text-[10px] font-semibold text-rose-300">
               {collisionReport.overlappingIds.size > 0 &&
                 `${collisionReport.overlapPairs.length} overlap`}
               {collisionReport.overlappingIds.size > 0 &&
                 collisionReport.outOfBoundsIds.size > 0 &&
                 " · "}
               {collisionReport.outOfBoundsIds.size > 0 &&
-                `${collisionReport.outOfBoundsIds.size} out-of-bounds`}
-            </span>
-          </div>
-        )}
-
-        {isPinMarkingMode && activeMarkingAssetId && (
-          <div className="flex items-center gap-2 border-l border-slate-200 pl-2">
-            <span className="font-mono text-[10px] font-semibold text-amber-600">
-              Pin Marking Mode: Click on CAD asset to place pin
+                `${collisionReport.outOfBoundsIds.size} OOB`}
             </span>
           </div>
         )}
       </div>
 
-      {/* Zoom Controls (Bottom Right) */}
-      <div className="absolute right-4 bottom-4 z-20 flex items-center gap-1.5 rounded-md border border-slate-300 bg-white/95 px-2 py-1 shadow-sm">
-        <button
-          type="button"
-          onClick={() => setZoom((z) => Math.max(0.2, z / 1.2))}
-          className="rounded p-1 text-slate-600 hover:bg-slate-100"
-          title="Zoom Out"
-        >
-          <ZoomOut className="h-3.5 w-3.5" />
-        </button>
-        <span className="min-w-[44px] text-center font-mono text-[11px] font-medium text-slate-700">
-          {Math.round(zoom * 100)}%
-        </span>
-        <button
-          type="button"
-          onClick={() => setZoom((z) => Math.min(8, z * 1.2))}
-          className="rounded p-1 text-slate-600 hover:bg-slate-100"
-          title="Zoom In"
-        >
-          <ZoomIn className="h-3.5 w-3.5" />
-        </button>
-        <button
-          type="button"
-          onClick={fitToView}
-          className="rounded p-1 text-slate-600 hover:bg-slate-100"
-          title="Fit Sheet to View"
-        >
-          <Maximize2 className="h-3.5 w-3.5" />
-        </button>
+      {/* Bottom Floating Status Pills (Senada RelayFlow) */}
+      {/* Bottom Left / Center: Cursor & Snap Coordinates + Zoom Controls */}
+      <div className="absolute bottom-3 left-9 z-20 flex flex-wrap items-center gap-2">
+        <div className="rounded-full border border-white/10 bg-[#171a21]/95 px-3 py-1 font-mono text-[11px] tabular-nums text-slate-300 shadow-xl backdrop-blur-xl">
+          {cursorWorld
+            ? `X: ${Math.round(cursorWorld.xMm)}mm | Y: ${Math.round(
+                cursorWorld.yMm
+              )}mm | Snap: ${gridSnapMm}mm`
+            : `Snap: ${gridSnapMm}mm`}
+        </div>
+
+        <div className="flex items-center gap-1 rounded-full border border-white/10 bg-[#171a21]/95 p-0.5 shadow-xl backdrop-blur-xl">
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.max(0.2, z / 1.2))}
+            className="rounded-full p-1 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+            title="Zoom Out"
+          >
+            <ZoomOut className="h-3.5 w-3.5" />
+          </button>
+          <span className="min-w-[42px] text-center font-mono text-[11px] font-medium tabular-nums text-slate-200">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button
+            type="button"
+            onClick={() => setZoom((z) => Math.min(8, z * 1.2))}
+            className="rounded-full p-1 text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+            title="Zoom In"
+          >
+            <ZoomIn className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={fitToView}
+            className="flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] text-slate-400 hover:bg-white/10 hover:text-white transition-colors"
+            title="Fit Sheet to View"
+          >
+            <Maximize2 className="h-3 w-3" />
+            Fit
+          </button>
+        </div>
       </div>
 
-      {/* Cursor Coordinates Status (Bottom Left) */}
-      <div className="pointer-events-none absolute bottom-4 left-9 z-20 rounded border border-slate-300 bg-white/90 px-2.5 py-1 font-mono text-[11px] text-slate-700 shadow-xs">
-        {cursorWorld
-          ? `X: ${Math.round(cursorWorld.xMm)} mm | Y: ${Math.round(
-              cursorWorld.yMm
-            )} mm | Snap: ${gridSnapMm} mm`
-          : `Snap: ${gridSnapMm} mm`}
+      {/* Bottom Right: Parts & Wires Count & Collisions Pill */}
+      <div className="pointer-events-none absolute right-4 bottom-3 z-20 flex items-center gap-2 rounded-full border border-white/10 bg-[#171a21]/95 px-3 py-1 font-mono text-[11px] text-slate-300 shadow-xl backdrop-blur-xl">
+        <span>Parts: {components.length + cadAssets.length}</span>
+        <span className="text-white/20">|</span>
+        <span>Wires: {wires.length}</span>
+        {collisionReport.overlappingIds.size > 0 && (
+          <>
+            <span className="text-white/20">|</span>
+            <span className="text-rose-400 font-semibold">
+              {collisionReport.overlapPairs.length} Overlaps
+            </span>
+          </>
+        )}
       </div>
 
       {/* Main Interactive SVG Canvas */}
@@ -1121,7 +1179,7 @@ export function Panel2DCanvas() {
             height={gridSnapMm}
             patternUnits="userSpaceOnUse"
           >
-            <circle cx={0} cy={0} r={0.6} fill="#94a3b8" />
+            <circle cx={0} cy={0} r={0.7} fill="#161920" />
           </pattern>
           <pattern
             id="duct-hatch"
@@ -1130,7 +1188,7 @@ export function Panel2DCanvas() {
             patternTransform="rotate(45 0 0)"
             patternUnits="userSpaceOnUse"
           >
-            <line x1="0" y1="0" x2="0" y2="6" stroke="#94a3b8" strokeWidth="1" />
+            <line x1="0" y1="0" x2="0" y2="6" stroke="#252932" strokeWidth="1" />
           </pattern>
           <marker
             id="measure-arrow"
@@ -1141,22 +1199,22 @@ export function Panel2DCanvas() {
             markerHeight="5"
             orient="auto-start-reverse"
           >
-            <path d="M 0 1 L 10 5 L 0 9 z" fill="#0284c7" />
+            <path d="M 0 1 L 10 5 L 0 9 z" fill="#ffffff" />
           </marker>
         </defs>
 
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
-          {/* Eplan Drawing Sheet (ISO Plot Frame) */}
+          {/* Technical Drawing Sheet Outline (Deep Obsidian Dark CAD) */}
           <g>
             <rect
               x={-sheetW / 2}
               y={-sheetH / 2}
               width={sheetW}
               height={sheetH}
-              fill="#ffffff"
-              stroke="#0f172a"
+              fill="#090b10"
+              stroke="#1a1e27"
               strokeWidth={1.2}
-              filter="drop-shadow(0 4px 12px rgba(0,0,0,0.12))"
+              filter="drop-shadow(0 8px 24px rgba(0,0,0,0.6))"
             />
             <rect
               x={-sheetW / 2 + 8}
@@ -1164,12 +1222,12 @@ export function Panel2DCanvas() {
               width={sheetW - 16}
               height={sheetH - 16}
               fill="none"
-              stroke="#64748b"
-              strokeWidth={0.4}
+              stroke="#161920"
+              strokeWidth={0.5}
             />
           </g>
 
-          {/* Backplate Boundary & Engineering Grid */}
+          {/* Backplate Boundary & Technical Hairline Grid */}
           <g>
             <rect
               x={-plateW / 2}
@@ -1177,7 +1235,7 @@ export function Panel2DCanvas() {
               width={plateW}
               height={plateH}
               fill="url(#grid-dots)"
-              stroke="#0f172a"
+              stroke="#252932"
               strokeWidth={1.4}
             />
             {/* Backplate Dimension Annotations */}
@@ -1186,7 +1244,7 @@ export function Panel2DCanvas() {
               y={-plateH / 2 - 8}
               fontSize={8}
               fontFamily="monospace"
-              fill="#334155"
+              fill="#64748b"
               textAnchor="middle"
             >
               MOUNTING PLATE: {plateW} x {plateH} mm
@@ -1747,8 +1805,8 @@ export function Panel2DCanvas() {
               y={tbY}
               width={tbW}
               height={tbH}
-              fill="#ffffff"
-              stroke="#0f172a"
+              fill="#0c0e14"
+              stroke="#252932"
               strokeWidth={0.9}
             />
             <line
@@ -1756,7 +1814,7 @@ export function Panel2DCanvas() {
               y1={tbY + 15}
               x2={tbX + tbW}
               y2={tbY + 15}
-              stroke="#0f172a"
+              stroke="#252932"
               strokeWidth={0.5}
             />
             <line
@@ -1764,7 +1822,7 @@ export function Panel2DCanvas() {
               y1={tbY + 30}
               x2={tbX + tbW}
               y2={tbY + 30}
-              stroke="#0f172a"
+              stroke="#252932"
               strokeWidth={0.5}
             />
             <line
@@ -1772,7 +1830,7 @@ export function Panel2DCanvas() {
               y1={tbY}
               x2={tbX + 135}
               y2={tbY + tbH}
-              stroke="#0f172a"
+              stroke="#252932"
               strokeWidth={0.5}
             />
             <line
@@ -1780,7 +1838,7 @@ export function Panel2DCanvas() {
               y1={tbY + 15}
               x2={tbX + 190}
               y2={tbY + tbH}
-              stroke="#0f172a"
+              stroke="#252932"
               strokeWidth={0.5}
             />
             <text
@@ -1789,7 +1847,7 @@ export function Panel2DCanvas() {
               fontSize={6}
               fontFamily="sans-serif"
               fontWeight="bold"
-              fill="#0f172a"
+              fill="#f1f5f9"
             >
               PROJECT: {titleBlock.projectName}
             </text>
@@ -1798,7 +1856,7 @@ export function Panel2DCanvas() {
               y={tbY + 24}
               fontSize={5.5}
               fontFamily="sans-serif"
-              fill="#334155"
+              fill="#94a3b8"
             >
               DRAWER: {titleBlock.drawer}
             </text>
@@ -1809,14 +1867,14 @@ export function Panel2DCanvas() {
               fontFamily="sans-serif"
               fill="#64748b"
             >
-              EPLAN PRO PANEL 2D MOUNTING LAYOUT
+              PANELFLOW 2D MOUNTING LAYOUT (.PFLOW)
             </text>
             <text
               x={tbX + 140}
               y={tbY + 10}
               fontSize={5.5}
               fontFamily="sans-serif"
-              fill="#334155"
+              fill="#94a3b8"
             >
               DATE: {titleBlock.date}
             </text>
@@ -1825,7 +1883,7 @@ export function Panel2DCanvas() {
               y={tbY + 24}
               fontSize={5.5}
               fontFamily="sans-serif"
-              fill="#334155"
+              fill="#94a3b8"
             >
               SCALE: {titleBlock.scale}
             </text>
@@ -1834,7 +1892,7 @@ export function Panel2DCanvas() {
               y={tbY + 39}
               fontSize={5.5}
               fontFamily="sans-serif"
-              fill="#334155"
+              fill="#94a3b8"
             >
               REV: {titleBlock.rev}
             </text>
@@ -1844,7 +1902,7 @@ export function Panel2DCanvas() {
               fontSize={5.5}
               fontFamily="sans-serif"
               fontWeight="bold"
-              fill="#0f172a"
+              fill="#cbd5e1"
             >
               SHEET:
             </text>
@@ -1854,7 +1912,7 @@ export function Panel2DCanvas() {
               fontSize={6.5}
               fontFamily="monospace"
               fontWeight="bold"
-              fill="#0284c7"
+              fill="#ffffff"
             >
               {titleBlock.sheetNo}
             </text>

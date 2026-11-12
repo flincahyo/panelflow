@@ -45,12 +45,12 @@ export function SheetTabs() {
       case "schematic":
         return <FileCode2 className="h-3.5 w-3.5 text-emerald-400" />;
       default:
-        return <FileCheck2 className="h-3.5 w-3.5 text-sky-400" />;
+        return <FileCheck2 className="h-3.5 w-3.5 text-slate-300" />;
     }
   };
 
   return (
-    <div className="relative flex h-9 w-full select-none items-center justify-between border-t border-slate-800 bg-[#0b0e14] px-2 text-xs">
+    <div className="relative flex h-9 w-full select-none items-center justify-between border-t border-white/10 bg-[#0c0e14] px-2.5 text-xs">
       <div className="flex items-center space-x-1 overflow-x-auto no-scrollbar py-1">
         {sheets.map((sheet) => {
           const isActive = sheet.id === activeSheetId;
@@ -60,10 +60,10 @@ export function SheetTabs() {
             <div
               key={sheet.id}
               onClick={() => setActiveSheet(sheet.id)}
-              className={`group flex items-center gap-1.5 rounded px-2.5 py-1 transition-all cursor-pointer border ${
+              className={`group flex items-center gap-1.5 rounded-lg px-2.5 py-1 transition-all cursor-pointer border ${
                 isActive
-                  ? "border-sky-500/60 bg-sky-950/40 text-slate-100 shadow-sm"
-                  : "border-transparent bg-slate-900/40 text-slate-400 hover:border-slate-800 hover:bg-slate-800/40 hover:text-slate-300"
+                  ? "border-white/15 bg-[#171a21] text-white shadow-xs"
+                  : "border-transparent bg-transparent text-slate-400 hover:bg-white/5 hover:text-slate-200"
               }`}
             >
               {getSheetIcon(sheet.sheetType)}
@@ -79,7 +79,7 @@ export function SheetTabs() {
                     if (e.key === "Enter") finishRename();
                     if (e.key === "Escape") setEditingSheetId(null);
                   }}
-                  className="rounded bg-slate-950 px-1 py-0.5 font-mono text-[11px] text-white outline-none ring-1 ring-sky-500"
+                  className="rounded bg-[#090b10] px-1.5 py-0.5 font-mono text-[11px] text-white outline-none ring-1 ring-white/30"
                 />
               ) : (
                 <span
@@ -94,8 +94,7 @@ export function SheetTabs() {
                 </span>
               )}
 
-              {/* Action buttons on tab */}
-              <div className="flex items-center space-x-0.5 opacity-60 group-hover:opacity-100">
+              <div className="flex items-center space-x-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   type="button"
                   title="Rename Sheet"
@@ -103,7 +102,7 @@ export function SheetTabs() {
                     e.stopPropagation();
                     startRename(sheet.id, sheet.name);
                   }}
-                  className="rounded p-0.5 hover:bg-slate-700/60 text-slate-400 hover:text-slate-200"
+                  className="rounded p-0.5 hover:bg-white/10 text-slate-400 hover:text-white"
                 >
                   <Edit2 className="h-2.5 w-2.5" />
                 </button>
@@ -114,7 +113,7 @@ export function SheetTabs() {
                     e.stopPropagation();
                     duplicateSheet(sheet.id);
                   }}
-                  className="rounded p-0.5 hover:bg-slate-700/60 text-slate-400 hover:text-slate-200"
+                  className="rounded p-0.5 hover:bg-white/10 text-slate-400 hover:text-white"
                 >
                   <Copy className="h-2.5 w-2.5" />
                 </button>
@@ -136,19 +135,18 @@ export function SheetTabs() {
           );
         })}
 
-        {/* Add sheet button */}
         <div className="relative">
           <button
             type="button"
             onClick={() => setShowTypeMenu((v) => !v)}
-            className="flex items-center gap-1 rounded border border-dashed border-slate-700 bg-slate-900/40 px-2 py-1 text-[11px] font-medium text-slate-300 hover:border-sky-500 hover:bg-sky-950/20 hover:text-sky-400"
+            className="flex items-center gap-1 rounded-lg border border-dashed border-white/15 bg-[#171a21]/60 px-2 py-1 text-[11px] font-medium text-slate-300 hover:border-white/30 hover:bg-[#171a21] hover:text-white transition-colors"
           >
             <Plus className="h-3 w-3" /> New Sheet
           </button>
 
           {showTypeMenu && (
             <div
-              className="absolute bottom-9 left-0 z-50 w-44 rounded-md border border-slate-800 bg-[#161b26] py-1 shadow-xl ring-1 ring-black/40 text-xs"
+              className="absolute bottom-9 left-0 z-50 w-48 rounded-xl border border-white/10 bg-[#111318]/98 p-1 shadow-2xl backdrop-blur-xl text-xs"
               onMouseLeave={() => setShowTypeMenu(false)}
             >
               <button
@@ -157,7 +155,7 @@ export function SheetTabs() {
                   addSheet("mounting-plate");
                   setShowTypeMenu(false);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-slate-200 hover:bg-sky-600 hover:text-white"
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-slate-200 hover:bg-white/10 hover:text-white"
               >
                 <FileCheck2 className="h-3.5 w-3.5 text-sky-400" />
                 Mounting Plate (2D/3D)
@@ -168,7 +166,7 @@ export function SheetTabs() {
                   addSheet("door-cutout");
                   setShowTypeMenu(false);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-slate-200 hover:bg-sky-600 hover:text-white"
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-slate-200 hover:bg-white/10 hover:text-white"
               >
                 <FileSpreadsheet className="h-3.5 w-3.5 text-amber-400" />
                 Door Cutout Layout
@@ -179,7 +177,7 @@ export function SheetTabs() {
                   addSheet("schematic");
                   setShowTypeMenu(false);
                 }}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-slate-200 hover:bg-sky-600 hover:text-white"
+                className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-slate-200 hover:bg-white/10 hover:text-white"
               >
                 <FileCode2 className="h-3.5 w-3.5 text-emerald-400" />
                 Schematic Diagram
@@ -189,8 +187,9 @@ export function SheetTabs() {
         </div>
       </div>
 
-      <div className="hidden font-mono text-[10px] text-slate-500 sm:block">
-        Sheet {sheets.findIndex((s) => s.id === activeSheetId) + 1} of {sheets.length}
+      <div className="hidden font-mono text-[10px] tabular-nums text-slate-500 sm:block">
+        Sheet {sheets.findIndex((s) => s.id === activeSheetId) + 1} of{" "}
+        {sheets.length}
       </div>
     </div>
   );
