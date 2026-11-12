@@ -125,6 +125,7 @@ export interface WireConnection {
   fromPinId: string;
   toComponentId: string;
   toPinId: string;
+  waypoints?: Array<{ xMm: number; yMm: number }>;
 }
 
 export interface TitleBlockMeta {
@@ -150,10 +151,12 @@ export interface PanelSheet {
   titleBlock: TitleBlockMeta;
 }
 
-export type SelectionTarget =
+export type SelectedItem =
   | { kind: "rail"; id: string }
   | { kind: "duct"; id: string }
   | { kind: "component"; id: string }
   | { kind: "cad"; id: string }
-  | { kind: "wire"; id: string }
-  | null;
+  | { kind: "wire"; id: string };
+
+export type SelectionTarget = SelectedItem | null;
+export type SelectedTarget = SelectedItem;

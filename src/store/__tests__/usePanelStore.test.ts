@@ -33,6 +33,7 @@ describe("usePanelStore - Default 2D & Context Menu Actions", () => {
       wires: clonedSheet.wires,
       titleBlock: clonedSheet.titleBlock,
       selected: null,
+      selectedIds: [],
     });
   });
 
@@ -235,5 +236,106 @@ describe("usePanelStore - Default 2D & Context Menu Actions", () => {
 
     store.toggleTheme();
     expect(usePanelStore.getState().theme).toBe("light");
+  });
+
+  it("supports multi-selection via setSelectedIds, toggleSelectId, and clearSelection", () => {
+    const store = usePanelStore.getState();
+
+    store.setSelectedIds([
+      { kind: "component", id: "comp-1" },
+      { kind: "component", id: "comp-2" },
+    ]);
+    expect(usePanelStore.getState().selectedIds).toHaveLength(2);
+    expect(usePanelStore.getState().selected).toEqual({ kind: "component", id: "comp-1" });
+
+    // Shift+Click toggle adds comp-3
+    store.toggleSelectId({ kind: "component", id: "comp-3" });
+    expect(usePanelStore.getState().selectedIds).toHaveLength(3);
+
+    // Shift+Click toggle removes comp-2
+    store.toggleSelectId({ kind: "component", id: "comp-2" });
+    expect(usePanelStore.getState().selectedIds).toEqual([
+      { kind: "component", id: "comp-1" },
+      { kind: "component", id: "comp-3" },
+    ]);
+
+    store.clearSelection();
+    expect(usePanelStore.getState().selectedIds).toEqual([]);
+    expect(usePanelStore.getState().selected).toBeNull();
+  });
+
+  it("moves all selected items together with moveSelectedItems and clamps to backplate", () => {
+    const store = usePanelStore.getState();
+    const c1Before = store.components.find((c) => c.id === "comp-1")!;
+    const c3Before = store.components.find((c) => c.id === "comp-3")!;
+
+    store.setSelectedIds([
+      { kind: "component", id: "comp-1" },
+      { kind: "component", id: "comp-3" },
+    ]);
+
+    store.moveSelectedItems(30, -20);
+    const state = usePanelStore.getState();
+    const c1After = state.components.find((c) => c.id === "comp-1")!;
+    const c3After = state.components.find((c) => c.id === "comp-3")!;
+    const c2After = state.components.find((c) => c.id === "comp-2")!;
+
+    expect(c1After.xMm).toBe(c1Before.xMm + 30);
+    expect(c1After.yMm).toBe(c1Before.yMm - 20);
+    expect(c3After.xMm).toBe(c3Before.xMm + 30);
+    expect(c3After.yMm).toBe(c3Before.yMm - 20);
+    // Unselected component stays put
+    expect(c2After.xMm).toBe(-100);
+  });
+
+  it("deletes all selected items and connected wires in one undoable batch", () => {
+    const store = usePanelStore.getState();
+    const initialCompCount = store.components.length;
+    expect(store.wires.length).toBeGreaterThan(0);
+
+    store.setSelectedIds([
+      { kind: "component", id: "comp-1" },
+      { kind: "component", id: "comp-3" },
+    ]);
+
+    store.deleteSelectedItems();
+    let state = usePanelStore.getState();
+    expect(state.components.length).toBe(initialCompCount - 2);
+    expect(state.components.find((c) => c.id === "comp-1")).toBeUndefined();
+    expect(state.components.find((c) => c.id === "comp-3")).toBeUndefined();
+    // Both wire-1 (from comp-1) and wire-2 (from comp-3) should be removed
+    expect(state.wires).toHaveLength(0);
+    expect(state.selectedIds).toEqual([]);
+    expect(state.selected).toBeNull();
+    expect(state.canUndo).toBe(true);
+
+    // Undo restores both components and their wires
+    state.undo();
+    state = usePanelStore.getState();
+    expect(state.components.length).toBe(initialCompCount);
+    expect(state.wires.length).toBeGreaterThan(0);
+  });
+
+  it("aligns selected items (left, center, top)", () => {
+    const store = usePanelStore.getState();
+    store.setSelectedIds([
+      { kind: "component", id: "comp-1" },
+      { kind: "component", id: "comp-4" },
+    ]);
+
+    store.alignSelectedItems("left");
+    let state = usePanelStore.getState();
+    const c1 = state.components.find((c) => c.id === "comp-1")!;
+    const c4 = state.components.find((c) => c.id === "comp-4")!;
+    expect(c1.xMm - c1.widthMm / 2).toBeCloseTo(c4.xMm - c4.widthMm / 2, 1);
+
+    store.alignSelectedItems("top");
+    state = usePanelStore.getState();
+    const c1Top = state.components.find((c) => c.id === "comp-1")!;
+    const c4Top = state.components.find((c) => c.id === "comp-4")!;
+    expect(c1Top.yMm + c1Top.heightMm / 2).toBeCloseTo(
+      c4Top.yMm + c4Top.heightMm / 2,
+      1
+    );
   });
 });

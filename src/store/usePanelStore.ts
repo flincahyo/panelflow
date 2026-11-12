@@ -8,6 +8,7 @@ import {
   snapToGrid,
 } from "@/lib/snap";
 import { getBackplateDimensions } from "@/lib/template-export";
+import { resolvePinWorldPoint, routeWireThroughDucts } from "@/lib/wire-router";
 import type {
   CanvasTool2D,
   ComponentTemplateId,
@@ -23,6 +24,7 @@ import type {
   PlateConfig,
   RotationDeg,
   SelectionTarget,
+  SelectedTarget,
   SheetType,
   TitleBlockMeta,
   ViewportMode,
@@ -306,7 +308,10 @@ interface PanelStore {
   activeWireColor: WireColorCode;
   activeWireGauge: string;
   activeWireStartPin: { componentId: string; pinId: string } | null;
+  autoRouteDuctsEnabled: boolean;
+  setAutoRouteDuctsEnabled: (enabled: boolean) => void;
   selected: SelectionTarget;
+  selectedIds: SelectedTarget[];
   isPinMarkingMode: boolean;
   activeMarkingAssetId: string | null;
   inspectorFocusNonce: number;
@@ -346,9 +351,18 @@ interface PanelStore {
   addWire: (wire: Omit<WireConnection, "id">) => void;
   updateWire: (id: string, partial: Partial<WireConnection>) => void;
   removeWire: (id: string) => void;
+  autoRouteWire: (id: string) => void;
+  autoRouteAllWires: () => void;
 
   // Selection & Marking
   setSelected: (target: SelectionTarget) => void;
+  setSelectedIds: (targets: SelectedTarget[]) => void;
+  toggleSelectId: (target: SelectedTarget) => void;
+  clearSelection: () => void;
+  moveSelectedItems: (dxMm: number, dyMm: number) => void;
+  deleteSelectedItems: () => void;
+  alignSelectedItems: (mode: "left" | "center" | "top") => void;
+  pushUndoSnapshot: () => void;
   setPinMarkingMode: (enabled: boolean, assetId?: string | null) => void;
 
   // Rails & Ducts
@@ -436,7 +450,10 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   activeWireColor: "R",
   activeWireGauge: "2.5",
   activeWireStartPin: null,
+  autoRouteDuctsEnabled: true,
+  setAutoRouteDuctsEnabled: (enabled) => set({ autoRouteDuctsEnabled: enabled }),
   selected: null,
+  selectedIds: [],
   isPinMarkingMode: false,
   activeMarkingAssetId: null,
   inspectorFocusNonce: 0,
@@ -494,6 +511,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     set({
       activeSheetId: sheetId,
       selected: null,
+      selectedIds: [],
       activeWireStartPin: null,
       isPinMarkingMode: false,
       activeMarkingAssetId: null,
@@ -528,6 +546,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
       sheets: updated,
       activeSheetId: id,
       selected: null,
+      selectedIds: [],
       activeWireStartPin: null,
       canUndo: true,
       canRedo: false,
@@ -592,6 +611,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
       sheets: updated,
       activeSheetId: newId,
       selected: null,
+      selectedIds: [],
       activeWireStartPin: null,
       canUndo: true,
       canRedo: false,
@@ -616,6 +636,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
       sheets: updated,
       activeSheetId: nextActiveId,
       selected: null,
+      selectedIds: [],
       activeWireStartPin: null,
       canUndo: true,
       canRedo: false,
@@ -642,7 +663,286 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   setActiveWireStartPin: (pin) => set({ activeWireStartPin: pin }),
   setDisplayUnit: (unit) => set({ displayUnit: unit }),
   setGridSnapMm: (snap) => set({ gridSnapMm: snap }),
-  setSelected: (target) => set({ selected: target }),
+  setSelected: (target) =>
+    set({
+      selected: target,
+      selectedIds: target ? [target] : [],
+    }),
+  setSelectedIds: (targets) =>
+    set({
+      selectedIds: targets,
+      selected: targets.length > 0 ? targets[0] : null,
+    }),
+  toggleSelectId: (target) => {
+    const { selectedIds } = get();
+    const exists = selectedIds.some((s) => s.id === target.id && s.kind === target.kind);
+    let next: SelectedTarget[];
+    if (exists) {
+      next = selectedIds.filter((s) => !(s.id === target.id && s.kind === target.kind));
+    } else {
+      next = [...selectedIds, target];
+    }
+    set({
+      selectedIds: next,
+      selected: next.length > 0 ? next[next.length - 1] : null,
+    });
+  },
+  clearSelection: () => set({ selected: null, selectedIds: [] }),
+
+  pushUndoSnapshot: () => {
+    const { sheets } = get();
+    pushHistory(sheets);
+    set({ canUndo: true, canRedo: false });
+  },
+
+  moveSelectedItems: (dxMm, dyMm) => {
+    const { sheets, activeSheetId, selectedIds, enclosure, plateConfig } = get();
+    if (selectedIds.length === 0 || (dxMm === 0 && dyMm === 0)) return;
+    const activeSheet = sheets.find((s) => s.id === activeSheetId);
+    if (!activeSheet) return;
+
+    const { widthMm: plateW, heightMm: plateH } = getBackplateDimensions(
+      enclosure,
+      plateConfig
+    );
+
+    const compIds = new Set(selectedIds.filter((s) => s.kind === "component").map((s) => s.id));
+    const cadIds = new Set(selectedIds.filter((s) => s.kind === "cad").map((s) => s.id));
+    const railIds = new Set(selectedIds.filter((s) => s.kind === "rail").map((s) => s.id));
+    const ductIds = new Set(selectedIds.filter((s) => s.kind === "duct").map((s) => s.id));
+
+    const nextComponents = activeSheet.components.map((c) => {
+      if (!compIds.has(c.id)) return c;
+      const dims = getRotatedDimensions(c.widthMm, c.heightMm, c.rotationDeg ?? 0);
+      const targetX = c.xMm + dxMm;
+      const targetY = c.yMm + dyMm;
+      const clamped = clampToBackplate(targetX, targetY, dims.widthMm, dims.heightMm, plateW, plateH);
+      return {
+        ...c,
+        xMm: clamped.xMm,
+        yMm: clamped.yMm,
+      };
+    });
+
+    const nextCadAssets = activeSheet.cadAssets.map((a) => {
+      if (!cadIds.has(a.id)) return a;
+      const dims = getRotatedDimensions(a.boundingBoxMm.w, a.boundingBoxMm.h, a.rotationDeg ?? 0);
+      const targetX = a.xMm + dxMm;
+      const targetY = a.yMm + dyMm;
+      const clamped = clampToBackplate(targetX, targetY, dims.widthMm, dims.heightMm, plateW, plateH);
+      return {
+        ...a,
+        xMm: clamped.xMm,
+        yMm: clamped.yMm,
+      };
+    });
+
+    const nextRails = activeSheet.rails.map((r) => {
+      if (!railIds.has(r.id)) return r;
+      const clamped = clampToBackplate(r.xMm + dxMm, r.yMm + dyMm, r.lengthMm, DIN_RAIL_HEIGHT_MM, plateW, plateH);
+      return {
+        ...r,
+        xMm: clamped.xMm,
+        yMm: clamped.yMm,
+      };
+    });
+
+    const nextDucts = activeSheet.ducts.map((d) => {
+      if (!ductIds.has(d.id)) return d;
+      const clamped = clampToBackplate(d.xMm + dxMm, d.yMm + dyMm, d.widthMm, d.heightMm, plateW, plateH);
+      return {
+        ...d,
+        xMm: clamped.xMm,
+        yMm: clamped.yMm,
+      };
+    });
+
+    const updated = sheets.map((s) =>
+      s.id === activeSheetId
+        ? {
+            ...s,
+            components: nextComponents,
+            cadAssets: nextCadAssets,
+            rails: nextRails,
+            ducts: nextDucts,
+          }
+        : s
+    );
+
+    const active = updated.find((s) => s.id === activeSheetId)!;
+    set({
+      sheets: updated,
+      ...syncActiveSheetProjection(active),
+    });
+  },
+
+  deleteSelectedItems: () => {
+    const { sheets, activeSheetId, selectedIds } = get();
+    if (selectedIds.length === 0) return;
+    pushHistory(sheets);
+    const activeSheet = sheets.find((s) => s.id === activeSheetId);
+    if (!activeSheet) return;
+
+    const compIds = new Set(selectedIds.filter((s) => s.kind === "component").map((s) => s.id));
+    const cadIds = new Set(selectedIds.filter((s) => s.kind === "cad").map((s) => s.id));
+    const railIds = new Set(selectedIds.filter((s) => s.kind === "rail").map((s) => s.id));
+    const ductIds = new Set(selectedIds.filter((s) => s.kind === "duct").map((s) => s.id));
+    const wireIds = new Set(selectedIds.filter((s) => s.kind === "wire").map((s) => s.id));
+
+    const nextComponents = activeSheet.components
+      .filter((c) => !compIds.has(c.id))
+      .map((c) => (c.railId && railIds.has(c.railId) ? { ...c, railId: null } : c));
+
+    const nextCadAssets = activeSheet.cadAssets.filter((a) => !cadIds.has(a.id));
+    const nextRails = activeSheet.rails.filter((r) => !railIds.has(r.id));
+    const nextDucts = activeSheet.ducts.filter((d) => !ductIds.has(d.id));
+
+    // Remove wires either explicitly selected or connected to deleted components/CAD assets
+    const nextWires = activeSheet.wires.filter(
+      (w) =>
+        !wireIds.has(w.id) &&
+        !compIds.has(w.fromComponentId) &&
+        !compIds.has(w.toComponentId) &&
+        !cadIds.has(w.fromComponentId) &&
+        !cadIds.has(w.toComponentId)
+    );
+
+    const updated = sheets.map((s) =>
+      s.id === activeSheetId
+        ? {
+            ...s,
+            components: nextComponents,
+            cadAssets: nextCadAssets,
+            rails: nextRails,
+            ducts: nextDucts,
+            wires: nextWires,
+          }
+        : s
+    );
+
+    const active = updated.find((s) => s.id === activeSheetId)!;
+    set({
+      sheets: updated,
+      selected: null,
+      selectedIds: [],
+      canUndo: true,
+      canRedo: false,
+      ...syncActiveSheetProjection(active),
+    });
+  },
+
+  alignSelectedItems: (mode: "left" | "center" | "top") => {
+    const { sheets, activeSheetId, selectedIds, enclosure, plateConfig } = get();
+    if (selectedIds.length < 2) return;
+    const activeSheet = sheets.find((s) => s.id === activeSheetId);
+    if (!activeSheet) return;
+
+    pushHistory(sheets);
+    const { widthMm: plateW, heightMm: plateH } = getBackplateDimensions(enclosure, plateConfig);
+
+    type ItemRef = {
+      id: string;
+      kind: "component" | "cad";
+      xMm: number;
+      yMm: number;
+      wMm: number;
+      hMm: number;
+      left: number;
+      center: number;
+      top: number;
+    };
+
+    const targets: ItemRef[] = [];
+    for (const sel of selectedIds) {
+      if (sel.kind === "component") {
+        const c = activeSheet.components.find((x) => x.id === sel.id);
+        if (c) {
+          const dims = getRotatedDimensions(c.widthMm, c.heightMm, c.rotationDeg ?? 0);
+          targets.push({
+            id: c.id,
+            kind: "component",
+            xMm: c.xMm,
+            yMm: c.yMm,
+            wMm: dims.widthMm,
+            hMm: dims.heightMm,
+            left: c.xMm - dims.widthMm / 2,
+            center: c.xMm,
+            top: c.yMm + dims.heightMm / 2,
+          });
+        }
+      } else if (sel.kind === "cad") {
+        const a = activeSheet.cadAssets.find((x) => x.id === sel.id);
+        if (a) {
+          const dims = getRotatedDimensions(a.boundingBoxMm.w, a.boundingBoxMm.h, a.rotationDeg ?? 0);
+          targets.push({
+            id: a.id,
+            kind: "cad",
+            xMm: a.xMm,
+            yMm: a.yMm,
+            wMm: dims.widthMm,
+            hMm: dims.heightMm,
+            left: a.xMm - dims.widthMm / 2,
+            center: a.xMm,
+            top: a.yMm + dims.heightMm / 2,
+          });
+        }
+      }
+    }
+
+    if (targets.length < 2) return;
+
+    const compPosMap = new Map<string, { x: number; y: number }>();
+    const cadPosMap = new Map<string, { x: number; y: number }>();
+
+    if (mode === "left") {
+      const minLeft = Math.min(...targets.map((t) => t.left));
+      for (const t of targets) {
+        const nextX = minLeft + t.wMm / 2;
+        const clamped = clampToBackplate(nextX, t.yMm, t.wMm, t.hMm, plateW, plateH);
+        if (t.kind === "component") compPosMap.set(t.id, { x: clamped.xMm, y: clamped.yMm });
+        else cadPosMap.set(t.id, { x: clamped.xMm, y: clamped.yMm });
+      }
+    } else if (mode === "center") {
+      const avgCenter = targets.reduce((sum, t) => sum + t.center, 0) / targets.length;
+      for (const t of targets) {
+        const clamped = clampToBackplate(avgCenter, t.yMm, t.wMm, t.hMm, plateW, plateH);
+        if (t.kind === "component") compPosMap.set(t.id, { x: clamped.xMm, y: clamped.yMm });
+        else cadPosMap.set(t.id, { x: clamped.xMm, y: clamped.yMm });
+      }
+    } else if (mode === "top") {
+      const maxTop = Math.max(...targets.map((t) => t.top));
+      for (const t of targets) {
+        const nextY = maxTop - t.hMm / 2;
+        const clamped = clampToBackplate(t.xMm, nextY, t.wMm, t.hMm, plateW, plateH);
+        if (t.kind === "component") compPosMap.set(t.id, { x: clamped.xMm, y: clamped.yMm });
+        else cadPosMap.set(t.id, { x: clamped.xMm, y: clamped.yMm });
+      }
+    }
+
+    const updated = sheets.map((s) => {
+      if (s.id !== activeSheetId) return s;
+      return {
+        ...s,
+        components: s.components.map((c) => {
+          const pos = compPosMap.get(c.id);
+          return pos ? { ...c, xMm: pos.x, yMm: pos.y } : c;
+        }),
+        cadAssets: s.cadAssets.map((a) => {
+          const pos = cadPosMap.get(a.id);
+          return pos ? { ...a, xMm: pos.x, yMm: pos.y } : a;
+        }),
+      };
+    });
+
+    const active = updated.find((s) => s.id === activeSheetId)!;
+    set({
+      sheets: updated,
+      canUndo: true,
+      canRedo: false,
+      ...syncActiveSheetProjection(active),
+    });
+  },
+
   setPinMarkingMode: (enabled, assetId = null) =>
     set({ isPinMarkingMode: enabled, activeMarkingAssetId: assetId }),
 
@@ -739,10 +1039,36 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   },
 
   addWire: (wire) => {
-    const { sheets, activeSheetId } = get();
+    const { sheets, activeSheetId, autoRouteDuctsEnabled } = get();
     pushHistory(sheets);
     const id = `wire-${Date.now()}`;
-    const newWire: WireConnection = { ...wire, id };
+    const activeSheet = sheets.find((s) => s.id === activeSheetId)!;
+    let waypoints = wire.waypoints;
+    if (!waypoints && autoRouteDuctsEnabled && activeSheet.ducts.length > 0) {
+      const p1 = resolvePinWorldPoint(
+        activeSheet.components,
+        activeSheet.cadAssets,
+        wire.fromComponentId,
+        wire.fromPinId
+      );
+      const p2 = resolvePinWorldPoint(
+        activeSheet.components,
+        activeSheet.cadAssets,
+        wire.toComponentId,
+        wire.toPinId
+      );
+      if (p1 && p2) {
+        const pts = routeWireThroughDucts(
+          { x: p1.xMm, y: p1.yMm },
+          { x: p2.xMm, y: p2.yMm },
+          activeSheet.ducts,
+          activeSheet.rails,
+          activeSheet.wires.length
+        );
+        waypoints = pts.map((p) => ({ xMm: p.x, yMm: p.y }));
+      }
+    }
+    const newWire: WireConnection = { ...wire, id, ...(waypoints ? { waypoints } : {}) };
     const updated = sheets.map((s) =>
       s.id === activeSheetId ? { ...s, wires: [...s.wires, newWire] } : s
     );
@@ -777,7 +1103,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   },
 
   removeWire: (id) => {
-    const { sheets, activeSheetId, selected } = get();
+    const { sheets, activeSheetId, selected, selectedIds } = get();
     pushHistory(sheets);
     const updated = sheets.map((s) =>
       s.id === activeSheetId
@@ -788,6 +1114,97 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     set({
       sheets: updated,
       selected: selected?.id === id ? null : selected,
+      selectedIds: selectedIds.filter((s) => s.id !== id),
+      canUndo: true,
+      canRedo: false,
+      ...syncActiveSheetProjection(active),
+    });
+  },
+
+  autoRouteWire: (id) => {
+    const { sheets, activeSheetId } = get();
+    const activeSheet = sheets.find((s) => s.id === activeSheetId);
+    if (!activeSheet) return;
+    const wireIdx = activeSheet.wires.findIndex((w) => w.id === id);
+    if (wireIdx === -1) return;
+    const wire = activeSheet.wires[wireIdx];
+    const p1 = resolvePinWorldPoint(
+      activeSheet.components,
+      activeSheet.cadAssets,
+      wire.fromComponentId,
+      wire.fromPinId
+    );
+    const p2 = resolvePinWorldPoint(
+      activeSheet.components,
+      activeSheet.cadAssets,
+      wire.toComponentId,
+      wire.toPinId
+    );
+    if (!p1 || !p2) return;
+
+    pushHistory(sheets);
+    const pts = routeWireThroughDucts(
+      { x: p1.xMm, y: p1.yMm },
+      { x: p2.xMm, y: p2.yMm },
+      activeSheet.ducts,
+      activeSheet.rails,
+      wireIdx
+    );
+    const waypoints = pts.map((p) => ({ xMm: p.x, yMm: p.y }));
+    const updated = sheets.map((s) =>
+      s.id === activeSheetId
+        ? {
+            ...s,
+            wires: s.wires.map((w) => (w.id === id ? { ...w, waypoints } : w)),
+          }
+        : s
+    );
+    const active = updated.find((s) => s.id === activeSheetId)!;
+    set({
+      sheets: updated,
+      canUndo: true,
+      canRedo: false,
+      ...syncActiveSheetProjection(active),
+    });
+  },
+
+  autoRouteAllWires: () => {
+    const { sheets, activeSheetId } = get();
+    const activeSheet = sheets.find((s) => s.id === activeSheetId);
+    if (!activeSheet || activeSheet.wires.length === 0) return;
+    pushHistory(sheets);
+    const routedWires = activeSheet.wires.map((wire, idx) => {
+      const p1 = resolvePinWorldPoint(
+        activeSheet.components,
+        activeSheet.cadAssets,
+        wire.fromComponentId,
+        wire.fromPinId
+      );
+      const p2 = resolvePinWorldPoint(
+        activeSheet.components,
+        activeSheet.cadAssets,
+        wire.toComponentId,
+        wire.toPinId
+      );
+      if (!p1 || !p2) return wire;
+      const pts = routeWireThroughDucts(
+        { x: p1.xMm, y: p1.yMm },
+        { x: p2.xMm, y: p2.yMm },
+        activeSheet.ducts,
+        activeSheet.rails,
+        idx
+      );
+      return {
+        ...wire,
+        waypoints: pts.map((p) => ({ xMm: p.x, yMm: p.y })),
+      };
+    });
+    const updated = sheets.map((s) =>
+      s.id === activeSheetId ? { ...s, wires: routedWires } : s
+    );
+    const active = updated.find((s) => s.id === activeSheetId)!;
+    set({
+      sheets: updated,
       canUndo: true,
       canRedo: false,
       ...syncActiveSheetProjection(active),
@@ -886,7 +1303,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   },
 
   removeRail: (id) => {
-    const { sheets, activeSheetId, selected } = get();
+    const { sheets, activeSheetId, selected, selectedIds } = get();
     pushHistory(sheets);
     const updated = sheets.map((s) =>
       s.id === activeSheetId
@@ -903,6 +1320,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     set({
       sheets: updated,
       selected: selected?.id === id ? null : selected,
+      selectedIds: selectedIds.filter((s) => s.id !== id),
       canUndo: true,
       canRedo: false,
       ...syncActiveSheetProjection(active),
@@ -1007,7 +1425,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   },
 
   removeDuct: (id) => {
-    const { sheets, activeSheetId, selected } = get();
+    const { sheets, activeSheetId, selected, selectedIds } = get();
     pushHistory(sheets);
     const updated = sheets.map((s) =>
       s.id === activeSheetId
@@ -1018,6 +1436,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     set({
       sheets: updated,
       selected: selected?.id === id ? null : selected,
+      selectedIds: selectedIds.filter((s) => s.id !== id),
       canUndo: true,
       canRedo: false,
       ...syncActiveSheetProjection(active),
@@ -1383,7 +1802,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   },
 
   removeComponent: (id) => {
-    const { sheets, activeSheetId, selected } = get();
+    const { sheets, activeSheetId, selected, selectedIds } = get();
     pushHistory(sheets);
     const updated = sheets.map((s) =>
       s.id === activeSheetId
@@ -1400,6 +1819,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     set({
       sheets: updated,
       selected: selected?.id === id ? null : selected,
+      selectedIds: selectedIds.filter((s) => s.id !== id),
       canUndo: true,
       canRedo: false,
       ...syncActiveSheetProjection(active),

@@ -17,13 +17,14 @@ import { detectCollisionsAndBounds } from "@/lib/collision";
 import { getBackplateDimensions } from "@/lib/template-export";
 import { parseDxfToMmSegments } from "@/lib/dxf-parser";
 import { WIRE_COLOR_MAP } from "@/lib/sheet-export";
-import { rotateLocalPoint, snapToGrid } from "@/lib/snap";
+import { getRotatedDimensions, rotateLocalPoint, snapToGrid } from "@/lib/snap";
 import { formatDim } from "@/lib/units";
 import {
   getWireOuterDiameterMm,
   pointsToRoundedSvgPath,
   pointsToSvgPath,
   routeOrthogonalWire,
+  routeWireThroughDucts,
 } from "@/lib/wire-router";
 import { usePanelStore } from "@/store/usePanelStore";
 import type {
@@ -31,6 +32,7 @@ import type {
   DinRail,
   GridSnapMm,
   PlacedComponent,
+  SelectedTarget,
   WireColorCode,
   WireDuct,
 } from "@/types/panel";
@@ -92,6 +94,21 @@ type DragState =
       initialDuct: WireDuct;
       startWorldXMm: number;
       startWorldYMm: number;
+    }
+  | {
+      type: "marquee";
+      startWorldXMm: number;
+      startWorldYMm: number;
+      currentWorldXMm: number;
+      currentWorldYMm: number;
+      additive: boolean;
+    }
+  | {
+      type: "multi-drag";
+      startWorldXMm: number;
+      startWorldYMm: number;
+      lastDxMm: number;
+      lastDyMm: number;
     };
 
 function Component2DSymbol({
@@ -566,14 +583,23 @@ export function Panel2DCanvas() {
   const titleBlock = usePanelStore((s) => s.titleBlock);
   const gridSnapMm = usePanelStore((s) => s.gridSnapMm);
   const selected = usePanelStore((s) => s.selected);
+  const selectedIds = usePanelStore((s) => s.selectedIds);
   const canvasTool2D = usePanelStore((s) => s.canvasTool2D);
   const activeWireColor = usePanelStore((s) => s.activeWireColor);
   const activeWireGauge = usePanelStore((s) => s.activeWireGauge);
   const activeWireStartPin = usePanelStore((s) => s.activeWireStartPin);
+  const autoRouteDuctsEnabled = usePanelStore((s) => s.autoRouteDuctsEnabled);
+  const setAutoRouteDuctsEnabled = usePanelStore((s) => s.setAutoRouteDuctsEnabled);
   const isPinMarkingMode = usePanelStore((s) => s.isPinMarkingMode);
   const activeMarkingAssetId = usePanelStore((s) => s.activeMarkingAssetId);
 
   const setSelected = usePanelStore((s) => s.setSelected);
+  const setSelectedIds = usePanelStore((s) => s.setSelectedIds);
+  const toggleSelectId = usePanelStore((s) => s.toggleSelectId);
+  const clearSelection = usePanelStore((s) => s.clearSelection);
+  const moveSelectedItems = usePanelStore((s) => s.moveSelectedItems);
+  const deleteSelectedItems = usePanelStore((s) => s.deleteSelectedItems);
+  const pushUndoSnapshot = usePanelStore((s) => s.pushUndoSnapshot);
   const setCanvasTool2D = usePanelStore((s) => s.setCanvasTool2D);
   const setActiveWireColor = usePanelStore((s) => s.setActiveWireColor);
   const setActiveWireGauge = usePanelStore((s) => s.setActiveWireGauge);
@@ -662,21 +688,31 @@ export function Panel2DCanvas() {
     return () => window.removeEventListener("resize", onResize);
   }, [fitToView]);
 
-  // Spacebar pan shortcut
+  // Spacebar pan & Delete/Backspace bulk delete shortcuts
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
-      if (
-        e.code === "Space" &&
-        !(e.target instanceof HTMLInputElement) &&
-        !(e.target instanceof HTMLTextAreaElement)
-      ) {
+      const target = e.target as HTMLElement | null;
+      const isEditingText =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        Boolean(target?.isContentEditable);
+
+      if (e.code === "Space" && !isEditingText) {
         setSpacePressed(true);
+      }
+      if ((e.key === "Delete" || e.key === "Backspace") && !isEditingText) {
+        if (selectedIds.length > 0 || selected) {
+          e.preventDefault();
+          deleteSelectedItems();
+        }
       }
       if (e.code === "Escape") {
         setActiveWireStartPin(null);
         setMeasureStart(null);
         setMeasureEnd(null);
         setMeasureHover(null);
+        clearSelection();
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
@@ -688,7 +724,14 @@ export function Panel2DCanvas() {
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
     };
-  }, [setActiveWireStartPin]);
+  }, [setActiveWireStartPin, clearSelection, deleteSelectedItems, selectedIds, selected]);
+
+  const isItemSelected = useCallback(
+    (kind: SelectedTarget["kind"], id: string) =>
+      selectedIds.some((s) => s.kind === kind && s.id === id) ||
+      (selected?.kind === kind && selected.id === id),
+    [selectedIds, selected]
+  );
 
   const screenToWorld = useCallback(
     (clientX: number, clientY: number) => {
@@ -754,7 +797,18 @@ export function Panel2DCanvas() {
       return;
     }
     if (e.button === 0) {
-      setSelected(null);
+      const raw = screenToWorld(e.clientX, e.clientY);
+      setDragState({
+        type: "marquee",
+        startWorldXMm: raw.xMm,
+        startWorldYMm: raw.yMm,
+        currentWorldXMm: raw.xMm,
+        currentWorldYMm: raw.yMm,
+        additive: e.shiftKey,
+      });
+      if (!e.shiftKey) {
+        clearSelection();
+      }
     }
   };
 
@@ -775,6 +829,33 @@ export function Panel2DCanvas() {
         x: dragState.startPanX + (e.clientX - dragState.startClientX),
         y: dragState.startPanY + (e.clientY - dragState.startClientY),
       });
+      return;
+    }
+
+    if (dragState.type === "marquee") {
+      setDragState({
+        ...dragState,
+        currentWorldXMm: world.xMm,
+        currentWorldYMm: world.yMm,
+      });
+      return;
+    }
+
+    if (dragState.type === "multi-drag") {
+      const rawDx = world.xMm - dragState.startWorldXMm;
+      const rawDy = world.yMm - dragState.startWorldYMm;
+      const targetDx = snapToGrid(rawDx, gridSnapMm);
+      const targetDy = snapToGrid(rawDy, gridSnapMm);
+      const deltaDx = targetDx - dragState.lastDxMm;
+      const deltaDy = targetDy - dragState.lastDyMm;
+      if (deltaDx !== 0 || deltaDy !== 0) {
+        moveSelectedItems(deltaDx, deltaDy);
+        setDragState({
+          ...dragState,
+          lastDxMm: targetDx,
+          lastDyMm: targetDy,
+        });
+      }
       return;
     }
 
@@ -860,6 +941,54 @@ export function Panel2DCanvas() {
   };
 
   const handlePointerUp = () => {
+    if (dragState?.type === "marquee") {
+      const minX = Math.min(dragState.startWorldXMm, dragState.currentWorldXMm);
+      const maxX = Math.max(dragState.startWorldXMm, dragState.currentWorldXMm);
+      const minY = Math.min(dragState.startWorldYMm, dragState.currentWorldYMm);
+      const maxY = Math.max(dragState.startWorldYMm, dragState.currentWorldYMm);
+
+      if (maxX - minX > 1 || maxY - minY > 1) {
+        const hits: SelectedTarget[] = [];
+
+        for (const c of components) {
+          const dims = getRotatedDimensions(c.widthMm, c.heightMm, c.rotationDeg ?? 0);
+          const cx1 = c.xMm - dims.widthMm / 2;
+          const cx2 = c.xMm + dims.widthMm / 2;
+          const cy1 = c.yMm - dims.heightMm / 2;
+          const cy2 = c.yMm + dims.heightMm / 2;
+          if (cx1 <= maxX && cx2 >= minX && cy1 <= maxY && cy2 >= minY) {
+            hits.push({ kind: "component", id: c.id });
+          }
+        }
+
+        for (const a of cadAssets) {
+          const dims = getRotatedDimensions(
+            a.boundingBoxMm.w,
+            a.boundingBoxMm.h,
+            a.rotationDeg ?? 0
+          );
+          const ax1 = a.xMm - dims.widthMm / 2;
+          const ax2 = a.xMm + dims.widthMm / 2;
+          const ay1 = a.yMm - dims.heightMm / 2;
+          const ay2 = a.yMm + dims.heightMm / 2;
+          if (ax1 <= maxX && ax2 >= minX && ay1 <= maxY && ay2 >= minY) {
+            hits.push({ kind: "cad", id: a.id });
+          }
+        }
+
+        if (dragState.additive) {
+          const merged = [...selectedIds];
+          for (const hit of hits) {
+            if (!merged.some((s) => s.kind === hit.kind && s.id === hit.id)) {
+              merged.push(hit);
+            }
+          }
+          setSelectedIds(merged);
+        } else {
+          setSelectedIds(hits);
+        }
+      }
+    }
     setDragState(null);
   };
 
@@ -1128,6 +1257,18 @@ export function Panel2DCanvas() {
               <option value="10.0">10.0 mm² (Ø6.5)</option>
               <option value="16.0">16.0 mm² (Ø8.0)</option>
             </select>
+            <button
+              type="button"
+              onClick={() => setAutoRouteDuctsEnabled(!autoRouteDuctsEnabled)}
+              title="Auto-route new wires through nearby Wire Ducts"
+              className={`flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[10px] transition-all ${
+                autoRouteDuctsEnabled && ducts.length > 0
+                  ? "border-sky-500/60 bg-sky-500/15 text-sky-600 dark:text-sky-300 font-semibold"
+                  : "border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14] text-[#64748b] dark:text-slate-400"
+              }`}
+            >
+              <span>{autoRouteDuctsEnabled && ducts.length > 0 ? "Duct Auto-Route: ON" : "Duct Auto-Route: OFF"}</span>
+            </button>
             {activeWireStartPin && (
               <span className="font-mono text-[10px] font-semibold text-amber-500 animate-pulse">
                 Click target pin...
@@ -1336,8 +1477,7 @@ export function Panel2DCanvas() {
             {ducts.map((d) => {
               const x = d.xMm - d.widthMm / 2;
               const y = -(d.yMm + d.heightMm / 2);
-              const isSelected =
-                selected?.kind === "duct" && selected.id === d.id;
+              const isSelected = isItemSelected("duct", d.id);
 
               return (
                 <g key={d.id}>
@@ -1345,8 +1485,23 @@ export function Panel2DCanvas() {
                     onPointerDown={(e) => {
                       if (e.button !== 0 || canvasTool2D !== "select" || spacePressed) return;
                       e.stopPropagation();
-                      setSelected({ kind: "duct", id: d.id });
+                      if (e.shiftKey) {
+                        toggleSelectId({ kind: "duct", id: d.id });
+                        return;
+                      }
                       const w = screenToWorld(e.clientX, e.clientY);
+                      if (selectedIds.length > 1 && isSelected) {
+                        pushUndoSnapshot();
+                        setDragState({
+                          type: "multi-drag",
+                          startWorldXMm: w.xMm,
+                          startWorldYMm: w.yMm,
+                          lastDxMm: 0,
+                          lastDyMm: 0,
+                        });
+                        return;
+                      }
+                      setSelected({ kind: "duct", id: d.id });
                       setDragState({
                         type: "duct-move",
                         id: d.id,
@@ -1357,6 +1512,14 @@ export function Panel2DCanvas() {
                     onContextMenu={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      if (selectedIds.length > 1 && isSelected) {
+                        setContextMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          target: { kind: "multi" },
+                        });
+                        return;
+                      }
                       setSelected({ kind: "duct", id: d.id });
                       setContextMenu({
                         x: e.clientX,
@@ -1443,8 +1606,7 @@ export function Panel2DCanvas() {
             {rails.map((r: DinRail) => {
               const x = r.xMm - r.lengthMm / 2;
               const y = -(r.yMm + 17.5);
-              const isSelected =
-                selected?.kind === "rail" && selected.id === r.id;
+              const isSelected = isItemSelected("rail", r.id);
 
               const holes: number[] = [];
               for (
@@ -1461,8 +1623,23 @@ export function Panel2DCanvas() {
                     onPointerDown={(e) => {
                       if (e.button !== 0 || canvasTool2D !== "select" || spacePressed) return;
                       e.stopPropagation();
-                      setSelected({ kind: "rail", id: r.id });
+                      if (e.shiftKey) {
+                        toggleSelectId({ kind: "rail", id: r.id });
+                        return;
+                      }
                       const w = screenToWorld(e.clientX, e.clientY);
+                      if (selectedIds.length > 1 && isSelected) {
+                        pushUndoSnapshot();
+                        setDragState({
+                          type: "multi-drag",
+                          startWorldXMm: w.xMm,
+                          startWorldYMm: w.yMm,
+                          lastDxMm: 0,
+                          lastDyMm: 0,
+                        });
+                        return;
+                      }
+                      setSelected({ kind: "rail", id: r.id });
                       setDragState({
                         type: "rail-move",
                         id: r.id,
@@ -1473,6 +1650,14 @@ export function Panel2DCanvas() {
                     onContextMenu={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
+                      if (selectedIds.length > 1 && isSelected) {
+                        setContextMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          target: { kind: "multi" },
+                        });
+                        return;
+                      }
                       setSelected({ kind: "rail", id: r.id });
                       setContextMenu({
                         x: e.clientX,
@@ -1583,13 +1768,13 @@ export function Panel2DCanvas() {
 
           {/* Components Layer */}
           <g>
-            {components.map((comp) => (
+            {components.map((comp) => {
+              const isSelected = isItemSelected("component", comp.id);
+              return (
               <Component2DSymbol
                 key={comp.id}
                 comp={comp}
-                isSelected={
-                  selected?.kind === "component" && selected.id === comp.id
-                }
+                isSelected={isSelected}
                 isWireMode={canvasTool2D === "wire"}
                 activeWireStartPin={activeWireStartPin}
                 hasCollision={collisionReport.overlappingIds.has(comp.id)}
@@ -1597,8 +1782,23 @@ export function Panel2DCanvas() {
                 onPointerDown={(e) => {
                   if (e.button !== 0 || canvasTool2D !== "select" || spacePressed) return;
                   e.stopPropagation();
-                  setSelected({ kind: "component", id: comp.id });
+                  if (e.shiftKey) {
+                    toggleSelectId({ kind: "component", id: comp.id });
+                    return;
+                  }
                   const w = screenToWorld(e.clientX, e.clientY);
+                  if (selectedIds.length > 1 && isSelected) {
+                    pushUndoSnapshot();
+                    setDragState({
+                      type: "multi-drag",
+                      startWorldXMm: w.xMm,
+                      startWorldYMm: w.yMm,
+                      lastDxMm: 0,
+                      lastDyMm: 0,
+                    });
+                    return;
+                  }
+                  setSelected({ kind: "component", id: comp.id });
                   setDragState({
                     type: "component",
                     id: comp.id,
@@ -1609,6 +1809,14 @@ export function Panel2DCanvas() {
                 onContextMenu={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  if (selectedIds.length > 1 && isSelected) {
+                    setContextMenu({
+                      x: e.clientX,
+                      y: e.clientY,
+                      target: { kind: "multi" },
+                    });
+                    return;
+                  }
                   setSelected({ kind: "component", id: comp.id });
                   setContextMenu({
                     x: e.clientX,
@@ -1621,7 +1829,8 @@ export function Panel2DCanvas() {
                   handlePinClick(comp.id, pinId);
                 }}
               />
-            ))}
+              );
+            })}
           </g>
 
           {/* Custom CAD Assets Layer */}
@@ -1629,13 +1838,12 @@ export function Panel2DCanvas() {
             {cadAssets.map((asset) => {
               const isMarkingThis =
                 isPinMarkingMode && activeMarkingAssetId === asset.id;
+              const isSelected = isItemSelected("cad", asset.id);
               return (
                 <CadAsset2DSymbol
                   key={asset.id}
                   asset={asset}
-                  isSelected={
-                    selected?.kind === "cad" && selected.id === asset.id
-                  }
+                  isSelected={isSelected}
                   isMarkingThis={isMarkingThis}
                   isWireMode={canvasTool2D === "wire"}
                   activeWireStartPin={activeWireStartPin}
@@ -1654,8 +1862,23 @@ export function Panel2DCanvas() {
                     }
                     if (canvasTool2D !== "select") return;
                     e.stopPropagation();
-                    setSelected({ kind: "cad", id: asset.id });
+                    if (e.shiftKey) {
+                      toggleSelectId({ kind: "cad", id: asset.id });
+                      return;
+                    }
                     const w = screenToWorld(e.clientX, e.clientY);
+                    if (selectedIds.length > 1 && isSelected) {
+                      pushUndoSnapshot();
+                      setDragState({
+                        type: "multi-drag",
+                        startWorldXMm: w.xMm,
+                        startWorldYMm: w.yMm,
+                        lastDxMm: 0,
+                        lastDyMm: 0,
+                      });
+                      return;
+                    }
+                    setSelected({ kind: "cad", id: asset.id });
                     setDragState({
                       type: "cad",
                       id: asset.id,
@@ -1666,6 +1889,14 @@ export function Panel2DCanvas() {
                   onContextMenu={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    if (selectedIds.length > 1 && isSelected) {
+                      setContextMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        target: { kind: "multi" },
+                      });
+                      return;
+                    }
                     setSelected({ kind: "cad", id: asset.id });
                     setContextMenu({
                       x: e.clientX,
@@ -1689,12 +1920,14 @@ export function Panel2DCanvas() {
               const p2 = pinMap.get(`${w.toComponentId}:${w.toPinId}`);
               if (!p1 || !p2) return null;
 
-              const waypoints = routeOrthogonalWire(p1, p2, "horizontal-first");
+              const waypoints =
+                w.waypoints && w.waypoints.length >= 2
+                  ? w.waypoints.map((pt) => ({ x: pt.xMm, y: -pt.yMm }))
+                  : routeOrthogonalWire(p1, p2, "horizontal-first");
               const pathD = pointsToRoundedSvgPath(waypoints, 4);
               const stroke = WIRE_COLOR_MAP[w.colorCode] || "#2563eb";
               const wireDiaMm = getWireOuterDiameterMm(w.gaugeMm2);
-              const isSelected =
-                selected?.kind === "wire" && selected.id === w.id;
+              const isSelected = isItemSelected("wire", w.id);
 
               // Place label at the exact midpoint of the longest straight span
               let mid = p1;
@@ -1715,11 +1948,23 @@ export function Panel2DCanvas() {
                   onPointerDown={(e) => {
                     if (e.button !== 0 || canvasTool2D !== "select" || spacePressed) return;
                     e.stopPropagation();
+                    if (e.shiftKey) {
+                      toggleSelectId({ kind: "wire", id: w.id });
+                      return;
+                    }
                     setSelected({ kind: "wire", id: w.id });
                   }}
                   onContextMenu={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
+                    if (selectedIds.length > 1 && isSelected) {
+                      setContextMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        target: { kind: "multi" },
+                      });
+                      return;
+                    }
                     setSelected({ kind: "wire", id: w.id });
                     setContextMenu({
                       x: e.clientX,
@@ -1785,11 +2030,20 @@ export function Panel2DCanvas() {
                 `${activeWireStartPin.componentId}:${activeWireStartPin.pinId}`
               );
               if (!p1) return null;
-              const previewPts = routeOrthogonalWire(
-                p1,
-                { x: cursorWorld.xMm, y: -cursorWorld.yMm },
-                "horizontal-first"
-              );
+              const previewPts =
+                autoRouteDuctsEnabled && ducts.length > 0
+                  ? routeWireThroughDucts(
+                      { x: p1.x, y: -p1.y },
+                      { x: cursorWorld.xMm, y: cursorWorld.yMm },
+                      ducts,
+                      rails,
+                      wires.length
+                    ).map((pt) => ({ x: pt.x, y: -pt.y }))
+                  : routeOrthogonalWire(
+                      p1,
+                      { x: cursorWorld.xMm, y: -cursorWorld.yMm },
+                      "horizontal-first"
+                    );
               return (
                 <path
                   d={pointsToSvgPath(previewPts)}
@@ -1887,6 +2141,29 @@ export function Panel2DCanvas() {
                   ΔX:{formatDim(dx, displayUnit)} ΔY:{formatDim(dy, displayUnit)}
                 </text>
               </g>
+            );
+          })()}
+
+          {/* Marquee Box Selection Overlay */}
+          {dragState?.type === "marquee" && (() => {
+            const sx = Math.min(dragState.startWorldXMm, dragState.currentWorldXMm);
+            const sy = -Math.max(dragState.startWorldYMm, dragState.currentWorldYMm);
+            const sw = Math.abs(dragState.currentWorldXMm - dragState.startWorldXMm);
+            const sh = Math.abs(dragState.currentWorldYMm - dragState.startWorldYMm);
+            if (sw < 1 && sh < 1) return null;
+            return (
+              <rect
+                x={sx}
+                y={sy}
+                width={sw}
+                height={sh}
+                fill="#38bdf8"
+                fillOpacity={0.14}
+                stroke="#0284c7"
+                strokeWidth={1.2 / zoom}
+                strokeDasharray={`${4 / zoom},${3 / zoom}`}
+                className="pointer-events-none"
+              />
             );
           })()}
 

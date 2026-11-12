@@ -6,6 +6,7 @@ import {
   AlignJustify,
   AlignLeft,
   AlignRight,
+  AlignStartVertical,
   ArrowRightLeft,
   ChevronRight,
   Copy,
@@ -26,6 +27,7 @@ export type ContextMenuTarget =
   | { kind: "rail"; id: string }
   | { kind: "duct"; id: string }
   | { kind: "wire"; id: string }
+  | { kind: "multi" }
   | { kind: "canvas"; worldPos: { xMm: number; yMm: number } };
 
 export interface ContextMenuState {
@@ -92,6 +94,9 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
   const addComponent = usePanelStore((s) => s.addComponent);
   const setGridSnapMm = usePanelStore((s) => s.setGridSnapMm);
   const setSelected = usePanelStore((s) => s.setSelected);
+  const selectedIds = usePanelStore((s) => s.selectedIds);
+  const deleteSelectedItems = usePanelStore((s) => s.deleteSelectedItems);
+  const alignSelectedItems = usePanelStore((s) => s.alignSelectedItems);
   const requestInspectorFocus = usePanelStore((s) => s.requestInspectorFocus);
 
   // Position clamping & auto-fit into viewport
@@ -613,6 +618,91 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
             >
               <Trash2 className="h-3.5 w-3.5" />
               <span>Delete Wire</span>
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* MULTI-SELECT TARGET */}
+      {target.kind === "multi" && (
+        <>
+          <div className="border-b border-[#e2e8f0] dark:border-slate-800/80 px-2.5 py-1.5 font-mono text-[10px] text-[#64748b] dark:text-slate-400">
+            <div className="font-semibold text-sky-400">
+              {selectedIds.length} ITEMS SELECTED
+            </div>
+            <div className="text-[9px] text-slate-500">
+              Bulk Actions
+            </div>
+          </div>
+
+          <div className="py-1">
+            <div
+              className="relative"
+              onMouseEnter={() => setOpenSubmenu("align-multi")}
+              onMouseLeave={() => setOpenSubmenu(null)}
+            >
+              <button
+                type="button"
+                className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+              >
+                <span className="flex items-center gap-2">
+                  <AlignLeft className="h-3.5 w-3.5 text-sky-400" />
+                  <span>Align Selected</span>
+                </span>
+                <ChevronRight className="h-3 w-3 text-slate-500" />
+              </button>
+
+              {openSubmenu === "align-multi" && (
+                <div className={`absolute top-0 ${submenuPosClass} w-44 rounded-lg border border-[#e2e8f0] dark:border-slate-700/80 bg-white/98 dark:bg-[#12161f]/98 p-1 shadow-xl dark:shadow-2xl backdrop-blur-md`}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      alignSelectedItems("left");
+                      onClose();
+                    }}
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+                  >
+                    <AlignLeft className="h-3.5 w-3.5 text-sky-400" />
+                    <span>Rata Kiri (Align Left)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      alignSelectedItems("center");
+                      onClose();
+                    }}
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+                  >
+                    <AlignCenter className="h-3.5 w-3.5 text-sky-400" />
+                    <span>Rata Tengah (Center)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      alignSelectedItems("top");
+                      onClose();
+                    }}
+                    className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+                  >
+                    <AlignStartVertical className="h-3.5 w-3.5 text-sky-400" />
+                    <span>Rata Atas (Align Top)</span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="border-t border-[#e2e8f0] dark:border-slate-800/80 pt-1">
+            <button
+              type="button"
+              onClick={() => {
+                deleteSelectedItems();
+                onClose();
+              }}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 hover:text-rose-700 dark:hover:text-rose-300"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Delete Selected ({selectedIds.length})</span>
             </button>
           </div>
         </>
