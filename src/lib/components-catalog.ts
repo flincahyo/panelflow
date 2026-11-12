@@ -435,6 +435,22 @@ export const COMPONENT_CATALOG: Record<ComponentTemplateId, ComponentTemplate> =
       { label: "X2", localXMm: 6, localYMm: 0, localZMm: -18 },
     ],
   },
+  "pilot-lamp-yellow": {
+    id: "pilot-lamp-yellow",
+    name: "Pilot Lamp Ø22mm Yellow",
+    shortName: "Lamp Yellow",
+    category: "Door & Panel Controls",
+    mountingType: "door_cutout",
+    widthMm: 30,
+    heightMm: 30,
+    depthMm: 45,
+    color: "#334155",
+    accentColor: "#eab308",
+    pins: [
+      { label: "X1", localXMm: -6, localYMm: 0, localZMm: -18 },
+      { label: "X2", localXMm: 6, localYMm: 0, localZMm: -18 },
+    ],
+  },
   "push-button": {
     id: "push-button",
     name: "Push Button Start/Stop Ø22mm",
@@ -523,6 +539,19 @@ export const COMPONENT_CATALOG: Record<ComponentTemplateId, ComponentTemplate> =
       { label: "L", localXMm: -12, localYMm: -50, localZMm: -14 },
       { label: "N", localXMm: 12, localYMm: -50, localZMm: -14 },
     ],
+  },
+  "cam-lock": {
+    id: "cam-lock",
+    name: "Quarter-Turn Cam Lock Double-D",
+    shortName: "Cam Lock",
+    category: "Door & Panel Controls",
+    mountingType: "door_cutout",
+    widthMm: 32,
+    heightMm: 32,
+    depthMm: 30,
+    color: "#1e293b",
+    accentColor: "#94a3b8",
+    pins: [],
   },
 };
 

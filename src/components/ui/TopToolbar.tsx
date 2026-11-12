@@ -48,6 +48,7 @@ import {
 } from "@/lib/project-io";
 import { generateEplanSheetSvg } from "@/lib/sheet-export";
 import { generateDrillingDxf, generateDrillingSvg } from "@/lib/template-export";
+import { generateDoorDrillingDxf, generateDoorDrillingSvg } from "@/lib/door-cutout";
 import { formatDim } from "@/lib/units";
 import { usePanelStore } from "@/store/usePanelStore";
 import type { DoorMode, GridSnapMm, LengthUnit, SheetType } from "@/types/panel";
@@ -89,6 +90,7 @@ export function TopToolbar({
 
   const sheets = usePanelStore((s) => s.sheets);
   const activeSheetId = usePanelStore((s) => s.activeSheetId);
+  const activeSheetType = usePanelStore((s) => s.activeSheetType);
   const autoRouteDuctsEnabled = usePanelStore((s) => s.autoRouteDuctsEnabled);
   const loadProjectState = usePanelStore((s) => s.loadProjectState);
   const resetToDefaultProject = usePanelStore((s) => s.resetToDefaultProject);
@@ -154,11 +156,21 @@ export function TopToolbar({
   }, []);
 
   const handleExportSvg = () => {
+    if (activeSheetType === "door-cutout") {
+      const svg = generateDoorDrillingSvg(enclosure, components);
+      triggerDownload("panelflow-door-drilling-1to1.svg", svg, "image/svg+xml");
+      return;
+    }
     const svg = generateDrillingSvg(enclosure, rails, ducts, plateConfig);
     triggerDownload("panelflow-drilling-1to1.svg", svg, "image/svg+xml");
   };
 
   const handleExportDxf = () => {
+    if (activeSheetType === "door-cutout") {
+      const dxf = generateDoorDrillingDxf(enclosure, components);
+      triggerDownload("panelflow-door-drilling-1to1.dxf", dxf, "application/dxf");
+      return;
+    }
     const dxf = generateDrillingDxf(enclosure, rails, ducts, plateConfig);
     triggerDownload("panelflow-drilling-1to1.dxf", dxf, "application/dxf");
   };
@@ -556,7 +568,9 @@ export function TopToolbar({
                 className={dropdownItemClass}
               >
                 <Download className="h-4 w-4 text-indigo-500" />
-                Export Drilling DXF
+                {activeSheetType === "door-cutout"
+                  ? "Export Door Drilling DXF (1:1)"
+                  : "Export Drilling DXF"}
               </button>
 
               <div className={dropdownDividerClass} />
@@ -743,7 +757,9 @@ export function TopToolbar({
                 </button>
                 <div className={dropdownDividerClass} />
                 <div className={dropdownSectionLabelClass}>
-                  CNC Drilling Template
+                  {activeSheetType === "door-cutout"
+                    ? "Door Drilling Template (1:1)"
+                    : "CNC Drilling Template"}
                 </div>
                 <button
                   type="button"
@@ -754,7 +770,9 @@ export function TopToolbar({
                   className={dropdownItemClass}
                 >
                   <Download className="h-3.5 w-3.5 text-indigo-500 dark:text-indigo-400" />
-                  Export Drilling DXF (1:1)
+                  {activeSheetType === "door-cutout"
+                    ? "Export Door Drilling DXF (1:1)"
+                    : "Export Drilling DXF (1:1)"}
                 </button>
                 <button
                   type="button"
@@ -765,7 +783,9 @@ export function TopToolbar({
                   className={dropdownItemClass}
                 >
                   <Download className="h-3.5 w-3.5 text-teal-500 dark:text-teal-400" />
-                  Export Drilling SVG (1:1)
+                  {activeSheetType === "door-cutout"
+                    ? "Export Door Drilling Template SVG (1:1)"
+                    : "Export Drilling SVG (1:1)"}
                 </button>
               </div>
             )}

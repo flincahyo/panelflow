@@ -331,6 +331,7 @@ interface PanelStore {
   cadAssets: CustomCadAsset[];
   wires: WireConnection[];
   titleBlock: TitleBlockMeta;
+  activeSheetType: SheetType;
 
   // Global Workspace State
   theme: ThemeMode;
@@ -507,6 +508,7 @@ function syncActiveSheetProjection(sheet: PanelSheet) {
     cadAssets: sheet.cadAssets,
     wires: sheet.wires,
     titleBlock: sheet.titleBlock,
+    activeSheetType: sheet.sheetType,
   };
 }
 
@@ -523,6 +525,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   cadAssets: defaultInitialSheet.cadAssets,
   wires: defaultInitialSheet.wires,
   titleBlock: defaultInitialSheet.titleBlock,
+  activeSheetType: defaultInitialSheet.sheetType,
 
   theme: "light",
   viewportMode: "2d",

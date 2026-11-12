@@ -31,11 +31,13 @@ describe("expanded components-catalog", () => {
     // Door & Panel Controls
     "pilot-lamp-red",
     "pilot-lamp-green",
+    "pilot-lamp-yellow",
     "push-button",
     "e-stop",
     "selector-3pos",
     "panel-meter-96",
     "cooling-fan-120",
+    "cam-lock",
   ];
 
   it("contains all required industrial standard templates", () => {

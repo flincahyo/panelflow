@@ -28,6 +28,7 @@ import {
   type SvgRect,
 } from "@/lib/cad-label";
 import { getBackplateDimensions } from "@/lib/template-export";
+import { EnclosureDoor2D } from "./EnclosureDoor2D";
 import { calculateAllDuctFillRatios, getDuctFillStatusColor } from "@/lib/duct-fill";
 import { parseDxfToMmSegments } from "@/lib/dxf-parser";
 import { WIRE_COLOR_MAP } from "@/lib/sheet-export";
@@ -396,6 +397,7 @@ function Component2DSymbol({
         </g>
       ) : comp.templateId === "pilot-lamp-red" ||
         comp.templateId === "pilot-lamp-green" ||
+        comp.templateId === "pilot-lamp-yellow" ||
         comp.templateId === "push-button" ||
         comp.templateId === "e-stop" ||
         comp.templateId === "selector-3pos" ? (
@@ -415,6 +417,42 @@ function Component2DSymbol({
             r={11}
             strokeDasharray="2,1.5"
             stroke="#475569"
+          />
+        </g>
+      ) : comp.templateId === "cam-lock" ? (
+        <g stroke="#0f172a" strokeWidth={0.8} fill="none">
+          <circle
+            cx={x + comp.widthMm / 2}
+            cy={y + comp.heightMm / 2}
+            r={11}
+            fill="#334155"
+            fillOpacity={0.2}
+            stroke="#475569"
+            strokeWidth={1.2}
+          />
+          <line
+            x1={x + comp.widthMm / 2 - 10}
+            y1={y + comp.heightMm / 2 - 9}
+            x2={x + comp.widthMm / 2 - 10}
+            y2={y + comp.heightMm / 2 + 9}
+            stroke="#f59e0b"
+            strokeWidth={1.2}
+          />
+          <line
+            x1={x + comp.widthMm / 2 + 10}
+            y1={y + comp.heightMm / 2 - 9}
+            x2={x + comp.widthMm / 2 + 10}
+            y2={y + comp.heightMm / 2 + 9}
+            stroke="#f59e0b"
+            strokeWidth={1.2}
+          />
+          <rect
+            x={x + comp.widthMm / 2 - 2}
+            y={y + comp.heightMm / 2 - 6}
+            width={4}
+            height={12}
+            rx={1}
+            fill="#94a3b8"
           />
         </g>
       ) : comp.templateId === "panel-meter-96" ? (
@@ -868,6 +906,7 @@ export function Panel2DCanvas() {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const theme = usePanelStore((s) => s.theme);
+  const activeSheetType = usePanelStore((s) => s.activeSheetType);
   const enclosure = usePanelStore((s) => s.enclosure);
   const plateConfig = usePanelStore((s) => s.plateConfig);
   const displayUnit = usePanelStore((s) => s.displayUnit);
@@ -2166,29 +2205,38 @@ export function Panel2DCanvas() {
             />
           </g>
 
-          {/* Backplate Boundary & Technical Hairline Grid */}
-          <g>
-            <rect
-              x={-plateW / 2}
-              y={-plateH / 2}
-              width={plateW}
-              height={plateH}
-              fill="url(#grid-dots)"
-              stroke={theme === "light" ? "#94a3b8" : "#252932"}
-              strokeWidth={1.4}
+          {/* Dedicated Door Cutout Canvas or Backplate Boundary */}
+          {activeSheetType === "door-cutout" ? (
+            <EnclosureDoor2D
+              enclosure={enclosure}
+              components={components}
+              theme={theme}
+              showDimensions={true}
             />
-            {/* Backplate Dimension Annotations */}
-            <text
-              x={0}
-              y={-plateH / 2 - 8}
-              fontSize={8}
-              fontFamily="monospace"
-              fill={theme === "light" ? "#334155" : "#64748b"}
-              textAnchor="middle"
-            >
-              MOUNTING PLATE: {plateW} x {plateH} mm
-            </text>
-          </g>
+          ) : (
+            <g>
+              <rect
+                x={-plateW / 2}
+                y={-plateH / 2}
+                width={plateW}
+                height={plateH}
+                fill="url(#grid-dots)"
+                stroke={theme === "light" ? "#94a3b8" : "#252932"}
+                strokeWidth={1.4}
+              />
+              {/* Backplate Dimension Annotations */}
+              <text
+                x={0}
+                y={-plateH / 2 - 8}
+                fontSize={8}
+                fontFamily="monospace"
+                fill={theme === "light" ? "#334155" : "#64748b"}
+                textAnchor="middle"
+              >
+                MOUNTING PLATE: {plateW} x {plateH} mm
+              </text>
+            </g>
+          )}
 
           {/* Wire Ducts Layer */}
           <g>

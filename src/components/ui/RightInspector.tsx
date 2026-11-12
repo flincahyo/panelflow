@@ -3,6 +3,7 @@
 import { ClipboardList, Crop, MapPin, RotateCcw, Sliders, Trash2, X, AlertTriangle, CheckCircle2, AlertCircle } from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { BomPanelTab } from "@/components/ui/BomPanelTab";
+import { computeDoorCutouts, getDoorDimensions } from "@/lib/door-cutout";
 import { calculateDuctFillRatio, getDuctFillStatusColor } from "@/lib/duct-fill";
 import { getEffectiveCadBounds } from "@/lib/collision";
 import { snapToGrid } from "@/lib/snap";
@@ -27,6 +28,9 @@ export function RightInspector({ onClose }: RightInspectorProps) {
   const viewportMode = usePanelStore((s) => s.viewportMode);
   const isPinMarkingMode = usePanelStore((s) => s.isPinMarkingMode);
   const activeMarkingAssetId = usePanelStore((s) => s.activeMarkingAssetId);
+  const activeSheetType = usePanelStore((s) => s.activeSheetType);
+  const enclosure = usePanelStore((s) => s.enclosure);
+  const updateEnclosure = usePanelStore((s) => s.updateEnclosure);
   const inspectorFocusNonce = usePanelStore((s) => s.inspectorFocusNonce);
   const rightPanelTab = usePanelStore((s) => s.rightPanelTab);
   const setRightPanelTab = usePanelStore((s) => s.setRightPanelTab);
@@ -81,6 +85,34 @@ export function RightInspector({ onClose }: RightInspectorProps) {
     if (!duct) return null;
     return calculateDuctFillRatio(duct, wires);
   }, [duct, wires]);
+
+  const doorCutoutSpec = useMemo(() => {
+    if (activeSheetType !== "door-cutout") return null;
+    return computeDoorCutouts(enclosure, components);
+  }, [activeSheetType, enclosure, components]);
+
+  const doorHoleBreakdown = useMemo(() => {
+    if (!doorCutoutSpec) return [];
+    const counts = new Map<string, number>();
+    for (const cutout of doorCutoutSpec.cutouts) {
+      if (cutout.kind === "circle") {
+        const key = `Ø${cutout.mainDiameterMm ?? 22.5}mm`;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      } else if (cutout.kind === "rect") {
+        const key = `□ ${cutout.rectWidthMm ?? 92}×${cutout.rectHeightMm ?? 92}mm`;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      } else if (cutout.kind === "fan-filter") {
+        const keyFan = `Ø${cutout.mainDiameterMm ?? 116}mm (Fan)`;
+        counts.set(keyFan, (counts.get(keyFan) ?? 0) + 1);
+        const keyCorner = `4x Ø4.5mm (Mount)`;
+        counts.set(keyCorner, (counts.get(keyCorner) ?? 0) + 1);
+      } else if (cutout.kind === "double-d") {
+        const key = `Double-D Ø${cutout.mainDiameterMm ?? 22.5} / ${cutout.flatToFlatMm ?? 20.1}mm`;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+      }
+    }
+    return Array.from(counts.entries()).map(([label, count]) => ({ label, count }));
+  }, [doorCutoutSpec]);
 
   const inputClass =
     "w-full rounded-lg border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#090b10] px-2.5 py-1.5 font-mono text-[13px] tabular-nums text-[#0f172a] dark:text-slate-100 focus:border-[#0284c7] dark:focus:border-white/30 focus:outline-none";
@@ -148,8 +180,200 @@ export function RightInspector({ onClose }: RightInspectorProps) {
             </span>
           </div>
 
+      {activeSheetType === "door-cutout" && doorCutoutSpec && (
+        <div className={`${cardClass} space-y-3 border-amber-500/20`}>
+          <div className="flex items-center justify-between border-b border-[#e2e8f0] dark:border-white/10 pb-2">
+            <span className="font-semibold text-[13px] text-[#0f172a] dark:text-white flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-amber-500 inline-block" />
+              Door Drilling Inspector
+            </span>
+            <span className="font-mono text-[11px] text-[#64748b] dark:text-slate-400">
+              {doorCutoutSpec.cutouts.length} cutouts ({doorCutoutSpec.allHoles.length} holes)
+            </span>
+          </div>
+
+          {/* Door Parameters Config */}
+          <div className="grid grid-cols-2 gap-2">
+            <label className="space-y-1">
+              <span className="text-xs text-[#64748b] dark:text-slate-400">
+                Hinge Side
+              </span>
+              <select
+                value={enclosure.doorHingeSide ?? "left"}
+                onChange={(e) =>
+                  updateEnclosure({
+                    doorHingeSide: e.target.value as "left" | "right",
+                  })
+                }
+                className={inputClass}
+              >
+                <option value="left">Left (Engsel Kiri)</option>
+                <option value="right">Right (Engsel Kanan)</option>
+              </select>
+            </label>
+            <label className="space-y-1">
+              <span className="text-xs text-[#64748b] dark:text-slate-400">
+                Door Thickness
+              </span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  step={0.5}
+                  min={1}
+                  max={5}
+                  value={enclosure.doorThicknessMm ?? 2.0}
+                  onChange={(e) =>
+                    updateEnclosure({
+                      doorThicknessMm: Math.max(
+                        0.8,
+                        Number.parseFloat(e.target.value) || 2.0
+                      ),
+                    })
+                  }
+                  className={inputClass}
+                />
+                <span className="font-mono text-[11px] text-[#94a3b8]">mm</span>
+              </div>
+            </label>
+          </div>
+
+          {/* Cutout Diameter & Type Breakdown */}
+          <div className="space-y-1.5 pt-1">
+            <span className="text-xs font-semibold text-[#64748b] dark:text-slate-400">
+              Cutout / Hole Breakdown:
+            </span>
+            {doorHoleBreakdown.length === 0 ? (
+              <p className="font-mono text-[11px] text-[#94a3b8] italic">
+                No door components placed yet. Drag pilot lamps, buttons, or meters onto door sheet.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {doorHoleBreakdown.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className={`flex items-center justify-between px-2.5 py-1 text-[11px] font-mono ${subBoxClass}`}
+                  >
+                    <span className="text-[#0f172a] dark:text-slate-200">
+                      {item.label}
+                    </span>
+                    <span className="font-bold text-amber-600 dark:text-amber-400">
+                      {item.count}x
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Exclusion Zone Violations */}
+          {doorCutoutSpec.violations.length > 0 && (
+            <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2.5 space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-500">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>Exclusion Zone Warning!</span>
+              </div>
+              <ul className="list-disc list-inside space-y-0.5 text-[11px] text-rose-400">
+                {doorCutoutSpec.violations.map((v, i) => (
+                  <li key={i}>{v.message}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+
       {!selected && (
         <div className="space-y-3 text-xs text-[#64748b] dark:text-slate-400">
+          {activeSheetType === "door-cutout" && doorCutoutSpec && (
+            <div className={`${cardClass} space-y-3 border-sky-500/30 bg-sky-500/5`}>
+              <div className="flex items-center justify-between border-b border-[#e2e8f0] dark:border-white/10 pb-2">
+                <span className="font-mono text-xs font-semibold uppercase tracking-wider text-sky-600 dark:text-sky-400">
+                  Door Cutout &amp; Drilling Mal
+                </span>
+                <span className="rounded bg-sky-500/20 px-1.5 py-0.5 font-mono text-[11px] font-bold text-sky-600 dark:text-sky-300">
+                  {doorCutoutSpec.cutouts.length} Cutouts
+                </span>
+              </div>
+
+              {/* Hinge Side & Door Thickness Controls */}
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block space-y-1">
+                  <span className="text-[11px] text-[#64748b] dark:text-slate-400">Hinge Side</span>
+                  <select
+                    value={enclosure.doorHingeSide ?? "left"}
+                    onChange={(e) =>
+                      updateEnclosure({
+                        doorHingeSide: e.target.value as "left" | "right",
+                      })
+                    }
+                    className={inputClass}
+                  >
+                    <option value="left">Left (Engsel Kiri)</option>
+                    <option value="right">Right (Engsel Kanan)</option>
+                  </select>
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-[11px] text-[#64748b] dark:text-slate-400">Plate Thick (mm)</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    step="0.5"
+                    value={enclosure.doorThicknessMm ?? 2.0}
+                    onChange={(e) =>
+                      updateEnclosure({
+                        doorThicknessMm: parseFloat(e.target.value) || 2.0,
+                      })
+                    }
+                    className={inputClass}
+                  />
+                </label>
+              </div>
+
+              {/* Cutout / Drilling Breakdown */}
+              <div className="space-y-1.5 border-t border-[#e2e8f0] dark:border-white/10 pt-2">
+                <div className="flex items-center justify-between font-mono text-[11px] font-semibold text-[#0f172a] dark:text-slate-200">
+                  <span>Hole Breakdown</span>
+                  <span className="text-[10px] text-[#64748b] dark:text-slate-400">
+                    Total Holes: {doorCutoutSpec.allHoles.length}
+                  </span>
+                </div>
+                {doorHoleBreakdown.length === 0 ? (
+                  <p className="text-[11px] italic text-[#94a3b8] dark:text-slate-500">
+                    No door cutout components placed yet. Drag pilot lamps, push buttons, or meters from the left panel.
+                  </p>
+                ) : (
+                  <div className="space-y-1">
+                    {doorHoleBreakdown.map((item, idx) => (
+                      <div
+                        key={idx}
+                        className={`flex items-center justify-between ${subBoxClass} px-2 py-1 font-mono text-[11px]`}
+                      >
+                        <span className="text-[#334155] dark:text-slate-300">{item.label}</span>
+                        <span className="font-bold text-sky-600 dark:text-sky-400">{item.count}x</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Violations Warning */}
+              {doorCutoutSpec.violations.length > 0 && (
+                <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2 space-y-1 text-rose-600 dark:text-rose-400">
+                  <div className="flex items-center gap-1 font-semibold text-[11px]">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    <span>Exclusion Zone Warning!</span>
+                  </div>
+                  {doorCutoutSpec.violations.map((v, i) => (
+                    <p key={i} className="text-[10px] leading-tight">
+                      • {v.message}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className={`${cardClass} space-y-1.5`}>
             <p className="text-xs text-[#334155] dark:text-slate-300">
               Select a DIN rail, wire duct, component, or wire in the{" "}

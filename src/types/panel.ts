@@ -21,6 +21,8 @@ export interface EnclosureConfig {
   backplateThicknessMm: number;
   wallThicknessMm: number;
   doorMode: DoorMode;
+  doorHingeSide?: "left" | "right";
+  doorThicknessMm?: number;
   plateMode?: PlateMode;
   manualPlateWidthMm?: number;
   manualPlateHeightMm?: number;
@@ -85,11 +87,13 @@ export type ComponentTemplateId =
   | "end-clamp"
   | "pilot-lamp-red"
   | "pilot-lamp-green"
+  | "pilot-lamp-yellow"
   | "push-button"
   | "e-stop"
   | "selector-3pos"
   | "panel-meter-96"
-  | "cooling-fan-120";
+  | "cooling-fan-120"
+  | "cam-lock";
 
 export interface ComponentTemplate {
   id: ComponentTemplateId;

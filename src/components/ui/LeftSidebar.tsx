@@ -184,15 +184,20 @@ function PartVectorIcon({
       );
     case "pilot-lamp-red":
     case "pilot-lamp-green":
+    case "pilot-lamp-yellow":
     case "push-button":
     case "e-stop":
     case "selector-3pos":
+    case "cam-lock":
       return (
         <svg viewBox="0 0 40 40" className="h-9 w-9">
           <circle cx="20" cy="20" r="14" fill={templateId === "e-stop" ? "#facc15" : "#1e293b"} stroke="#475569" strokeWidth="1.5" />
           <circle cx="20" cy="20" r="9" fill={accentColor} stroke="#0f172a" strokeWidth="1.2" />
           {templateId === "selector-3pos" && (
             <line x1="14" y1="14" x2="26" y2="26" stroke="#ffffff" strokeWidth="2.2" strokeLinecap="round" />
+          )}
+          {templateId === "cam-lock" && (
+            <rect x="18" y="13" width="4" height="14" rx="1" fill="#ffffff" />
           )}
         </svg>
       );
