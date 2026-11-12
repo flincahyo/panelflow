@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "reac
 import {
   Box,
   ChevronDown,
+  ClipboardList,
   Download,
   Eye,
   FileCheck2,
@@ -29,6 +30,7 @@ import {
   Undo2,
   Zap,
 } from "lucide-react";
+import { BomReportModal } from "@/components/modals/BomReportModal";
 import { clearAutoSaveSession } from "@/lib/indexed-db";
 import {
   parseAndValidatePflow,
@@ -98,6 +100,7 @@ export function TopToolbar({
   const [activeMenu, setActiveMenu] = useState<"file" | "edit" | "view" | null>(
     null
   );
+  const [bomModalOpen, setBomModalOpen] = useState(false);
   const menuBarRef = useRef<HTMLDivElement>(null);
   const openPflowInputRef = useRef<HTMLInputElement>(null);
 
@@ -407,6 +410,21 @@ export function TopToolbar({
                 </button>
                 <div className={dropdownDividerClass} />
                 <div className={dropdownSectionLabelClass}>
+                  Manufacturing & BOM
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBomModalOpen(true);
+                    setActiveMenu(null);
+                  }}
+                  className={dropdownItemClass}
+                >
+                  <ClipboardList className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400" />
+                  BOM & Wire Cutting Schedule...
+                </button>
+                <div className={dropdownDividerClass} />
+                <div className={dropdownSectionLabelClass}>
                   Export 2D Drawing (.PFLOW)
                 </div>
                 <button
@@ -619,20 +637,21 @@ export function TopToolbar({
             )}
           </div>
         </div>
-      </div>
 
-      {/* RIGHT SECTION: Project Pill (.PFLOW) + Viewport Switcher + Unit Switcher + Theme Toggle + Inspector Toggle */}
-      <div className="flex items-center gap-2.5">
-        {/* Active Project Pill */}
+        {/* Active Project Pill (RelayFlow parity: left section after File/Edit/View) */}
         <div className="hidden items-center gap-2 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] px-3.5 py-1.5 font-mono text-xs md:flex">
-          <span className="h-2 w-2 rounded-full bg-emerald-500 dark:bg-emerald-400" />
-          <span className="max-w-[160px] truncate text-[#334155] dark:text-slate-300 font-medium">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500 dark:bg-emerald-400" />
+          <span className="max-w-[260px] lg:max-w-[340px] truncate text-[#334155] dark:text-slate-300 font-medium">
             {titleBlock.projectName}
           </span>
-          <span className="rounded-md border border-[#e2e8f0] dark:border-white/10 bg-[#e2e8f0]/70 dark:bg-white/10 px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-[#0f172a] dark:text-slate-200">
+          <span className="shrink-0 rounded-md border border-[#e2e8f0] dark:border-white/10 bg-[#e2e8f0]/70 dark:bg-white/10 px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-wider text-[#0f172a] dark:text-slate-200">
             .PFLOW
           </span>
         </div>
+      </div>
+
+      {/* RIGHT SECTION: Viewport Switcher + Unit Switcher + BOM Report + Theme Toggle + Inspector Toggle */}
+      <div className="flex items-center gap-2.5">
 
         {/* Viewport Switcher Pill: [2D Layout] / [3D View] */}
         <div className="flex items-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#171a21] p-0.5 shadow-inner">
@@ -672,13 +691,25 @@ export function TopToolbar({
               className={`rounded-full px-2.5 py-1 font-mono text-xs transition-all ${
                 displayUnit === u
                   ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-bold shadow-xs"
-                  : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
+                  : "text-[#475569] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200 font-medium"
               }`}
             >
               {u}
             </button>
           ))}
         </div>
+
+        {/* BOM & Wire List Quick Button */}
+        <button
+          type="button"
+          onClick={() => setBomModalOpen(true)}
+          aria-label="BOM & Wire Cutting Schedule"
+          title="BOM & Wire Cutting Schedule"
+          className="flex h-8 items-center gap-1.5 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#171a21] px-3 text-xs font-medium text-[#334155] dark:text-slate-200 shadow-xs dark:shadow-none transition-all hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white"
+        >
+          <ClipboardList className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400" />
+          <span className="hidden lg:inline">BOM</span>
+        </button>
 
         {/* Theme Toggle Button (Sun / Moon) */}
         <button
@@ -722,6 +753,9 @@ export function TopToolbar({
         onChange={handleOpenPflowFile}
         className="hidden"
       />
+      {bomModalOpen && (
+        <BomReportModal onClose={() => setBomModalOpen(false)} />
+      )}
     </header>
   );
 }
