@@ -373,7 +373,9 @@ export function LeftSidebar() {
         body: JSON.stringify({
           name: asset.name,
           format: asset.format,
-          bounding_box: asset.boundingBoxMm,
+          bounding_box: asset.cropMm
+            ? { ...asset.boundingBoxMm, cropMm: asset.cropMm }
+            : asset.boundingBoxMm,
           pins: asset.pins,
           cad_data: asset.rawText || asset.dataUrl || null,
         }),
@@ -454,6 +456,7 @@ export function LeftSidebar() {
       yMm: 0,
       zMm: Math.max(10, item.boundingBoxMm.d / 2),
       boundingBoxMm: { ...item.boundingBoxMm },
+      cropMm: item.cropMm ? { ...item.cropMm } : undefined,
       pins: item.pins.map((p, idx) => ({
         ...p,
         id: `${uid}-pin-${idx + 1}`,

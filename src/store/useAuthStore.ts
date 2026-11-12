@@ -101,6 +101,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         const json = await res.json();
         const parts = Array.isArray(json.parts) ? json.parts : [];
         for (const p of parts) {
+          const rawBb = p.bounding_box || { w: 60, h: 60, d: 40 };
+          const cropMm =
+            rawBb.cropMm && typeof rawBb.cropMm === "object"
+              ? {
+                  top: Number(rawBb.cropMm.top) || 0,
+                  bottom: Number(rawBb.cropMm.bottom) || 0,
+                  left: Number(rawBb.cropMm.left) || 0,
+                  right: Number(rawBb.cropMm.right) || 0,
+                }
+              : undefined;
           const asset: CustomCadAsset = {
             id: p.id,
             name: p.name,
@@ -111,7 +121,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             yMm: 0,
             zMm: 10,
             rotationDeg: 0,
-            boundingBoxMm: p.bounding_box || { w: 60, h: 60, d: 40 },
+            boundingBoxMm: {
+              w: Number(rawBb.w) || 60,
+              h: Number(rawBb.h) || 60,
+              d: Number(rawBb.d) || 40,
+            },
+            cropMm,
             pins: Array.isArray(p.pins) ? p.pins : [],
             rawText: typeof p.cad_data === "string" ? p.cad_data : undefined,
           };

@@ -13,7 +13,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import { ContextMenu } from "@/components/ui/ContextMenu";
-import { detectCollisionsAndBounds } from "@/lib/collision";
+import { detectCollisionsAndBounds, getEffectiveCadBounds } from "@/lib/collision";
 import { getBackplateDimensions } from "@/lib/template-export";
 import { parseDxfToMmSegments } from "@/lib/dxf-parser";
 import { WIRE_COLOR_MAP } from "@/lib/sheet-export";
@@ -525,6 +525,8 @@ function CadAsset2DSymbol({
   onContextMenu: (e: React.MouseEvent) => void;
   onPinClick: (e: React.PointerEvent, pinId: string) => void;
 }) {
+  const [hoveredPinId, setHoveredPinId] = useState<string | null>(null);
+
   const dxfParsed = useMemo(() => {
     if (asset.format !== "dxf" || !asset.rawText) return null;
     return parseDxfToMmSegments(asset.rawText, asset.sourceUnit);
@@ -533,9 +535,24 @@ function CadAsset2DSymbol({
   const w = dxfParsed ? dxfParsed.boundingBoxMm.w : asset.boundingBoxMm.w;
   const h = dxfParsed ? dxfParsed.boundingBoxMm.h : asset.boundingBoxMm.h;
 
+  const effBounds = getEffectiveCadBounds({
+    boundingBoxMm: { w, h },
+    cropMm: asset.cropMm,
+  });
+  const effW = effBounds.widthMm;
+  const effH = effBounds.heightMm;
+
   // SVG Y is down, world Y is up
-  const x = asset.xMm - w / 2;
-  const y = -(asset.yMm + h / 2);
+  const effX = asset.xMm + effBounds.offsetX - effW / 2;
+  const effY = -(asset.yMm + effBounds.offsetY + effH / 2);
+  const hasCrop = Boolean(
+    asset.cropMm &&
+      (asset.cropMm.top > 0 ||
+        asset.cropMm.bottom > 0 ||
+        asset.cropMm.left > 0 ||
+        asset.cropMm.right > 0)
+  );
+  const clipId = `cad-crop-${asset.id.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 
   const shortLabel =
     asset.name.length > 18 ? `${asset.name.slice(0, 16)}…` : asset.name;
@@ -554,12 +571,20 @@ function CadAsset2DSymbol({
     >
       <title>{asset.fileName}</title>
 
+      {hasCrop && (
+        <defs>
+          <clipPath id={clipId}>
+            <rect x={effX} y={effY} width={effW} height={effH} />
+          </clipPath>
+        </defs>
+      )}
+
       {/* Interactive Hitbox & Background */}
       <rect
-        x={x}
-        y={y}
-        width={w}
-        height={h}
+        x={effX}
+        y={effY}
+        width={effW}
+        height={effH}
         fill={asset.format === "dxf" ? "#f0f9ff" : "#f8fafc"}
         fillOpacity={asset.format === "dxf" ? 0.35 : 0.85}
         stroke={
@@ -578,10 +603,10 @@ function CadAsset2DSymbol({
       {/* Selection / Marking Halo */}
       {(isSelected || isMarkingThis) && (
         <rect
-          x={x - 2.5}
-          y={y - 2.5}
-          width={w + 5}
-          height={h + 5}
+          x={effX - 2.5}
+          y={effY - 2.5}
+          width={effW + 5}
+          height={effH + 5}
           fill="none"
           stroke={isMarkingThis ? "#f59e0b" : "#0284c7"}
           strokeWidth={1.2}
@@ -592,7 +617,12 @@ function CadAsset2DSymbol({
 
       {/* DXF Vector Segments or 3D Mesh Silhouette */}
       {dxfParsed && dxfParsed.segments.length > 0 ? (
-        <g stroke="#0369a1" strokeWidth={0.75} strokeLinecap="round">
+        <g
+          clipPath={hasCrop ? `url(#${clipId})` : undefined}
+          stroke="#0369a1"
+          strokeWidth={0.75}
+          strokeLinecap="round"
+        >
           {dxfParsed.segments.map((seg, idx) => (
             <line
               key={idx}
@@ -604,17 +634,22 @@ function CadAsset2DSymbol({
           ))}
         </g>
       ) : (
-        <g stroke="#64748b" strokeWidth={0.6} fill="none">
-          <line x1={x} y1={y} x2={x + w} y2={y + h} strokeDasharray="2,2" />
-          <line x1={x + w} y1={y} x2={x} y2={y + h} strokeDasharray="2,2" />
+        <g
+          clipPath={hasCrop ? `url(#${clipId})` : undefined}
+          stroke="#64748b"
+          strokeWidth={0.6}
+          fill="none"
+        >
+          <line x1={effX} y1={effY} x2={effX + effW} y2={effY + effH} strokeDasharray="2,2" />
+          <line x1={effX + effW} y1={effY} x2={effX} y2={effY + effH} strokeDasharray="2,2" />
           <circle cx={asset.xMm} cy={-asset.yMm} r={Math.min(w, h) * 0.2} />
         </g>
       )}
 
       {/* Asset Name & Format Tag */}
       <text
-        x={x + 2}
-        y={y - 3}
+        x={effX + 2}
+        y={effY - 3}
         fontSize={4.5}
         fontFamily="monospace"
         fontWeight="bold"
@@ -623,17 +658,30 @@ function CadAsset2DSymbol({
         {shortLabel} [{asset.format.toUpperCase()}]
       </text>
 
-      {/* Pins */}
+      {/* Transparent / Subtle Hollow Crosshair Pin Markers */}
       {asset.pins.map((pin) => {
         const px = asset.xMm + pin.localXMm;
         const py = -(asset.yMm + pin.localYMm);
         const isStartPin =
           activeWireStartPin?.componentId === asset.id &&
           activeWireStartPin?.pinId === pin.id;
+        const isHovered = hoveredPinId === pin.id;
+        const isActivePin =
+          isWireMode || isMarkingThis || isHovered || isStartPin;
+
+        const ringStroke = isStartPin
+          ? "#b45309"
+          : isWireMode
+          ? "#0284c7"
+          : "#d97706";
 
         return (
           <g
             key={pin.id}
+            onPointerEnter={() => setHoveredPinId(pin.id)}
+            onPointerLeave={() =>
+              setHoveredPinId((curr) => (curr === pin.id ? null : curr))
+            }
             onPointerDown={(e) => {
               if (isWireMode) {
                 e.stopPropagation();
@@ -645,19 +693,56 @@ function CadAsset2DSymbol({
             <circle
               cx={px}
               cy={py}
-              r={isWireMode ? 2.6 : 1.8}
-              fill={isStartPin ? "#f59e0b" : "#fef3c7"}
-              stroke={isStartPin ? "#b45309" : isWireMode ? "#0284c7" : "#d97706"}
-              strokeWidth={isWireMode ? 0.9 : 0.65}
+              r={
+                isStartPin
+                  ? 2.6
+                  : isWireMode || isMarkingThis
+                  ? 2.3
+                  : isHovered
+                  ? 2.2
+                  : 1.9
+              }
+              fill={
+                isStartPin
+                  ? "rgba(245, 158, 11, 0.25)"
+                  : isActivePin
+                  ? "rgba(245, 158, 11, 0.14)"
+                  : "rgba(245, 158, 11, 0.08)"
+              }
+              stroke={ringStroke}
+              strokeOpacity={isActivePin ? 0.95 : 0.65}
+              strokeWidth={isActivePin ? 0.75 : 0.4}
+            />
+            <line
+              x1={px - 1.1}
+              y1={py}
+              x2={px + 1.1}
+              y2={py}
+              stroke={ringStroke}
+              strokeOpacity={isActivePin ? 0.9 : 0.55}
+              strokeWidth={0.3}
+              pointerEvents="none"
+            />
+            <line
+              x1={px}
+              y1={py - 1.1}
+              x2={px}
+              y2={py + 1.1}
+              stroke={ringStroke}
+              strokeOpacity={isActivePin ? 0.9 : 0.55}
+              strokeWidth={0.3}
+              pointerEvents="none"
             />
             <text
-              x={px}
-              y={py - 3}
-              fontSize={3.6}
+              x={px + 2.4}
+              y={py + 1}
+              fontSize={isActivePin ? 3.5 : 2.8}
               fontFamily="monospace"
-              fontWeight="bold"
-              fill="#92400e"
-              textAnchor="middle"
+              fontWeight={isActivePin ? "bold" : "normal"}
+              fill={isWireMode ? "#0369a1" : "#92400e"}
+              fillOpacity={isActivePin ? 0.95 : 0.55}
+              textAnchor="start"
+              pointerEvents="none"
             >
               {pin.label}
             </text>
@@ -1123,15 +1208,16 @@ export function Panel2DCanvas() {
         }
 
         for (const a of cadAssets) {
-          const dims = getRotatedDimensions(
-            a.boundingBoxMm.w,
-            a.boundingBoxMm.h,
-            a.rotationDeg ?? 0
-          );
-          const ax1 = a.xMm - dims.widthMm / 2;
-          const ax2 = a.xMm + dims.widthMm / 2;
-          const ay1 = a.yMm - dims.heightMm / 2;
-          const ay2 = a.yMm + dims.heightMm / 2;
+          const eff = getEffectiveCadBounds(a);
+          const rot = a.rotationDeg ?? 0;
+          const dims = getRotatedDimensions(eff.widthMm, eff.heightMm, rot);
+          const rotOffset = rotateLocalPoint(eff.offsetX, eff.offsetY, rot);
+          const effCenterXMm = a.xMm + rotOffset.xMm;
+          const effCenterYMm = a.yMm + rotOffset.yMm;
+          const ax1 = effCenterXMm - dims.widthMm / 2;
+          const ax2 = effCenterXMm + dims.widthMm / 2;
+          const ay1 = effCenterYMm - dims.heightMm / 2;
+          const ay2 = effCenterYMm + dims.heightMm / 2;
           if (ax1 <= maxX && ax2 >= minX && ay1 <= maxY && ay2 >= minY) {
             hits.push({ kind: "cad", id: a.id });
           }

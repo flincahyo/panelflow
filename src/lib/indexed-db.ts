@@ -12,6 +12,7 @@ export interface CustomLibraryCadItem {
   format: CustomCadAsset["format"];
   sourceUnit: CustomCadAsset["sourceUnit"];
   boundingBoxMm: { w: number; h: number; d: number };
+  cropMm?: CustomCadAsset["cropMm"];
   pins: CustomCadAsset["pins"];
   rawText?: string;
   dataUrl?: string;
@@ -118,6 +119,7 @@ export async function saveCustomCadToLibrary(
     format: asset.format,
     sourceUnit: asset.sourceUnit,
     boundingBoxMm: { ...asset.boundingBoxMm },
+    cropMm: asset.cropMm ? { ...asset.cropMm } : undefined,
     pins: asset.pins.map((p) => ({ ...p })),
     rawText: asset.rawText,
     dataUrl: asset.dataUrl,

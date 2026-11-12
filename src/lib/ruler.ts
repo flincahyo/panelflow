@@ -1,4 +1,5 @@
-import { DIN_RAIL_HEIGHT_MM, getRotatedDimensions } from "@/lib/snap";
+import { DIN_RAIL_HEIGHT_MM, getRotatedDimensions, rotateLocalPoint } from "@/lib/snap";
+import { getEffectiveCadBounds } from "@/lib/collision";
 import type {
   CustomCadAsset,
   DinRail,
@@ -186,12 +187,11 @@ export function computeSelectionFootprint(params: {
     } else if (target.kind === "cad") {
       const a = cadAssets.find((item) => item.id === target.id);
       if (!a) continue;
-      const dims = getRotatedDimensions(
-        a.boundingBoxMm.w,
-        a.boundingBoxMm.h,
-        a.rotationDeg ?? 0
-      );
-      expand(a.xMm, a.yMm, dims.widthMm, dims.heightMm);
+      const eff = getEffectiveCadBounds(a);
+      const rot = a.rotationDeg ?? 0;
+      const dims = getRotatedDimensions(eff.widthMm, eff.heightMm, rot);
+      const rotOffset = rotateLocalPoint(eff.offsetX, eff.offsetY, rot);
+      expand(a.xMm + rotOffset.xMm, a.yMm + rotOffset.yMm, dims.widthMm, dims.heightMm);
     } else if (target.kind === "rail") {
       const r = rails.find((item) => item.id === target.id);
       if (!r) continue;

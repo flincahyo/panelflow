@@ -125,6 +125,13 @@ export interface PlacedComponent {
 
 export type CadFormat = "glb" | "gltf" | "obj" | "dxf";
 
+export interface CadCropMm {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}
+
 export interface CustomCadAsset {
   id: string;
   name: string;
@@ -136,6 +143,7 @@ export interface CustomCadAsset {
   zMm: number;
   rotationDeg?: RotationDeg;
   boundingBoxMm: { w: number; h: number; d: number };
+  cropMm?: CadCropMm;
   pins: PinTerminal[];
   objectUrl?: string;
   dataUrl?: string;

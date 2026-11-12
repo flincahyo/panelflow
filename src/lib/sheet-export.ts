@@ -8,6 +8,7 @@ import type {
   WireConnection,
   WireDuct,
 } from "@/types/panel";
+import { getEffectiveCadBounds } from "./collision";
 import { parseDxfToMmSegments } from "./dxf-parser";
 import { getBackplateDimensions } from "./template-export";
 import {
@@ -166,8 +167,22 @@ export function generateEplanSheetSvg(params: EplanSheetParams): string {
         dxfSegments = parsed.segments;
       }
 
-      const x = toSvgX(asset.xMm - w / 2);
-      const y = toSvgY(asset.yMm + h / 2);
+      const effBounds = getEffectiveCadBounds({
+        boundingBoxMm: { w, h },
+        cropMm: asset.cropMm,
+      });
+      const effW = effBounds.widthMm;
+      const effH = effBounds.heightMm;
+      const effX = toSvgX(asset.xMm + effBounds.offsetX - effW / 2);
+      const effY = toSvgY(asset.yMm + effBounds.offsetY + effH / 2);
+      const hasCrop = Boolean(
+        asset.cropMm &&
+          (asset.cropMm.top > 0 ||
+            asset.cropMm.bottom > 0 ||
+            asset.cropMm.left > 0 ||
+            asset.cropMm.right > 0)
+      );
+      const clipId = `export-cad-crop-${asset.id.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
 
       const pinsSvg = asset.pins
         .map((p) => {
@@ -177,8 +192,10 @@ export function generateEplanSheetSvg(params: EplanSheetParams): string {
 
           return `
       <g class="cad-pin" data-pin-id="${p.id}">
-        <circle cx="${pinSvgX.toFixed(2)}" cy="${pinSvgY.toFixed(2)}" r="1.6" fill="#fef3c7" stroke="#d97706" stroke-width="0.6" />
-        <text x="${(pinSvgX + 2.5).toFixed(2)}" y="${(pinSvgY + 2).toFixed(2)}" font-family="monospace" font-size="4.5" font-weight="bold" fill="#92400e">${p.label}</text>
+        <circle cx="${pinSvgX.toFixed(2)}" cy="${pinSvgY.toFixed(2)}" r="1.9" fill="rgba(245, 158, 11, 0.08)" stroke="#d97706" stroke-opacity="0.65" stroke-width="0.4" />
+        <line x1="${(pinSvgX - 1.1).toFixed(2)}" y1="${pinSvgY.toFixed(2)}" x2="${(pinSvgX + 1.1).toFixed(2)}" y2="${pinSvgY.toFixed(2)}" stroke="#d97706" stroke-opacity="0.55" stroke-width="0.3" />
+        <line x1="${pinSvgX.toFixed(2)}" y1="${(pinSvgY - 1.1).toFixed(2)}" x2="${pinSvgX.toFixed(2)}" y2="${(pinSvgY + 1.1).toFixed(2)}" stroke="#d97706" stroke-opacity="0.55" stroke-width="0.3" />
+        <text x="${(pinSvgX + 2.4).toFixed(2)}" y="${(pinSvgY + 1).toFixed(2)}" font-family="monospace" font-size="3.2" fill="#92400e" fill-opacity="0.7">${p.label}</text>
       </g>`;
         })
         .join("\n");
@@ -197,11 +214,19 @@ export function generateEplanSheetSvg(params: EplanSheetParams): string {
       const shortLabel =
         asset.name.length > 20 ? `${asset.name.slice(0, 18)}…` : asset.name;
 
+      const clipDef = hasCrop
+        ? `<defs><clipPath id="${clipId}"><rect x="${effX.toFixed(2)}" y="${effY.toFixed(2)}" width="${effW.toFixed(2)}" height="${effH.toFixed(2)}" /></clipPath></defs>`
+        : "";
+      const clipAttr = hasCrop ? ` clip-path="url(#${clipId})"` : "";
+
       return `
     <g class="cad-asset" data-id="${asset.id}">
-      <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${w.toFixed(2)}" height="${h.toFixed(2)}" fill="${asset.format === "dxf" ? "#f0f9ff" : "#f8fafc"}" fill-opacity="${asset.format === "dxf" ? "0.3" : "0.85"}" stroke="${asset.format === "dxf" ? "#94a3b8" : "#0f172a"}" stroke-width="0.7" stroke-dasharray="${asset.format === "dxf" ? "2,1.5" : "none"}" />
-      <text x="${(x + 2).toFixed(2)}" y="${(y - 3).toFixed(2)}" font-family="monospace" font-size="5" font-weight="bold" fill="#0369a1">${shortLabel} [${asset.format.toUpperCase()}]</text>
-      ${dxfLinesSvg}
+      ${clipDef}
+      <rect x="${effX.toFixed(2)}" y="${effY.toFixed(2)}" width="${effW.toFixed(2)}" height="${effH.toFixed(2)}" fill="${asset.format === "dxf" ? "#f0f9ff" : "#f8fafc"}" fill-opacity="${asset.format === "dxf" ? "0.3" : "0.85"}" stroke="${asset.format === "dxf" ? "#94a3b8" : "#0f172a"}" stroke-width="0.7" stroke-dasharray="${asset.format === "dxf" ? "2,1.5" : "none"}" />
+      <text x="${(effX + 2).toFixed(2)}" y="${(effY - 3).toFixed(2)}" font-family="monospace" font-size="5" font-weight="bold" fill="#0369a1">${shortLabel} [${asset.format.toUpperCase()}]</text>
+      <g${clipAttr}>
+        ${dxfLinesSvg}
+      </g>
       ${pinsSvg}
     </g>`;
     })

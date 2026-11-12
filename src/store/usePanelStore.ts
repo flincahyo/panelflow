@@ -4,9 +4,11 @@ import {
   clampToBackplate,
   DIN_RAIL_HEIGHT_MM,
   getRotatedDimensions,
+  rotateLocalPoint,
   snapComponentToNearestRail,
   snapToGrid,
 } from "@/lib/snap";
+import { getEffectiveCadBounds } from "@/lib/collision";
 import { getBackplateDimensions } from "@/lib/template-export";
 import { resolvePinWorldPoint, routeWireThroughDucts } from "@/lib/wire-router";
 import type {
@@ -845,14 +847,17 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
 
     const nextCadAssets = activeSheet.cadAssets.map((a) => {
       if (!cadIds.has(a.id)) return a;
-      const dims = getRotatedDimensions(a.boundingBoxMm.w, a.boundingBoxMm.h, a.rotationDeg ?? 0);
-      const targetX = a.xMm + dxMm;
-      const targetY = a.yMm + dyMm;
+      const eff = getEffectiveCadBounds(a);
+      const rot = a.rotationDeg ?? 0;
+      const dims = getRotatedDimensions(eff.widthMm, eff.heightMm, rot);
+      const rotOffset = rotateLocalPoint(eff.offsetX, eff.offsetY, rot);
+      const targetX = a.xMm + rotOffset.xMm + dxMm;
+      const targetY = a.yMm + rotOffset.yMm + dyMm;
       const clamped = clampToBackplate(targetX, targetY, dims.widthMm, dims.heightMm, plateW, plateH);
       return {
         ...a,
-        xMm: clamped.xMm,
-        yMm: clamped.yMm,
+        xMm: clamped.xMm - rotOffset.xMm,
+        yMm: clamped.yMm - rotOffset.yMm,
       };
     });
 
@@ -992,17 +997,22 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
       } else if (sel.kind === "cad") {
         const a = activeSheet.cadAssets.find((x) => x.id === sel.id);
         if (a) {
-          const dims = getRotatedDimensions(a.boundingBoxMm.w, a.boundingBoxMm.h, a.rotationDeg ?? 0);
+          const eff = getEffectiveCadBounds(a);
+          const rot = a.rotationDeg ?? 0;
+          const dims = getRotatedDimensions(eff.widthMm, eff.heightMm, rot);
+          const rotOffset = rotateLocalPoint(eff.offsetX, eff.offsetY, rot);
+          const cx = a.xMm + rotOffset.xMm;
+          const cy = a.yMm + rotOffset.yMm;
           targets.push({
             id: a.id,
             kind: "cad",
-            xMm: a.xMm,
-            yMm: a.yMm,
+            xMm: cx,
+            yMm: cy,
             wMm: dims.widthMm,
             hMm: dims.heightMm,
-            left: a.xMm - dims.widthMm / 2,
-            center: a.xMm,
-            top: a.yMm + dims.heightMm / 2,
+            left: cx - dims.widthMm / 2,
+            center: cx,
+            top: cy + dims.heightMm / 2,
           });
         }
       }

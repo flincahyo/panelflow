@@ -1,5 +1,43 @@
-import { getRotatedDimensions } from "@/lib/snap";
+import { getRotatedDimensions, rotateLocalPoint } from "@/lib/snap";
 import type { CustomCadAsset, PlacedComponent } from "@/types/panel";
+
+export interface CadEffectiveBounds {
+  widthMm: number;
+  heightMm: number;
+  offsetX: number;
+  offsetY: number;
+}
+
+/**
+ * Calculates effective dimensions and centroid offset of a CAD asset after crop/trim.
+ * Uncropped geometry is centered at (xMm, yMm).
+ * When cropped, effective width = max(1, w - left - right),
+ * effective height = max(1, h - top - bottom),
+ * centroid shifts by ((left - right) / 2, (bottom - top) / 2).
+ */
+export function getEffectiveCadBounds(asset: {
+  boundingBoxMm: { w: number; h: number };
+  cropMm?: { top: number; bottom: number; left: number; right: number };
+}): CadEffectiveBounds {
+  const w = asset.boundingBoxMm.w;
+  const h = asset.boundingBoxMm.h;
+  const crop = asset.cropMm;
+  if (!crop) {
+    return { widthMm: w, heightMm: h, offsetX: 0, offsetY: 0 };
+  }
+
+  const left = Math.max(0, Math.min(crop.left || 0, w - 1));
+  const right = Math.max(0, Math.min(crop.right || 0, Math.max(0, w - left - 1)));
+  const top = Math.max(0, Math.min(crop.top || 0, h - 1));
+  const bottom = Math.max(0, Math.min(crop.bottom || 0, Math.max(0, h - top - 1)));
+
+  const effW = Math.max(1, w - left - right);
+  const effH = Math.max(1, h - top - bottom);
+  const offsetX = (left - right) / 2;
+  const offsetY = (bottom - top) / 2;
+
+  return { widthMm: effW, heightMm: effH, offsetX, offsetY };
+}
 
 export interface BoxItem {
   id: string;
@@ -39,17 +77,16 @@ export function detectCollisionsAndBounds(
       };
     }),
     ...cadAssets.map((a) => {
-      const dims = getRotatedDimensions(
-        a.boundingBoxMm.w,
-        a.boundingBoxMm.h,
-        a.rotationDeg ?? 0
-      );
+      const eff = getEffectiveCadBounds(a);
+      const rot = a.rotationDeg ?? 0;
+      const dims = getRotatedDimensions(eff.widthMm, eff.heightMm, rot);
+      const rotOffset = rotateLocalPoint(eff.offsetX, eff.offsetY, rot);
       return {
         id: a.id,
         kind: "cad" as const,
         name: a.name,
-        xMm: a.xMm,
-        yMm: a.yMm,
+        xMm: a.xMm + rotOffset.xMm,
+        yMm: a.yMm + rotOffset.yMm,
         widthMm: dims.widthMm,
         heightMm: dims.heightMm,
       };

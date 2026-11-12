@@ -1,8 +1,9 @@
 "use client";
 
-import { ClipboardList, MapPin, Sliders, Trash2, X } from "lucide-react";
+import { ClipboardList, Crop, MapPin, RotateCcw, Sliders, Trash2, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { BomPanelTab } from "@/components/ui/BomPanelTab";
+import { getEffectiveCadBounds } from "@/lib/collision";
 import { snapToGrid } from "@/lib/snap";
 import { formatDim, fromMm, inputStepForUnit, toMm } from "@/lib/units";
 import { usePanelStore } from "@/store/usePanelStore";
@@ -493,7 +494,18 @@ export function RightInspector({ onClose }: RightInspectorProps) {
         </div>
       )}
 
-      {cad && (
+      {cad && (() => {
+        const effBounds = getEffectiveCadBounds(cad);
+        const crop = cad.cropMm ?? { top: 0, bottom: 0, left: 0, right: 0 };
+        const hasCrop = crop.top > 0 || crop.bottom > 0 || crop.left > 0 || crop.right > 0;
+        const updateCrop = (side: "top" | "bottom" | "left" | "right", rawVal: string) => {
+          const valMm = Math.max(0, toMm(Number.parseFloat(rawVal) || 0, displayUnit));
+          const next = { ...crop, [side]: valMm };
+          const allZero = next.top === 0 && next.bottom === 0 && next.left === 0 && next.right === 0;
+          updateCadAsset(cad.id, { cropMm: allZero ? undefined : next });
+        };
+
+        return (
         <div className={`${cardClass} space-y-3`}>
           <div className="flex items-center justify-between">
             <span className="font-semibold text-[13px] text-[#0f172a] dark:text-white">{cad.name}</span>
@@ -506,10 +518,18 @@ export function RightInspector({ onClose }: RightInspectorProps) {
             </button>
           </div>
 
-          <div className={`${subBoxClass} p-2 font-mono text-[11px] tabular-nums text-[#64748b] dark:text-slate-400`}>
-            Normalized BBox: {formatDim(cad.boundingBoxMm.w, displayUnit)} ×{" "}
-            {formatDim(cad.boundingBoxMm.h, displayUnit)} ×{" "}
-            {formatDim(cad.boundingBoxMm.d, displayUnit)}
+          <div className={`${subBoxClass} p-2 font-mono text-[11px] tabular-nums text-[#64748b] dark:text-slate-400 space-y-0.5`}>
+            <div>
+              Normalized BBox: {formatDim(cad.boundingBoxMm.w, displayUnit)} ×{" "}
+              {formatDim(cad.boundingBoxMm.h, displayUnit)} ×{" "}
+              {formatDim(cad.boundingBoxMm.d, displayUnit)}
+            </div>
+            {hasCrop && (
+              <div className="text-sky-600 dark:text-sky-400 font-semibold">
+                Cropped BBox: {formatDim(effBounds.widthMm, displayUnit)} ×{" "}
+                {formatDim(effBounds.heightMm, displayUnit)}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-3 gap-1.5">
@@ -538,6 +558,78 @@ export function RightInspector({ onClose }: RightInspectorProps) {
                 />
               </label>
             ))}
+          </div>
+
+          {/* Non-Destructive CAD Crop / Trim */}
+          <div className="space-y-2 border-t border-[#e2e8f0] dark:border-white/10 pt-2.5">
+            <div className="flex items-center justify-between">
+              <span className="flex items-center gap-1.5 font-mono text-[11px] font-semibold uppercase tracking-wider text-[#64748b] dark:text-slate-400">
+                <Crop className="h-3.5 w-3.5 text-sky-500" />
+                CAD Crop / Trim ({displayUnit})
+              </span>
+              <button
+                type="button"
+                disabled={!hasCrop}
+                onClick={() => updateCadAsset(cad.id, { cropMm: undefined })}
+                className={`flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-[10px] transition-colors ${
+                  hasCrop
+                    ? "text-sky-600 dark:text-sky-400 hover:bg-sky-500/10"
+                    : "text-[#94a3b8] dark:text-slate-600 cursor-not-allowed"
+                }`}
+              >
+                <RotateCcw className="h-3 w-3" />
+                Reset Crop
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-1.5">
+              {(
+                [
+                  ["Top", "top"],
+                  ["Bottom", "bottom"],
+                  ["Left", "left"],
+                  ["Right", "right"],
+                ] as const
+              ).map(([label, side]) => (
+                <label key={side} className="space-y-0.5">
+                  <span className="text-[11px] text-[#64748b] dark:text-slate-400">
+                    {label}
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    step={step}
+                    value={Number(fromMm(crop[side], displayUnit).toFixed(2))}
+                    onChange={(e) => updateCrop(side, e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-1 pt-0.5">
+              <span className="font-mono text-[10px] text-[#94a3b8] dark:text-slate-500 mr-1">
+                Top preset:
+              </span>
+              {[10, 15, 20].map((presetMm) => (
+                <button
+                  key={presetMm}
+                  type="button"
+                  onClick={() =>
+                    updateCadAsset(cad.id, {
+                      cropMm: { ...crop, top: presetMm },
+                    })
+                  }
+                  className={`rounded border px-1.5 py-0.5 font-mono text-[10px] transition-colors ${
+                    Math.abs(crop.top - presetMm) < 0.01
+                      ? "border-sky-500 bg-sky-500/10 text-sky-600 dark:text-sky-400 font-semibold"
+                      : "border-[#e2e8f0] dark:border-white/10 text-[#64748b] dark:text-slate-400 hover:border-sky-400"
+                  }`}
+                >
+                  {presetMm}mm
+                </button>
+              ))}
+            </div>
           </div>
 
           <button
@@ -594,7 +686,8 @@ export function RightInspector({ onClose }: RightInspectorProps) {
             ))}
           </div>
         </div>
-      )}
+        );
+      })()}
         </div>
       )}
     </aside>
