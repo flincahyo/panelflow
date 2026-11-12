@@ -428,7 +428,7 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   wires: defaultInitialSheet.wires,
   titleBlock: defaultInitialSheet.titleBlock,
 
-  theme: "dark",
+  theme: "light",
   viewportMode: "2d",
   canvasTool2D: "select",
   displayUnit: "mm",

@@ -3,7 +3,8 @@
 import { OrbitControls } from "@react-three/drei";
 import { Canvas, type ThreeEvent } from "@react-three/fiber";
 import { Redo2, Undo2 } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
 import {
   ContextMenu,
   type ContextMenuState,
@@ -14,10 +15,109 @@ import { CustomCad3D } from "@/components/viewport/CustomCad3D";
 import { Enclosure3D } from "@/components/viewport/Enclosure3D";
 import { RailsAndDucts3D } from "@/components/viewport/RailsAndDucts3D";
 import { detectCollisionsAndBounds } from "@/lib/collision";
+import { WIRE_COLOR_MAP } from "@/lib/sheet-export";
 import { getBackplateDimensions } from "@/lib/template-export";
 import { formatDim } from "@/lib/units";
+import { getWireOuterDiameterMm } from "@/lib/wire-router";
 import { usePanelStore } from "@/store/usePanelStore";
 import type { DoorMode, GridSnapMm } from "@/types/panel";
+
+function Wires3D({
+  onContextMenu,
+}: {
+  onContextMenu: (e: ThreeEvent<MouseEvent>, target: ContextMenuTarget) => void;
+}) {
+  const components = usePanelStore((s) => s.components);
+  const cadAssets = usePanelStore((s) => s.cadAssets);
+  const wires = usePanelStore((s) => s.wires);
+  const selected = usePanelStore((s) => s.selected);
+  const setSelected = usePanelStore((s) => s.setSelected);
+
+  const wireMeshes = useMemo(() => {
+    const pinMap = new Map<string, THREE.Vector3>();
+    for (const c of components) {
+      const rad = -((c.rotationDeg ?? 0) * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      for (const p of c.pins) {
+        const wx = c.xMm + p.localXMm * cos - p.localYMm * sin;
+        const wy = c.yMm + p.localXMm * sin + p.localYMm * cos;
+        const wz = c.zMm + p.localZMm;
+        pinMap.set(`${c.id}:${p.id}`, new THREE.Vector3(wx, wy, wz));
+      }
+    }
+    for (const a of cadAssets) {
+      const rad = -((a.rotationDeg ?? 0) * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      for (const p of a.pins) {
+        const wx = a.xMm + p.localXMm * cos - p.localYMm * sin;
+        const wy = a.yMm + p.localXMm * sin + p.localYMm * cos;
+        const wz = a.zMm + p.localZMm;
+        pinMap.set(`${a.id}:${p.id}`, new THREE.Vector3(wx, wy, wz));
+      }
+    }
+
+    return wires
+      .map((w) => {
+        const p1 = pinMap.get(`${w.fromComponentId}:${w.fromPinId}`);
+        const p2 = pinMap.get(`${w.toComponentId}:${w.toPinId}`);
+        if (!p1 || !p2) return null;
+
+        const liftZ = Math.max(p1.z, p2.z) + 18;
+        const midX = (p1.x + p2.x) / 2;
+        const midY = (p1.y + p2.y) / 2;
+        const curve = new THREE.CatmullRomCurve3([
+          p1,
+          new THREE.Vector3(p1.x, p1.y, liftZ),
+          new THREE.Vector3(midX, midY, liftZ + 6),
+          new THREE.Vector3(p2.x, p2.y, liftZ),
+          p2,
+        ]);
+        const radius = Math.max(1.2, getWireOuterDiameterMm(w.gaugeMm2) / 2);
+        const geometry = new THREE.TubeGeometry(curve, 24, radius, 8, false);
+        const color = WIRE_COLOR_MAP[w.colorCode] || "#2563eb";
+        return { id: w.id, geometry, color };
+      })
+      .filter((item): item is NonNullable<typeof item> => item !== null);
+  }, [components, cadAssets, wires]);
+
+  useEffect(() => {
+    return () => {
+      for (const item of wireMeshes) {
+        item.geometry.dispose();
+      }
+    };
+  }, [wireMeshes]);
+
+  return (
+    <group>
+      {wireMeshes.map((wm) => {
+        const isSelected = selected?.kind === "wire" && selected.id === wm.id;
+        return (
+          <mesh
+            key={wm.id}
+            geometry={wm.geometry}
+            castShadow
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelected({ kind: "wire", id: wm.id });
+            }}
+            onContextMenu={(e) => onContextMenu(e, { kind: "wire", id: wm.id })}
+          >
+            <meshStandardMaterial
+              color={isSelected ? "#38bdf8" : wm.color}
+              roughness={0.38}
+              metalness={0.12}
+              emissive={isSelected ? "#0284c7" : "#000000"}
+              emissiveIntensity={isSelected ? 0.35 : 0}
+            />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+}
 
 export function PanelViewport() {
   const [isDraggingItem, setIsDraggingItem] = useState(false);
@@ -101,19 +201,26 @@ export function PanelViewport() {
         dpr={[1, 1.5]}
         gl={{ powerPreference: "high-performance", antialias: true }}
         shadows
-        camera={{ position: [480, 180, 1180], fov: 38, near: 2, far: 25000 }}
+        camera={{ position: [520, 200, 1360], fov: 38, near: 2, far: 25000 }}
       >
         <color
           attach="background"
           args={[theme === "light" ? "#f1f5f9" : "#090b10"]}
         />
-        <ambientLight intensity={theme === "light" ? 0.85 : 0.65} />
+        <ambientLight intensity={theme === "light" ? 0.95 : 0.7} />
+        <hemisphereLight
+          args={[
+            theme === "light" ? "#ffffff" : "#cbd5e1",
+            theme === "light" ? "#94a3b8" : "#1e293b",
+            theme === "light" ? 0.85 : 0.45,
+          ]}
+        />
         <directionalLight
           position={[600, 900, 1000]}
           intensity={1.35}
           castShadow
         />
-        <directionalLight position={[-600, -400, 700]} intensity={0.45} />
+        <directionalLight position={[-600, -400, 700]} intensity={0.5} />
 
         <Enclosure3D />
         <RailsAndDucts3D
@@ -124,6 +231,7 @@ export function PanelViewport() {
           onDragChange={setIsDraggingItem}
           onContextMenu={handle3DContextMenu}
         />
+        <Wires3D onContextMenu={handle3DContextMenu} />
         <CustomCad3D onContextMenu={handle3DContextMenu} />
 
         <OrbitControls

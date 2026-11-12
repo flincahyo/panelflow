@@ -49,31 +49,31 @@ export function Enclosure3D() {
       {/* Rear enclosure wall */}
       <mesh position={[0, 0, zBack]} receiveShadow>
         <boxGeometry args={[W, H, T]} />
-        <meshStandardMaterial color="#2a313d" metalness={0.55} roughness={0.5} />
+        <meshStandardMaterial color="#3b4454" metalness={0.25} roughness={0.55} />
       </mesh>
 
       {/* Left wall */}
       <mesh position={[-W / 2 + T / 2, 0, zCenter]} receiveShadow>
         <boxGeometry args={[T, H, D]} />
-        <meshStandardMaterial color="#333b48" metalness={0.55} roughness={0.45} />
+        <meshStandardMaterial color="#475569" metalness={0.25} roughness={0.5} />
       </mesh>
 
       {/* Right wall */}
       <mesh position={[W / 2 - T / 2, 0, zCenter]} receiveShadow>
         <boxGeometry args={[T, H, D]} />
-        <meshStandardMaterial color="#333b48" metalness={0.55} roughness={0.45} />
+        <meshStandardMaterial color="#475569" metalness={0.25} roughness={0.5} />
       </mesh>
 
       {/* Top wall */}
       <mesh position={[0, H / 2 - T / 2, zCenter]} receiveShadow>
         <boxGeometry args={[W - T * 2, T, D]} />
-        <meshStandardMaterial color="#333b48" metalness={0.55} roughness={0.45} />
+        <meshStandardMaterial color="#475569" metalness={0.25} roughness={0.5} />
       </mesh>
 
       {/* Bottom wall */}
       <mesh position={[0, -H / 2 + T / 2, zCenter]} receiveShadow>
         <boxGeometry args={[W - T * 2, T, D]} />
-        <meshStandardMaterial color="#333b48" metalness={0.55} roughness={0.45} />
+        <meshStandardMaterial color="#475569" metalness={0.25} roughness={0.5} />
       </mesh>
 
       {/* Galvanized Steel Mounting Backplate (front face at z = 0) */}
@@ -98,35 +98,73 @@ export function Enclosure3D() {
         />
       </lineSegments>
 
-      {/* Hinged Front Door */}
+      {/* Hinged Front Door (flush with outer W x H front frame at zFront) */}
       {doorMode !== "hidden" && (
         <group
-          position={[-W / 2, 0, zFront]}
+          position={[-W / 2, 0, zFront + T / 2]}
           rotation={[0, doorMode === "open" ? -Math.PI * 0.62 : 0, 0]}
         >
+          {/* Door Leaf (Glass or Solid) */}
           <mesh position={[W / 2, 0, 0]}>
             <boxGeometry args={[W, H, T]} />
             {doorMode === "transparent" ? (
               <meshPhysicalMaterial
                 color="#93c5fd"
                 transparent
-                opacity={0.14}
+                opacity={0.18}
                 roughness={0.15}
                 metalness={0.1}
                 depthWrite={false}
               />
             ) : (
               <meshStandardMaterial
-                color="#3b4454"
-                metalness={0.55}
-                roughness={0.42}
+                color="#475569"
+                metalness={0.25}
+                roughness={0.48}
               />
             )}
           </mesh>
+
+          {/* Door Perimeter Frame Bezel (keeps glass door visually aligned to W x H cabinet opening) */}
+          {doorMode === "transparent" && (
+            <group>
+              {/* Top bezel */}
+              <mesh position={[W / 2, H / 2 - 10, 0]}>
+                <boxGeometry args={[W, 20, T + 1]} />
+                <meshStandardMaterial color="#475569" metalness={0.25} roughness={0.5} />
+              </mesh>
+              {/* Bottom bezel */}
+              <mesh position={[W / 2, -H / 2 + 10, 0]}>
+                <boxGeometry args={[W, 20, T + 1]} />
+                <meshStandardMaterial color="#475569" metalness={0.25} roughness={0.5} />
+              </mesh>
+              {/* Left bezel */}
+              <mesh position={[10, 0, 0]}>
+                <boxGeometry args={[20, H - 40, T + 1]} />
+                <meshStandardMaterial color="#475569" metalness={0.25} roughness={0.5} />
+              </mesh>
+              {/* Right bezel */}
+              <mesh position={[W - 10, 0, 0]}>
+                <boxGeometry args={[20, H - 40, T + 1]} />
+                <meshStandardMaterial color="#475569" metalness={0.25} roughness={0.5} />
+              </mesh>
+            </group>
+          )}
+
+          {/* Hinge Knuckles flush on left front frame */}
+          <mesh position={[0, H * 0.3, 0]}>
+            <cylinderGeometry args={[4, 4, 24, 12]} />
+            <meshStandardMaterial color="#1e293b" metalness={0.4} roughness={0.4} />
+          </mesh>
+          <mesh position={[0, -H * 0.3, 0]}>
+            <cylinderGeometry args={[4, 4, 24, 12]} />
+            <meshStandardMaterial color="#1e293b" metalness={0.4} roughness={0.4} />
+          </mesh>
+
           {/* Door Handle Latch */}
-          <mesh position={[W - 26, 0, T / 2 + 5]}>
+          <mesh position={[W - 22, 0, T / 2 + 5]}>
             <boxGeometry args={[14, 70, 10]} />
-            <meshStandardMaterial color="#0f172a" metalness={0.4} roughness={0.5} />
+            <meshStandardMaterial color="#1e293b" metalness={0.35} roughness={0.45} />
           </mesh>
         </group>
       )}

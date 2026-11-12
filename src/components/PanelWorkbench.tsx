@@ -35,6 +35,8 @@ export function PanelWorkbench() {
       const saved = localStorage.getItem("panelflow_saved_theme");
       if (saved === "light" || saved === "dark") {
         setTheme(saved);
+      } else {
+        setTheme("light");
       }
     } catch {
       // storage unavailable

@@ -273,26 +273,76 @@ function Component2DSymbol({
       ) : null}
 
       {/* Component Tag & Type */}
-      <text
-        x={x + 2.5}
-        y={y + 12}
-        fontSize={5}
-        fontFamily="monospace"
-        fontWeight="bold"
-        fill="#0f172a"
-      >
-        {comp.name}
-      </text>
-      {comp.widthMm >= 16 && (
-        <text
-          x={x + 2.5}
-          y={y + 18}
-          fontSize={3.8}
-          fontFamily="sans-serif"
-          fill="#64748b"
-        >
-          {comp.templateId.toUpperCase()}
-        </text>
+      {comp.widthMm < 30 ? (
+        <>
+          {/* Contrasting Pill Tag above narrow component (< 30mm) */}
+          {(() => {
+            const shortTag =
+              comp.name.length > 14 ? `${comp.name.slice(0, 12)}…` : comp.name;
+            const pillW = Math.max(22, shortTag.length * 2.5 + 5);
+            const pillY = hasCollision || isOutOfBounds ? y - 16 : y - 10;
+            return (
+              <g className="pointer-events-none">
+                <rect
+                  x={x + comp.widthMm / 2 - pillW / 2}
+                  y={pillY}
+                  width={pillW}
+                  height={7.5}
+                  rx={1.5}
+                  fill="#0f172a"
+                  stroke="#ffffff"
+                  strokeWidth={0.4}
+                />
+                <text
+                  x={x + comp.widthMm / 2}
+                  y={pillY + 5.2}
+                  fontSize={3.8}
+                  fontFamily="monospace"
+                  fontWeight="bold"
+                  fill="#ffffff"
+                  textAnchor="middle"
+                >
+                  {shortTag}
+                </text>
+              </g>
+            );
+          })()}
+          <text
+            x={x + comp.widthMm / 2}
+            y={y + 11.5}
+            fontSize={3.2}
+            fontFamily="monospace"
+            fontWeight="bold"
+            fill="#334155"
+            textAnchor="middle"
+          >
+            {comp.templateId.toUpperCase()}
+          </text>
+        </>
+      ) : (
+        <>
+          <text
+            x={x + 2.5}
+            y={y + 12}
+            fontSize={4.8}
+            fontFamily="monospace"
+            fontWeight="bold"
+            fill="#0f172a"
+          >
+            {comp.name.length > Math.floor((comp.widthMm - 4) / 2.9)
+              ? `${comp.name.slice(0, Math.max(4, Math.floor((comp.widthMm - 4) / 2.9) - 1))}…`
+              : comp.name}
+          </text>
+          <text
+            x={x + 2.5}
+            y={y + 18}
+            fontSize={3.8}
+            fontFamily="sans-serif"
+            fill="#64748b"
+          >
+            {comp.templateId.toUpperCase()}
+          </text>
+        </>
       )}
 
       {/* Pins */}
@@ -578,17 +628,25 @@ export function Panel2DCanvas() {
   const sheetW = Math.max(841, plateW + 220);
   const sheetH = Math.max(594, plateH + 140);
 
-  // Fit sheet on initial mount
+  // Fit sheet on initial mount (reserve top clearance for ruler + floating toolbar)
   const fitToView = useCallback(() => {
     const el = containerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
     setViewportSize({ width: rect.width, height: rect.height });
-    const scaleX = (rect.width - 80) / sheetW;
-    const scaleY = (rect.height - 80) / sheetH;
+    const topPad = 92;
+    const bottomPad = 44;
+    const sidePad = 72;
+    const availW = Math.max(200, rect.width - sidePad * 2);
+    const availH = Math.max(200, rect.height - topPad - bottomPad);
+    const scaleX = availW / sheetW;
+    const scaleY = availH / sheetH;
     const nextZoom = Math.max(0.25, Math.min(3, Math.min(scaleX, scaleY)));
     setZoom(nextZoom);
-    setPan({ x: rect.width / 2, y: rect.height / 2 });
+    setPan({
+      x: rect.width / 2 + 12,
+      y: topPad + availH / 2,
+    });
   }, [sheetW, sheetH]);
 
   useEffect(() => {
@@ -874,7 +932,7 @@ export function Panel2DCanvas() {
   for (let y = yBottomMm; y <= yTopMm; y += rulerStepMm) yTicks.push(y);
 
   // Title block geometry (bottom-right of sheet)
-  const tbW = 240;
+  const tbW = 264;
   const tbH = 44;
   const tbX = sheetW / 2 - 12 - tbW;
   const tbY = sheetH / 2 - 12 - tbH;
@@ -901,6 +959,7 @@ export function Panel2DCanvas() {
       <div className="pointer-events-none absolute top-0 right-0 left-6 z-20 h-6 overflow-hidden border-b border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#0c0e14]/90 font-mono text-[9px] text-[#64748b] dark:text-slate-400 backdrop-blur-md">
         {xTicks.map((xMm) => {
           const left = pan.x + xMm * zoom - 24;
+          if (left < 6) return null;
           return (
             <div
               key={xMm}
@@ -917,6 +976,7 @@ export function Panel2DCanvas() {
       <div className="pointer-events-none absolute top-6 bottom-0 left-0 z-20 w-6 overflow-hidden border-r border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#0c0e14]/90 font-mono text-[9px] text-[#64748b] dark:text-slate-400 backdrop-blur-md">
         {yTicks.map((yMm) => {
           const top = pan.y - yMm * zoom - 24;
+          if (top < 6) return null;
           return (
             <div
               key={yMm}
@@ -1635,7 +1695,19 @@ export function Panel2DCanvas() {
               const wireDiaMm = getWireOuterDiameterMm(w.gaugeMm2);
               const isSelected =
                 selected?.kind === "wire" && selected.id === w.id;
-              const mid = waypoints[Math.floor(waypoints.length / 2)] || p1;
+
+              // Place label at the exact midpoint of the longest straight span
+              let mid = p1;
+              let bestLen = -1;
+              for (let i = 0; i < waypoints.length - 1; i++) {
+                const a = waypoints[i];
+                const b = waypoints[i + 1];
+                const len = Math.hypot(b.x - a.x, b.y - a.y);
+                if (len > bestLen) {
+                  bestLen = len;
+                  mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+                }
+              }
 
               return (
                 <g
@@ -1846,39 +1918,55 @@ export function Panel2DCanvas() {
               strokeWidth={0.5}
             />
             <line
-              x1={tbX + 135}
+              x1={tbX + 158}
               y1={tbY}
-              x2={tbX + 135}
+              x2={tbX + 158}
               y2={tbY + tbH}
               stroke={theme === "light" ? "#cbd5e1" : "#252932"}
               strokeWidth={0.5}
             />
             <line
-              x1={tbX + 190}
+              x1={tbX + 214}
               y1={tbY + 15}
-              x2={tbX + 190}
+              x2={tbX + 214}
               y2={tbY + tbH}
               stroke={theme === "light" ? "#cbd5e1" : "#252932"}
               strokeWidth={0.5}
             />
+            <defs>
+              <clipPath id="tb-project-clip">
+                <rect x={tbX + 2} y={tbY + 1} width={153} height={13} />
+              </clipPath>
+              <clipPath id="tb-drawer-clip">
+                <rect x={tbX + 2} y={tbY + 16} width={153} height={13} />
+              </clipPath>
+            </defs>
             <text
               x={tbX + 5}
               y={tbY + 10}
-              fontSize={6}
+              fontSize={5.5}
               fontFamily="sans-serif"
               fontWeight="bold"
+              clipPath="url(#tb-project-clip)"
               fill={theme === "light" ? "#0f172a" : "#f1f5f9"}
             >
-              PROJECT: {titleBlock.projectName}
+              PROJECT:{" "}
+              {titleBlock.projectName.length > 34
+                ? `${titleBlock.projectName.slice(0, 32)}…`
+                : titleBlock.projectName}
             </text>
             <text
               x={tbX + 5}
               y={tbY + 24}
               fontSize={5.5}
               fontFamily="sans-serif"
+              clipPath="url(#tb-drawer-clip)"
               fill={theme === "light" ? "#475569" : "#94a3b8"}
             >
-              DRAWER: {titleBlock.drawer}
+              DRAWER:{" "}
+              {titleBlock.drawer.length > 34
+                ? `${titleBlock.drawer.slice(0, 32)}…`
+                : titleBlock.drawer}
             </text>
             <text
               x={tbX + 5}
@@ -1890,7 +1978,7 @@ export function Panel2DCanvas() {
               PANELFLOW 2D MOUNTING LAYOUT (.PFLOW)
             </text>
             <text
-              x={tbX + 140}
+              x={tbX + 163}
               y={tbY + 10}
               fontSize={5.5}
               fontFamily="sans-serif"
@@ -1899,7 +1987,7 @@ export function Panel2DCanvas() {
               DATE: {titleBlock.date}
             </text>
             <text
-              x={tbX + 140}
+              x={tbX + 163}
               y={tbY + 24}
               fontSize={5.5}
               fontFamily="sans-serif"
@@ -1908,7 +1996,7 @@ export function Panel2DCanvas() {
               SCALE: {titleBlock.scale}
             </text>
             <text
-              x={tbX + 140}
+              x={tbX + 163}
               y={tbY + 39}
               fontSize={5.5}
               fontFamily="sans-serif"
@@ -1917,7 +2005,7 @@ export function Panel2DCanvas() {
               REV: {titleBlock.rev}
             </text>
             <text
-              x={tbX + 195}
+              x={tbX + 219}
               y={tbY + 24}
               fontSize={5.5}
               fontFamily="sans-serif"
@@ -1927,7 +2015,7 @@ export function Panel2DCanvas() {
               SHEET:
             </text>
             <text
-              x={tbX + 195}
+              x={tbX + 219}
               y={tbY + 39}
               fontSize={6.5}
               fontFamily="monospace"

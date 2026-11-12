@@ -11,17 +11,17 @@ const THEME_INIT_SCRIPT = `
 (function() {
   try {
     var saved = localStorage.getItem('panelflow_saved_theme');
-    var theme = saved === 'light' ? 'light' : 'dark';
-    if (theme === 'light') {
-      document.documentElement.classList.remove('dark');
-      document.documentElement.classList.add('light');
-      document.documentElement.style.backgroundColor = '#f8fafc';
-      document.documentElement.style.colorScheme = 'light';
-    } else {
+    var theme = saved === 'dark' ? 'dark' : 'light';
+    if (theme === 'dark') {
       document.documentElement.classList.add('dark');
       document.documentElement.classList.remove('light');
       document.documentElement.style.backgroundColor = '#090b10';
       document.documentElement.style.colorScheme = 'dark';
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.documentElement.classList.add('light');
+      document.documentElement.style.backgroundColor = '#f8fafc';
+      document.documentElement.style.colorScheme = 'light';
     }
   } catch (e) {}
 })();
@@ -33,7 +33,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
+    <html lang="en" className="light" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>

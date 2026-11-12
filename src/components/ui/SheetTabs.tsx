@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Copy,
   Edit2,
@@ -25,6 +25,25 @@ export function SheetTabs() {
   const [editingSheetId, setEditingSheetId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [showTypeMenu, setShowTypeMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showTypeMenu) return;
+    const onPointerDown = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowTypeMenu(false);
+      }
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setShowTypeMenu(false);
+    };
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [showTypeMenu]);
 
   const startRename = (id: string, name: string) => {
     setEditingSheetId(id);
@@ -51,8 +70,9 @@ export function SheetTabs() {
 
   return (
     <div className="relative flex h-9 w-full select-none items-center justify-between border-t border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14] px-2.5 text-xs">
-      <div className="flex items-center space-x-1 overflow-x-auto no-scrollbar py-1">
-        {sheets.map((sheet) => {
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <div className="flex items-center space-x-1 overflow-x-auto no-scrollbar py-1">
+          {sheets.map((sheet) => {
           const isActive = sheet.id === activeSheetId;
           const isEditing = sheet.id === editingSheetId;
 
@@ -134,8 +154,9 @@ export function SheetTabs() {
             </div>
           );
         })}
+        </div>
 
-        <div className="relative">
+        <div ref={menuRef} className="relative shrink-0">
           <button
             type="button"
             onClick={() => setShowTypeMenu((v) => !v)}
@@ -145,14 +166,12 @@ export function SheetTabs() {
           </button>
 
           {showTypeMenu && (
-            <div
-              className="absolute bottom-9 left-0 z-50 w-48 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white/98 dark:bg-[#111318]/98 p-1 shadow-xl dark:shadow-2xl backdrop-blur-xl text-xs"
-              onMouseLeave={() => setShowTypeMenu(false)}
-            >
+            <div className="absolute bottom-9 left-0 z-50 w-52 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-white/98 dark:bg-[#111318]/98 p-1 shadow-xl dark:shadow-2xl backdrop-blur-xl text-xs">
               <button
                 type="button"
                 onClick={() => {
-                  addSheet("mounting-plate");
+                  const newId = addSheet("mounting-plate");
+                  setActiveSheet(newId);
                   setShowTypeMenu(false);
                 }}
                 className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white"
@@ -163,7 +182,8 @@ export function SheetTabs() {
               <button
                 type="button"
                 onClick={() => {
-                  addSheet("door-cutout");
+                  const newId = addSheet("door-cutout");
+                  setActiveSheet(newId);
                   setShowTypeMenu(false);
                 }}
                 className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white"
@@ -174,7 +194,8 @@ export function SheetTabs() {
               <button
                 type="button"
                 onClick={() => {
-                  addSheet("schematic");
+                  const newId = addSheet("schematic");
+                  setActiveSheet(newId);
                   setShowTypeMenu(false);
                 }}
                 className="flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white"
