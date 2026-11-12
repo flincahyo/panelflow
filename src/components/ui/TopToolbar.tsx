@@ -30,7 +30,6 @@ import {
   Undo2,
   Zap,
 } from "lucide-react";
-import { BomReportModal } from "@/components/modals/BomReportModal";
 import { clearAutoSaveSession } from "@/lib/indexed-db";
 import {
   parseAndValidatePflow,
@@ -96,11 +95,13 @@ export function TopToolbar({
   const setGridSnapMm = usePanelStore((s) => s.setGridSnapMm);
   const setDoorMode = usePanelStore((s) => s.setDoorMode);
   const addSheet = usePanelStore((s) => s.addSheet);
+  const rightPanelTab = usePanelStore((s) => s.rightPanelTab);
+  const setRightPanelTab = usePanelStore((s) => s.setRightPanelTab);
+  const setInspectorOpen = usePanelStore((s) => s.setInspectorOpen);
 
   const [activeMenu, setActiveMenu] = useState<"file" | "edit" | "view" | null>(
     null
   );
-  const [bomModalOpen, setBomModalOpen] = useState(false);
   const menuBarRef = useRef<HTMLDivElement>(null);
   const openPflowInputRef = useRef<HTMLInputElement>(null);
 
@@ -415,7 +416,8 @@ export function TopToolbar({
                 <button
                   type="button"
                   onClick={() => {
-                    setBomModalOpen(true);
+                    setInspectorOpen(true);
+                    setRightPanelTab("bom");
                     setActiveMenu(null);
                   }}
                   className={dropdownItemClass}
@@ -640,7 +642,7 @@ export function TopToolbar({
 
         {/* Active Project Pill (RelayFlow parity: left section after File/Edit/View) */}
         <div className="hidden items-center gap-2 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#171a21] px-3.5 py-1.5 font-mono text-xs md:flex">
-          <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500 dark:bg-emerald-400" />
+          <FileCode2 className="h-3.5 w-3.5 shrink-0 text-[#64748b] dark:text-slate-400" />
           <span className="max-w-[260px] lg:max-w-[340px] truncate text-[#334155] dark:text-slate-300 font-medium">
             {titleBlock.projectName}
           </span>
@@ -702,10 +704,17 @@ export function TopToolbar({
         {/* BOM & Wire List Quick Button */}
         <button
           type="button"
-          onClick={() => setBomModalOpen(true)}
+          onClick={() => {
+            setInspectorOpen(true);
+            setRightPanelTab("bom");
+          }}
           aria-label="BOM & Wire Cutting Schedule"
           title="BOM & Wire Cutting Schedule"
-          className="flex h-8 items-center gap-1.5 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#171a21] px-3 text-xs font-medium text-[#334155] dark:text-slate-200 shadow-xs dark:shadow-none transition-all hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white"
+          className={`flex h-8 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-all ${
+            inspectorOpen && rightPanelTab === "bom"
+              ? "border-sky-300 dark:border-sky-500/40 bg-sky-50 dark:bg-sky-500/15 text-sky-700 dark:text-sky-300 shadow-xs"
+              : "border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#171a21] text-[#334155] dark:text-slate-200 shadow-xs dark:shadow-none hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white"
+          }`}
         >
           <ClipboardList className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400" />
           <span className="hidden lg:inline">BOM</span>
@@ -753,9 +762,6 @@ export function TopToolbar({
         onChange={handleOpenPflowFile}
         className="hidden"
       />
-      {bomModalOpen && (
-        <BomReportModal onClose={() => setBomModalOpen(false)} />
-      )}
     </header>
   );
 }

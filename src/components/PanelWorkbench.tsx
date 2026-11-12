@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { LeftSidebar } from "@/components/ui/LeftSidebar";
 import { RightInspector } from "@/components/ui/RightInspector";
 import { SheetTabs } from "@/components/ui/SheetTabs";
@@ -33,7 +33,8 @@ export function PanelWorkbench() {
   const viewportMode = usePanelStore((s) => s.viewportMode);
   const setTheme = usePanelStore((s) => s.setTheme);
   const loadProjectState = usePanelStore((s) => s.loadProjectState);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const inspectorOpen = usePanelStore((s) => s.inspectorOpen);
+  const setInspectorOpen = usePanelStore((s) => s.setInspectorOpen);
   const restoredRef = useRef(false);
 
   // Sync theme from localStorage on initial client mount
@@ -102,7 +103,7 @@ export function PanelWorkbench() {
     <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#f8fafc] dark:bg-[#090b10] text-[#0f172a] dark:text-slate-100 antialiased select-none">
       <TopToolbar
         inspectorOpen={inspectorOpen}
-        onToggleInspector={() => setInspectorOpen((v) => !v)}
+        onToggleInspector={() => setInspectorOpen(!inspectorOpen)}
       />
       <main className="flex min-h-0 flex-1 overflow-hidden">
         <LeftSidebar />

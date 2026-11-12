@@ -338,4 +338,21 @@ describe("usePanelStore - Default 2D & Context Menu Actions", () => {
       1
     );
   });
+
+  it("controls inspector visibility and tab switching between inspector and bom", () => {
+    const store = usePanelStore.getState();
+    expect(store.inspectorOpen).toBe(true);
+    expect(store.rightPanelTab).toBe("inspector");
+
+    store.setRightPanelTab("bom");
+    expect(usePanelStore.getState().rightPanelTab).toBe("bom");
+
+    store.setInspectorOpen(false);
+    expect(usePanelStore.getState().inspectorOpen).toBe(false);
+
+    // requestInspectorFocus reopens inspector and switches to inspector tab
+    store.requestInspectorFocus();
+    expect(usePanelStore.getState().inspectorOpen).toBe(true);
+    expect(usePanelStore.getState().rightPanelTab).toBe("inspector");
+  });
 });

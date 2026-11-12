@@ -83,6 +83,7 @@ function applyThemeToDom(theme: "dark" | "light") {
 }
 
 export type ThemeMode = "dark" | "light";
+export type RightPanelTab = "inspector" | "bom";
 
 export type SheetSnapshot = PanelSheet;
 
@@ -315,6 +316,8 @@ interface PanelStore {
   isPinMarkingMode: boolean;
   activeMarkingAssetId: string | null;
   inspectorFocusNonce: number;
+  inspectorOpen: boolean;
+  rightPanelTab: RightPanelTab;
 
   // History Stack
   undo: () => void;
@@ -332,6 +335,8 @@ interface PanelStore {
   // Inspector & Toolbar Focus
   setTheme: (theme: ThemeMode) => void;
   toggleTheme: () => void;
+  setInspectorOpen: (open: boolean) => void;
+  setRightPanelTab: (tab: RightPanelTab) => void;
   requestInspectorFocus: () => void;
   setViewportMode: (mode: ViewportMode) => void;
   setCanvasTool2D: (tool: CanvasTool2D) => void;
@@ -468,6 +473,8 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   isPinMarkingMode: false,
   activeMarkingAssetId: null,
   inspectorFocusNonce: 0,
+  inspectorOpen: true,
+  rightPanelTab: "inspector",
   canUndo: false,
   canRedo: false,
 
@@ -665,8 +672,14 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     applyThemeToDom(next);
     set({ theme: next });
   },
+  setInspectorOpen: (open) => set({ inspectorOpen: open }),
+  setRightPanelTab: (tab) => set({ rightPanelTab: tab }),
   requestInspectorFocus: () =>
-    set((state) => ({ inspectorFocusNonce: state.inspectorFocusNonce + 1 })),
+    set((state) => ({
+      inspectorOpen: true,
+      rightPanelTab: "inspector",
+      inspectorFocusNonce: state.inspectorFocusNonce + 1,
+    })),
   setViewportMode: (mode) => set({ viewportMode: mode }),
   setCanvasTool2D: (tool) => set({ canvasTool2D: tool, activeWireStartPin: null }),
   setActiveWireColor: (color) => set({ activeWireColor: color }),

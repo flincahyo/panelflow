@@ -1,7 +1,8 @@
 "use client";
 
-import { MapPin, Trash2, X } from "lucide-react";
+import { ClipboardList, MapPin, Sliders, Trash2, X } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { BomPanelTab } from "@/components/ui/BomPanelTab";
 import { snapToGrid } from "@/lib/snap";
 import { formatDim, fromMm, inputStepForUnit, toMm } from "@/lib/units";
 import { usePanelStore } from "@/store/usePanelStore";
@@ -24,6 +25,8 @@ export function RightInspector({ onClose }: RightInspectorProps) {
   const isPinMarkingMode = usePanelStore((s) => s.isPinMarkingMode);
   const activeMarkingAssetId = usePanelStore((s) => s.activeMarkingAssetId);
   const inspectorFocusNonce = usePanelStore((s) => s.inspectorFocusNonce);
+  const rightPanelTab = usePanelStore((s) => s.rightPanelTab);
+  const setRightPanelTab = usePanelStore((s) => s.setRightPanelTab);
   const compNameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -79,22 +82,57 @@ export function RightInspector({ onClose }: RightInspectorProps) {
     "rounded-lg border border-[#e2e8f0] dark:border-white/5 bg-[#f8fafc] dark:bg-[#090b10]";
 
   return (
-    <aside className="flex w-76 shrink-0 flex-col border-l border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14]/95 p-3 text-xs text-[#0f172a] dark:text-slate-200 overflow-y-auto backdrop-blur-xl">
-      <div className="mb-3 flex items-center justify-between border-b border-[#e2e8f0] dark:border-white/10 pb-2">
-        <span className="font-mono text-xs font-semibold uppercase tracking-wider text-[#64748b] dark:text-slate-400">
-          Inspector ({displayUnit})
-        </span>
+    <aside className="flex w-[340px] shrink-0 flex-col overflow-hidden border-l border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14]/95 text-xs text-[#0f172a] dark:text-slate-200 backdrop-blur-xl">
+      {/* Tabbed Sidebar Header */}
+      <div className="flex shrink-0 items-center justify-between gap-2 border-b border-[#e2e8f0] dark:border-white/10 px-3 py-2.5">
+        <div className="flex flex-1 items-center rounded-lg border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#171a21] p-0.5">
+          <button
+            type="button"
+            onClick={() => setRightPanelTab("inspector")}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all ${
+              rightPanelTab === "inspector"
+                ? "bg-white dark:bg-[#222733] text-[#0f172a] dark:text-white shadow-xs"
+                : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-white"
+            }`}
+          >
+            <Sliders className="h-3 w-3 shrink-0" />
+            <span>Inspector</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setRightPanelTab("bom")}
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold transition-all ${
+              rightPanelTab === "bom"
+                ? "bg-white dark:bg-[#222733] text-[#0f172a] dark:text-white shadow-xs"
+                : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-white"
+            }`}
+          >
+            <ClipboardList className="h-3 w-3 shrink-0 text-sky-500 dark:text-sky-400" />
+            <span>BOM &amp; Wires</span>
+          </button>
+        </div>
+
         {onClose && (
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md p-1 text-[#64748b] dark:text-slate-500 hover:bg-[#e2e8f0] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white"
-            title="Collapse Inspector"
+            className="shrink-0 rounded-md p-1 text-[#64748b] dark:text-slate-500 hover:bg-[#e2e8f0] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white"
+            title="Collapse Right Sidebar"
           >
             <X className="h-4 w-4" />
           </button>
         )}
       </div>
+
+      {rightPanelTab === "bom" ? (
+        <BomPanelTab />
+      ) : (
+        <div className="min-h-0 flex-1 overflow-y-auto p-3 space-y-3">
+          <div className="flex items-center justify-between px-0.5">
+            <span className="font-mono text-[10px] font-semibold uppercase tracking-wider text-[#64748b] dark:text-slate-400">
+              Properties ({displayUnit})
+            </span>
+          </div>
 
       {!selected && (
         <div className="space-y-3 text-xs text-[#64748b] dark:text-slate-400">
@@ -549,6 +587,8 @@ export function RightInspector({ onClose }: RightInspectorProps) {
               </div>
             ))}
           </div>
+        </div>
+      )}
         </div>
       )}
     </aside>
