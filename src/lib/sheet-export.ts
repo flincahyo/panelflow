@@ -14,6 +14,7 @@ import {
   getSmartCadLabelPosition,
 } from "./cad-label";
 import { getEffectiveCadBounds } from "./collision";
+import { calculateAllDuctFillRatios, getDuctFillStatusColor } from "./duct-fill";
 import { parseDxfToMmSegments } from "./dxf-parser";
 import { getBackplateDimensions } from "./template-export";
 import {
@@ -86,15 +87,27 @@ export function generateEplanSheetSvg(params: EplanSheetParams): string {
   const plateSvgX = toSvgX(-plateW / 2);
   const plateSvgY = toSvgY(plateH / 2);
 
+  // Precalculate duct fill ratios for badges
+  const ductFillMap = calculateAllDuctFillRatios(ducts, wires);
+
   // 2. Wire Ducts
   const ductSvg = ducts
     .map((d) => {
       const x = toSvgX(d.xMm - d.widthMm / 2);
       const y = toSvgY(d.yMm + d.heightMm / 2);
+      const stats = ductFillMap.get(d.id);
+      const colors = stats ? getDuctFillStatusColor(stats.status) : null;
+      const badgeSvg =
+        stats && colors
+          ? `<rect x="${(x + d.widthMm - 24).toFixed(2)}" y="${(y + 2).toFixed(2)}" width="22" height="9" rx="1.5" fill="${colors.badgeBg}" stroke="${colors.badgeBorder}" stroke-width="0.3" />
+      <text x="${(x + d.widthMm - 13).toFixed(2)}" y="${(y + 7.5).toFixed(2)}" font-family="monospace" font-size="4" font-weight="bold" fill="${colors.badgeText}" text-anchor="middle">${stats.fillRatioPercent}%</text>`
+          : "";
+
       return `
     <g class="wire-duct" data-id="${d.id}">
       <rect x="${x.toFixed(2)}" y="${y.toFixed(2)}" width="${d.widthMm.toFixed(2)}" height="${d.heightMm.toFixed(2)}" fill="#cbd5e1" fill-opacity="0.3" stroke="#64748b" stroke-dasharray="2,2" stroke-width="0.5" />
       <text x="${(x + 4).toFixed(2)}" y="${(y + 12).toFixed(2)}" font-family="sans-serif" font-size="6" fill="#64748b">${d.name} (${d.widthMm}x${d.heightMm})</text>
+      ${badgeSvg}
     </g>`;
     })
     .join("\n");
@@ -272,11 +285,15 @@ export function generateEplanSheetSvg(params: EplanSheetParams): string {
       const midIdx = Math.floor(waypoints.length / 2);
       const labelPos = waypoints[midIdx] || p1;
 
+      const wireTag = `${w.label} (${w.gaugeMm2}mm²)`;
+      const badgeW = Math.max(16, wireTag.length * 2.6 + 4);
+      const badgeH = 7.5;
+
       return `
     <g class="wire-net" data-id="${w.id}">
       <path d="${pathD}" fill="none" stroke="${stroke}" stroke-width="${wireDiameterMm.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" />
-      <rect x="${(labelPos.x - 8).toFixed(2)}" y="${(labelPos.y - 4).toFixed(2)}" width="16" height="8" rx="1.5" fill="#ffffff" stroke="${stroke}" stroke-width="0.4" />
-      <text x="${labelPos.x.toFixed(2)}" y="${(labelPos.y + 1.5).toFixed(2)}" font-family="monospace" font-size="4" font-weight="bold" fill="#0f172a" text-anchor="middle">${w.label} (${w.gaugeMm2}mm²)</text>
+      <rect x="${(labelPos.x - badgeW / 2).toFixed(2)}" y="${(labelPos.y - badgeH / 2).toFixed(2)}" width="${badgeW.toFixed(2)}" height="${badgeH}" rx="1.5" fill="#ffffff" stroke="${stroke}" stroke-width="0.5" />
+      <text x="${labelPos.x.toFixed(2)}" y="${(labelPos.y + 1.2).toFixed(2)}" font-family="monospace" font-size="3.5" font-weight="bold" fill="#0f172a" text-anchor="middle">${wireTag}</text>
     </g>`;
     })
     .join("\n");

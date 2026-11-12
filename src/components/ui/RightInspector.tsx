@@ -1,8 +1,9 @@
 "use client";
 
-import { ClipboardList, Crop, MapPin, RotateCcw, Sliders, Trash2, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { ClipboardList, Crop, MapPin, RotateCcw, Sliders, Trash2, X, AlertTriangle, CheckCircle2, AlertCircle } from "lucide-react";
+import { useEffect, useMemo, useRef } from "react";
 import { BomPanelTab } from "@/components/ui/BomPanelTab";
+import { calculateDuctFillRatio, getDuctFillStatusColor } from "@/lib/duct-fill";
 import { getEffectiveCadBounds } from "@/lib/collision";
 import { snapToGrid } from "@/lib/snap";
 import { formatDim, fromMm, inputStepForUnit, toMm } from "@/lib/units";
@@ -75,6 +76,11 @@ export function RightInspector({ onClose }: RightInspectorProps) {
     selected?.kind === "wire"
       ? wires.find((w) => w.id === selected.id)
       : undefined;
+
+  const ductFillStats = useMemo(() => {
+    if (!duct) return null;
+    return calculateDuctFillRatio(duct, wires);
+  }, [duct, wires]);
 
   const inputClass =
     "w-full rounded-lg border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#090b10] px-2.5 py-1.5 font-mono text-[13px] tabular-nums text-[#0f172a] dark:text-slate-100 focus:border-[#0284c7] dark:focus:border-white/30 focus:outline-none";
@@ -399,6 +405,63 @@ export function RightInspector({ onClose }: RightInspectorProps) {
               </label>
             ))}
           </div>
+
+          {/* Wire Duct Fill Ratio Gauge & Capacity Metrics */}
+          {ductFillStats && (
+            <div className={`${subBoxClass} p-2.5 space-y-2`}>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-[#0f172a] dark:text-white uppercase tracking-wider">
+                  Fill Ratio
+                </span>
+                <span
+                  className="font-mono text-xs font-bold px-1.5 py-0.5 rounded"
+                  style={{
+                    backgroundColor: getDuctFillStatusColor(ductFillStats.status).badgeBg,
+                    color: getDuctFillStatusColor(ductFillStats.status).badgeText,
+                  }}
+                >
+                  {ductFillStats.fillRatioPercent}%
+                </span>
+              </div>
+
+              {/* Progress / Gauge Bar */}
+              <div className="h-2 w-full rounded-full bg-slate-200 dark:bg-white/10 overflow-hidden">
+                <div
+                  className="h-full transition-all duration-300 rounded-full"
+                  style={{
+                    width: `${Math.min(100, ductFillStats.fillRatioPercent)}%`,
+                    backgroundColor: getDuctFillStatusColor(ductFillStats.status).gaugeColor,
+                  }}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-1 text-[11px] font-mono text-[#64748b] dark:text-slate-400">
+                <div>
+                  Wires: <span className="text-[#0f172a] dark:text-slate-200 font-semibold">{ductFillStats.wireCount}</span>
+                </div>
+                <div>
+                  Total: <span className="text-[#0f172a] dark:text-slate-200 font-semibold">{ductFillStats.totalCableAreaMm2} mm²</span>
+                </div>
+                <div className="col-span-2">
+                  Capacity: <span className="text-[#0f172a] dark:text-slate-200 font-semibold">{ductFillStats.effectiveCapacityMm2} mm²</span> (60% usable)
+                </div>
+              </div>
+
+              {ductFillStats.status === "warning" && ductFillStats.recommendedSize && (
+                <div className="rounded border border-rose-300 dark:border-rose-500/40 bg-rose-50 dark:bg-rose-500/10 p-2 text-[11px] text-rose-700 dark:text-rose-300 space-y-1">
+                  <div className="font-semibold flex items-center gap-1">
+                    ⚠️ Overfill Warning (&gt;70%)
+                  </div>
+                  <div>
+                    Recommended Size:{" "}
+                    <span className="font-mono font-bold">
+                      {ductFillStats.recommendedSize.label} mm
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 

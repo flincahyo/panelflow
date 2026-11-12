@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Cable,
   Hand,
+  Hash,
   Maximize2,
   MousePointer2,
   Redo2,
@@ -27,6 +28,7 @@ import {
   type SvgRect,
 } from "@/lib/cad-label";
 import { getBackplateDimensions } from "@/lib/template-export";
+import { calculateAllDuctFillRatios, getDuctFillStatusColor } from "@/lib/duct-fill";
 import { parseDxfToMmSegments } from "@/lib/dxf-parser";
 import { WIRE_COLOR_MAP } from "@/lib/sheet-export";
 import {
@@ -883,6 +885,7 @@ export function Panel2DCanvas() {
   const activeWireGauge = usePanelStore((s) => s.activeWireGauge);
   const activeWireStartPin = usePanelStore((s) => s.activeWireStartPin);
   const autoRouteDuctsEnabled = usePanelStore((s) => s.autoRouteDuctsEnabled);
+  const autoNumberWires = usePanelStore((s) => s.autoNumberWires);
   const setAutoRouteDuctsEnabled = usePanelStore((s) => s.setAutoRouteDuctsEnabled);
   const isPinMarkingMode = usePanelStore((s) => s.isPinMarkingMode);
   const activeMarkingAssetId = usePanelStore((s) => s.activeMarkingAssetId);
@@ -962,6 +965,11 @@ export function Panel2DCanvas() {
   const cadObstacleBoxes = useMemo(
     () => buildSvgObstacleBoxes(components, cadAssets),
     [components, cadAssets]
+  );
+
+  const ductFillMap = useMemo(
+    () => calculateAllDuctFillRatios(ducts, wires),
+    [ducts, wires]
   );
 
   // Sheet dimensions around backplate
@@ -1969,6 +1977,16 @@ export function Panel2DCanvas() {
             >
               <span>{autoRouteDuctsEnabled && ducts.length > 0 ? "Duct Auto-Route: ON" : "Duct Auto-Route: OFF"}</span>
             </button>
+            <button
+              type="button"
+              disabled={wires.length === 0}
+              onClick={() => autoNumberWires()}
+              title="Auto-number all wires on active sheet (EPLAN: L1-x, L2-x, N-x, PE-x, W01...)"
+              className="flex items-center gap-1 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14] px-2.5 py-0.5 font-mono text-[10px] text-[#0f172a] dark:text-slate-200 hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 disabled:opacity-40 transition-all"
+            >
+              <Hash className="h-3 w-3 text-emerald-500" />
+              <span>Auto-Number</span>
+            </button>
             {activeWireStartPin && (
               <span className="font-mono text-[10px] font-semibold text-amber-500 animate-pulse">
                 Click target pin...
@@ -2249,6 +2267,45 @@ export function Panel2DCanvas() {
                     >
                       {d.name} ({d.widthMm}x{d.heightMm})
                     </text>
+                    {(() => {
+                      const fillStats = ductFillMap.get(d.id);
+                      if (!fillStats) return null;
+                      const colors = getDuctFillStatusColor(fillStats.status);
+                      const isHoriz = d.orientation === "horizontal";
+                      const crossW = isHoriz ? d.heightMm : d.widthMm;
+                      const crossH = d.depthMm || crossW;
+                      const badgeText = `${crossW}x${crossH} [${fillStats.fillRatioPercent}%]`;
+                      const badgeW = 34;
+                      const badgeH = 9;
+                      const bx = isHoriz ? x + d.widthMm - badgeW - 3 : x + (d.widthMm - badgeW) / 2;
+                      const by = isHoriz ? y + 3 : y + d.heightMm - badgeH - 4;
+                      return (
+                        <g pointerEvents="none">
+                          <rect
+                            x={bx}
+                            y={by}
+                            width={badgeW}
+                            height={badgeH}
+                            rx={2}
+                            fill={colors.badgeBg}
+                            stroke={colors.badgeBorder}
+                            strokeWidth={0.5}
+                          />
+                          <text
+                            x={bx + badgeW / 2}
+                            y={by + badgeH / 2 + 0.3}
+                            textAnchor="middle"
+                            dominantBaseline="central"
+                            fontSize={4}
+                            fontFamily="monospace"
+                            fontWeight="bold"
+                            fill={colors.badgeText}
+                          >
+                            {badgeText}
+                          </text>
+                        </g>
+                      );
+                    })()}
                   </g>
 
                   {/* Duct Resize Handles */}
@@ -2705,26 +2762,28 @@ export function Panel2DCanvas() {
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
+                  {/* Halo filter / contrast border for clear readability */}
                   <rect
-                    x={mid.x - 11}
-                    y={mid.y - 4.5}
-                    width={22}
-                    height={9}
-                    rx={1.5}
+                    x={mid.x - Math.max(12, (w.label.length + w.gaugeMm2.length) * 2.8 + 6) / 2}
+                    y={mid.y - 5.5}
+                    width={Math.max(12, (w.label.length + w.gaugeMm2.length) * 2.8 + 6)}
+                    height={11}
+                    rx={2.5}
                     fill="#ffffff"
                     stroke={isSelected ? "#0284c7" : stroke}
-                    strokeWidth={0.6}
+                    strokeWidth={isSelected ? 1.0 : 0.6}
+                    filter="drop-shadow(0px 1px 2px rgba(0,0,0,0.18))"
                   />
                   <text
                     x={mid.x}
-                    y={mid.y + 1.5}
-                    fontSize={4}
+                    y={mid.y + 1.2}
+                    fontSize={3.8}
                     fontFamily="monospace"
                     fontWeight="bold"
                     fill="#0f172a"
                     textAnchor="middle"
                   >
-                    {w.label} {w.gaugeMm2}
+                    {w.label} <tspan fill="#64748b" fontSize={3.2}>({w.gaugeMm2}mm²)</tspan>
                   </text>
                 </g>
               );

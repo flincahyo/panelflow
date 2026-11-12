@@ -177,7 +177,7 @@ function printBomPdf(
   <table>
     <thead>
       <tr>
-        <th>Wire</th>
+        <th>Wire ID / Tag</th>
         <th>From</th>
         <th>To</th>
         <th style="text-align:center;">Color</th>

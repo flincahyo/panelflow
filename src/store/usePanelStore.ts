@@ -11,6 +11,7 @@ import {
 import { getEffectiveCadBounds } from "@/lib/collision";
 import { getBackplateDimensions } from "@/lib/template-export";
 import { resolvePinWorldPoint, routeWireThroughDucts } from "@/lib/wire-router";
+import { generateWireNumbers } from "@/lib/wire-numbering";
 import type {
   CanvasTool2D,
   ComponentTemplateId,
@@ -392,6 +393,7 @@ interface PanelStore {
   removeWire: (id: string) => void;
   autoRouteWire: (id: string) => void;
   autoRouteAllWires: () => void;
+  autoNumberWires: (sheetId?: string) => void;
 
   // Selection & Marking
   setSelected: (target: SelectionTarget) => void;
@@ -1669,6 +1671,25 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     });
     const updated = sheets.map((s) =>
       s.id === activeSheetId ? { ...s, wires: routedWires } : s
+    );
+    const active = updated.find((s) => s.id === activeSheetId)!;
+    set({
+      sheets: updated,
+      canUndo: true,
+      canRedo: false,
+      ...syncActiveSheetProjection(active),
+    });
+  },
+
+  autoNumberWires: (sheetId) => {
+    const { sheets, activeSheetId } = get();
+    const targetId = sheetId || activeSheetId;
+    const targetSheet = sheets.find((s) => s.id === targetId);
+    if (!targetSheet || targetSheet.wires.length === 0) return;
+    pushHistory(sheets);
+    const numberedWires = generateWireNumbers(targetSheet.wires);
+    const updated = sheets.map((s) =>
+      s.id === targetId ? { ...s, wires: numberedWires } : s
     );
     const active = updated.find((s) => s.id === activeSheetId)!;
     set({

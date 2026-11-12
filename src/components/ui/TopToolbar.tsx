@@ -30,6 +30,7 @@ import {
   Sliders,
   Sun,
   Moon,
+  Hash,
   Undo2,
   Zap,
   Cloud,
@@ -97,6 +98,7 @@ export function TopToolbar({
   const canUndo = usePanelStore((s) => s.canUndo);
   const canRedo = usePanelStore((s) => s.canRedo);
   const autoRouteAllWires = usePanelStore((s) => s.autoRouteAllWires);
+  const autoNumberWires = usePanelStore((s) => s.autoNumberWires);
   const selected = usePanelStore((s) => s.selected);
   const selectedIds = usePanelStore((s) => s.selectedIds);
   const clipboardItems = usePanelStore((s) => s.clipboardItems);
@@ -258,6 +260,9 @@ export function TopToolbar({
       if (key === "s") {
         e.preventDefault();
         handleSavePflow();
+      } else if (key === "n" && e.shiftKey) {
+        e.preventDefault();
+        autoNumberWires();
       } else if (key === "o") {
         e.preventDefault();
         openPflowInputRef.current?.click();
@@ -504,6 +509,18 @@ export function TopToolbar({
               >
                 <Network className="h-4 w-4 text-sky-500" />
                 Auto-Route All Wires
+              </button>
+              <button
+                type="button"
+                disabled={wires.length === 0}
+                onClick={() => {
+                  autoNumberWires();
+                  setActiveMenu(null);
+                }}
+                className={dropdownItemClass}
+              >
+                <Hash className="h-4 w-4 text-emerald-500" />
+                Auto-Number Wires
               </button>
 
               <div className={dropdownDividerClass} />
@@ -857,6 +874,23 @@ export function TopToolbar({
                     Auto-Route All Wires via Ducts
                   </span>
                 </button>
+                <button
+                  type="button"
+                  disabled={wires.length === 0}
+                  onClick={() => {
+                    autoNumberWires();
+                    setActiveMenu(null);
+                  }}
+                  className="flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white disabled:opacity-40"
+                >
+                  <span className="flex items-center gap-2">
+                    <Hash className="h-3.5 w-3.5 text-emerald-500" />
+                    Auto-Number Wires
+                  </span>
+                  <span className="font-mono text-[11px] text-[#64748b] dark:text-slate-500">
+                    Ctrl+Shift+N
+                  </span>
+                </button>
               </div>
             )}
           </div>
@@ -998,6 +1032,19 @@ export function TopToolbar({
             </button>
           ))}
         </div>
+
+        {/* Auto-Number Wires Toolbar Button */}
+        <button
+          type="button"
+          disabled={wires.length === 0}
+          onClick={() => autoNumberWires()}
+          aria-label="Auto-Number Wires (Ctrl+Shift+N)"
+          title="Auto-Number Wires (Ctrl+Shift+N)"
+          className="flex h-8 items-center gap-1 sm:gap-1.5 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#171a21] px-2 sm:px-3 text-xs font-medium text-[#334155] dark:text-slate-200 shadow-xs dark:shadow-none hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white disabled:opacity-40"
+        >
+          <Hash className="h-3.5 w-3.5 text-emerald-500" />
+          <span className="hidden lg:inline">Auto-Number</span>
+        </button>
 
         {/* BOM & Wire List Quick Button */}
         <button

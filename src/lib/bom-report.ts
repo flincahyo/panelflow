@@ -473,7 +473,7 @@ export function generateWireListCsv(report: BomReportData): string {
 
   lines.push(
     toCsvRow([
-      "Wire Label",
+      "Wire ID / Tag",
       "From (Tag : Pin)",
       "To (Tag : Pin)",
       "Signal / Color",
