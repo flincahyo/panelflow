@@ -675,13 +675,12 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
       name || nextIncrementedName(`Sheet (${typeLabel})`, sheets.map((s) => s.name));
     const newSheet = createDefaultSheet(id, sheetName, sheetType);
 
-    // Non-mounting-plate sheets (door-cutout, schematic) start clean without pre-populated DIN hardware
-    if (sheetType !== "mounting-plate") {
-      newSheet.rails = [];
-      newSheet.ducts = [];
-      newSheet.components = [];
-      newSheet.wires = [];
-    }
+    // New sheets start completely blank (no pre-populated hardware or demo components)
+    newSheet.rails = [];
+    newSheet.ducts = [];
+    newSheet.components = [];
+    newSheet.wires = [];
+    newSheet.cadAssets = [];
 
     const updated = [...sheets, newSheet];
     set({
