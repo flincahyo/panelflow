@@ -15,12 +15,20 @@ import {
   Sparkles,
   Crop,
   Layers,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { usePanelStore } from "@/store/usePanelStore";
 import { saveCustomCadToLibrary } from "@/lib/indexed-db";
 import {
   vectorizeImage,
+  STANDARD_COMPONENT_PRESETS,
+  calculateAspectRatio,
+  calculateHeightFromWidth,
+  calculateWidthFromHeight,
+  trimImageWhitespace,
   type ImageToCadResult,
+  type ComponentDimensionPreset,
 } from "@/lib/image-to-cad";
 import type { CustomCadAsset, PinTerminal } from "@/types/panel";
 
@@ -36,8 +44,17 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
 
   // File & Image state
   const [file, setFile] = useState<File | null>(null);
+  const [rawImageDataUrl, setRawImageDataUrl] = useState<string | null>(null);
+  const [trimmedDataUrl, setTrimmedDataUrl] = useState<string | null>(null);
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
   const [componentName, setComponentName] = useState("");
+
+  // Aspect ratio & auto-crop whitespace
+  const [lockAspectRatio, setLockAspectRatio] = useState<boolean>(true);
+  const [autoTrimWhitespace, setAutoTrimWhitespace] = useState<boolean>(true);
+  const [rawAspectRatio, setRawAspectRatio] = useState<number>(1);
+  const [trimmedAspectRatio, setTrimmedAspectRatio] = useState<number | null>(null);
+  const [imageAspectRatio, setImageAspectRatio] = useState<number>(1);
 
   // Physical Dimensions (mm)
   const [widthMm, setWidthMm] = useState<number>(45);
@@ -82,10 +99,93 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
     const reader = new FileReader();
     reader.onload = (e) => {
       const url = e.target?.result as string;
-      setPreviewDataUrl(url);
-      setStep(2);
+      setRawImageDataUrl(url);
+
+      const img = new Image();
+      img.onload = () => {
+        const rawW = img.naturalWidth || img.width;
+        const rawH = img.naturalHeight || img.height;
+        const rawRatio = calculateAspectRatio(rawW, rawH);
+        setRawAspectRatio(rawRatio);
+
+        let finalTrimmedUrl: string | null = null;
+        let finalTrimmedRatio: number | null = null;
+        try {
+          const trim = trimImageWhitespace(img);
+          if (trim && (trim.trimmedWidth < rawW * 0.99 || trim.trimmedHeight < rawH * 0.99)) {
+            finalTrimmedUrl = trim.dataUrl;
+            finalTrimmedRatio = trim.aspectRatio;
+          }
+        } catch {
+          // ignore
+        }
+
+        setTrimmedDataUrl(finalTrimmedUrl);
+        setTrimmedAspectRatio(finalTrimmedRatio);
+
+        const effectiveRatio =
+          autoTrimWhitespace && finalTrimmedRatio ? finalTrimmedRatio : rawRatio;
+        setImageAspectRatio(effectiveRatio);
+
+        const activeUrl =
+          autoTrimWhitespace && finalTrimmedUrl ? finalTrimmedUrl : url;
+        setPreviewDataUrl(activeUrl);
+
+        // Initial dimension: default width = 45 mm, heightMm proportional to image
+        const initW = 45;
+        const initH = calculateHeightFromWidth(initW, effectiveRatio);
+        setWidthMm(initW);
+        setHeightMm(initH);
+
+        setStep(2);
+      };
+      img.src = url;
     };
     reader.readAsDataURL(selectedFile);
+  };
+
+  const handleWidthChange = (val: number) => {
+    const nextW = Math.max(1, Math.round(val) || 1);
+    setWidthMm(nextW);
+    if (lockAspectRatio && imageAspectRatio > 0) {
+      setHeightMm(calculateHeightFromWidth(nextW, imageAspectRatio));
+    }
+  };
+
+  const handleHeightChange = (val: number) => {
+    const nextH = Math.max(1, Math.round(val) || 1);
+    setHeightMm(nextH);
+    if (lockAspectRatio && imageAspectRatio > 0) {
+      setWidthMm(calculateWidthFromHeight(nextH, imageAspectRatio));
+    }
+  };
+
+  const handleToggleAutoTrim = (enabled: boolean) => {
+    setAutoTrimWhitespace(enabled);
+    const nextUrl = enabled && trimmedDataUrl ? trimmedDataUrl : rawImageDataUrl;
+    if (nextUrl) {
+      setPreviewDataUrl(nextUrl);
+    }
+    const nextRatio = enabled && trimmedAspectRatio ? trimmedAspectRatio : rawAspectRatio;
+    setImageAspectRatio(nextRatio);
+    if (lockAspectRatio && nextRatio > 0) {
+      setHeightMm(calculateHeightFromWidth(widthMm, nextRatio));
+    }
+  };
+
+  const handleApplyPreset = (preset: ComponentDimensionPreset) => {
+    setWidthMm(preset.widthMm);
+    setHeightMm(preset.heightMm);
+    setDepthMm(preset.depthMm);
+  };
+
+  const handleResetToImageRatio = () => {
+    const activeRatio =
+      autoTrimWhitespace && trimmedAspectRatio ? trimmedAspectRatio : rawAspectRatio;
+    if (activeRatio > 0) {
+      setImageAspectRatio(activeRatio);
+      setHeightMm(calculateHeightFromWidth(widthMm, activeRatio));
+    }
   };
 
   // Run vectorization engine
@@ -517,10 +617,49 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                   </p>
                 </div>
 
+                {/* Auto-Crop Whitespace Margin */}
+                <div className="flex items-center justify-between rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] p-3">
+                  <div className="space-y-0.5 pr-2">
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#0f172a] dark:text-slate-200">
+                      <Crop className="h-3.5 w-3.5 text-sky-500" />
+                      <span>Auto-Crop Whitespace Margin</span>
+                      {trimmedDataUrl && (
+                        <span className="rounded bg-sky-500/10 px-1.5 py-0.2 text-[9px] font-medium text-sky-500">
+                          Trimmed
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-[#64748b] dark:text-slate-400">
+                      Crop blank datasheet background so mm scale applies cleanly to component body
+                    </p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={autoTrimWhitespace}
+                    onChange={(e) => handleToggleAutoTrim(e.target.checked)}
+                    className="h-4 w-4 rounded border-[#cbd5e1] text-sky-500 focus:ring-sky-500 cursor-pointer"
+                  />
+                </div>
+
                 {/* Dimensions (W, H, D) */}
-                <div className="space-y-2 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] p-3">
-                  <div className="text-[11px] font-semibold text-[#0f172a] dark:text-slate-200">
-                    Physical Dimensions (mm)
+                <div className="space-y-2.5 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] p-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-[11px] font-semibold text-[#0f172a] dark:text-slate-200">
+                      Physical Dimensions (mm)
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setLockAspectRatio(!lockAspectRatio)}
+                      className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer ${
+                        lockAspectRatio
+                          ? "bg-sky-500/10 text-sky-500 border border-sky-500/20"
+                          : "bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 border border-[#cbd5e1] dark:border-white/10"
+                      }`}
+                      title={lockAspectRatio ? "Aspect Ratio Locked (proportional scale)" : "Aspect Ratio Unlocked (freeform scale)"}
+                    >
+                      {lockAspectRatio ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+                      <span>{lockAspectRatio ? "Lock Ratio" : "Free Ratio"}</span>
+                    </button>
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <label className="space-y-1">
@@ -530,7 +669,7 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                         min="5"
                         max="2000"
                         value={widthMm}
-                        onChange={(e) => setWidthMm(Math.max(5, Number(e.target.value) || 5))}
+                        onChange={(e) => handleWidthChange(Number(e.target.value))}
                         className="w-full rounded-md border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2 py-1 text-xs font-mono"
                       />
                     </label>
@@ -541,7 +680,7 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                         min="5"
                         max="2000"
                         value={heightMm}
-                        onChange={(e) => setHeightMm(Math.max(5, Number(e.target.value) || 5))}
+                        onChange={(e) => handleHeightChange(Number(e.target.value))}
                         className="w-full rounded-md border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2 py-1 text-xs font-mono"
                       />
                     </label>
@@ -556,6 +695,34 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                         className="w-full rounded-md border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2 py-1 text-xs font-mono"
                       />
                     </label>
+                  </div>
+
+                  {/* Standard Component Presets & Reset to Image Ratio */}
+                  <div className="pt-2 border-t border-[#e2e8f0] dark:border-white/10 space-y-1.5">
+                    <div className="flex items-center justify-between text-[10px] text-[#64748b] dark:text-slate-400">
+                      <span className="font-medium">Industry Presets:</span>
+                      <button
+                        type="button"
+                        onClick={handleResetToImageRatio}
+                        className="flex items-center gap-1 text-sky-500 hover:text-sky-600 transition-colors font-medium cursor-pointer"
+                        title="Recalculate height to match original photo/trimmed aspect ratio"
+                      >
+                        <RotateCcw className="h-2.5 w-2.5" />
+                        <span>Reset to Image Ratio</span>
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {STANDARD_COMPONENT_PRESETS.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => handleApplyPreset(p)}
+                          className="rounded bg-white dark:bg-[#0c0e14] border border-[#cbd5e1] dark:border-white/10 px-2 py-0.5 text-[10px] font-medium text-[#475569] dark:text-slate-300 hover:border-sky-500 hover:text-sky-500 transition-colors cursor-pointer"
+                        >
+                          {p.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 

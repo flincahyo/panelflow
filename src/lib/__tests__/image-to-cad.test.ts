@@ -6,6 +6,11 @@ import {
   generateDxfFromSegments,
   binarizeImageData,
   extractContoursFromBinaryMask,
+  calculateAspectRatio,
+  calculateHeightFromWidth,
+  calculateWidthFromHeight,
+  findContentBoundingBox,
+  STANDARD_COMPONENT_PRESETS,
   type Point2D,
 } from "../image-to-cad";
 import { parseDxfToMmSegments } from "../dxf-parser";
@@ -132,5 +137,136 @@ describe("Image-to-CAD Vectorizer Engine", () => {
     const contours = extractContoursFromBinaryMask(mask, w, h, 4);
     expect(contours.length).toBeGreaterThanOrEqual(1);
     expect(contours[0].length).toBeGreaterThanOrEqual(4);
+  });
+
+  describe("Anti-Gepeng Aspect Ratio & Math Utilities", () => {
+    it("calculates aspect ratio correctly and handles invalid inputs gracefully", () => {
+      expect(calculateAspectRatio(100, 50)).toBe(2);
+      expect(calculateAspectRatio(45, 85)).toBeCloseTo(45 / 85);
+      expect(calculateAspectRatio(0, 100)).toBe(1);
+      expect(calculateAspectRatio(100, 0)).toBe(1);
+      expect(calculateAspectRatio(-50, 50)).toBe(1);
+    });
+
+    it("calculates proportional height from width", () => {
+      // 1:2 aspect ratio (w=50, h=100) -> ratio = 0.5
+      expect(calculateHeightFromWidth(45, 0.5)).toBe(90);
+      // Square
+      expect(calculateHeightFromWidth(96, 1)).toBe(96);
+      // Fallback on invalid ratio
+      expect(calculateHeightFromWidth(45, 0)).toBe(45);
+    });
+
+    it("calculates proportional width from height", () => {
+      // 1:2 aspect ratio (w=50, h=100) -> ratio = 0.5
+      expect(calculateWidthFromHeight(100, 0.5)).toBe(50);
+      // Square
+      expect(calculateWidthFromHeight(96, 1)).toBe(96);
+      // Fallback on invalid ratio
+      expect(calculateWidthFromHeight(70, 0)).toBe(70);
+    });
+
+    it("includes all requested standard industry component dimension presets", () => {
+      const contactor = STANDARD_COMPONENT_PRESETS.find((p) => p.id === "contactor");
+      expect(contactor).toBeDefined();
+      expect(contactor).toMatchObject({ widthMm: 45, heightMm: 77, depthMm: 86 });
+
+      const overload = STANDARD_COMPONENT_PRESETS.find((p) => p.id === "overload");
+      expect(overload).toBeDefined();
+      expect(overload).toMatchObject({ widthMm: 45, heightMm: 66, depthMm: 70 });
+
+      const mcb1p = STANDARD_COMPONENT_PRESETS.find((p) => p.id === "mcb-1p");
+      expect(mcb1p).toBeDefined();
+      expect(mcb1p).toMatchObject({ widthMm: 18, heightMm: 85, depthMm: 70 });
+
+      const mcb3p = STANDARD_COMPONENT_PRESETS.find((p) => p.id === "mcb-3p");
+      expect(mcb3p).toBeDefined();
+      expect(mcb3p).toMatchObject({ widthMm: 54, heightMm: 85, depthMm: 70 });
+
+      const psu = STANDARD_COMPONENT_PRESETS.find((p) => p.id === "psu-24v");
+      expect(psu).toBeDefined();
+      expect(psu).toMatchObject({ widthMm: 72, heightMm: 125, depthMm: 100 });
+
+      const terminal = STANDARD_COMPONENT_PRESETS.find((p) => p.id === "terminal-block");
+      expect(terminal).toBeDefined();
+      expect(terminal).toMatchObject({ widthMm: 6, heightMm: 50, depthMm: 45 });
+
+      const meter = STANDARD_COMPONENT_PRESETS.find((p) => p.id === "panel-meter");
+      expect(meter).toBeDefined();
+      expect(meter).toMatchObject({ widthMm: 96, heightMm: 96, depthMm: 65 });
+    });
+  });
+
+  describe("Auto-Trim Whitespace Margin Detection", () => {
+    it("detects exact non-white bounding box inside white datasheet background", () => {
+      // 10x10 image initialized to pure white (255, 255, 255, 255)
+      const w = 10;
+      const h = 10;
+      const data = new Uint8ClampedArray(w * h * 4);
+      data.fill(255);
+
+      // Create a 4x6 dark box from x=[3..6], y=[2..7]
+      for (let y = 2; y <= 7; y++) {
+        for (let x = 3; x <= 6; x++) {
+          const idx = (y * w + x) * 4;
+          data[idx] = 40;     // R
+          data[idx + 1] = 40; // G
+          data[idx + 2] = 40; // B
+          data[idx + 3] = 255; // A
+        }
+      }
+
+      const bbox = findContentBoundingBox(data, w, h, 245, 10);
+      expect(bbox).not.toBeNull();
+      expect(bbox?.minX).toBe(3);
+      expect(bbox?.maxX).toBe(6);
+      expect(bbox?.minY).toBe(2);
+      expect(bbox?.maxY).toBe(7);
+      expect(bbox?.width).toBe(4);
+      expect(bbox?.height).toBe(6);
+    });
+
+    it("returns null when image is pure white or transparent", () => {
+      const w = 5;
+      const h = 5;
+      const whiteData = new Uint8ClampedArray(w * h * 4);
+      whiteData.fill(255); // all white
+
+      const bboxWhite = findContentBoundingBox(whiteData, w, h, 245, 10);
+      expect(bboxWhite).toBeNull();
+
+      const transparentData = new Uint8ClampedArray(w * h * 4);
+      // All 0s (transparent alpha)
+      const bboxTrans = findContentBoundingBox(transparentData, w, h, 245, 10);
+      expect(bboxTrans).toBeNull();
+    });
+
+    it("detects content in inverted polarity mode (bright lines on dark background)", () => {
+      const w = 6;
+      const h = 6;
+      const data = new Uint8ClampedArray(w * h * 4);
+      // Background is black with full alpha
+      for (let i = 0; i < w * h; i++) {
+        data[i * 4 + 0] = 10;
+        data[i * 4 + 1] = 10;
+        data[i * 4 + 2] = 10;
+        data[i * 4 + 3] = 255;
+      }
+
+      // Bright line at (2, 2) to (4, 4)
+      for (let i = 2; i <= 4; i++) {
+        const idx = (i * w + i) * 4;
+        data[idx] = 250;
+        data[idx + 1] = 250;
+        data[idx + 2] = 250;
+      }
+
+      const bbox = findContentBoundingBox(data, w, h, 128, 10, true);
+      expect(bbox).not.toBeNull();
+      expect(bbox?.minX).toBe(2);
+      expect(bbox?.maxX).toBe(4);
+      expect(bbox?.minY).toBe(2);
+      expect(bbox?.maxY).toBe(4);
+    });
   });
 });

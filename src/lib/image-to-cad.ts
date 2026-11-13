@@ -27,6 +27,195 @@ export interface ImageToCadResult {
   contourCount: number;
 }
 
+export interface ContentBoundingBox {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+  width: number;
+  height: number;
+}
+
+export interface TrimResult {
+  dataUrl: string;
+  originalWidth: number;
+  originalHeight: number;
+  trimmedWidth: number;
+  trimmedHeight: number;
+  aspectRatio: number;
+  boundingBox: ContentBoundingBox;
+}
+
+export interface ComponentDimensionPreset {
+  id: string;
+  label: string;
+  name: string;
+  widthMm: number;
+  heightMm: number;
+  depthMm: number;
+}
+
+export const STANDARD_COMPONENT_PRESETS: ComponentDimensionPreset[] = [
+  { id: "contactor", label: "Contactor (45×77mm)", name: "Contactor", widthMm: 45, heightMm: 77, depthMm: 86 },
+  { id: "overload", label: "Overload Relay (45×66mm)", name: "Overload Relay", widthMm: 45, heightMm: 66, depthMm: 70 },
+  { id: "mcb-1p", label: "MCB 1P (18×85mm)", name: "MCB 1P", widthMm: 18, heightMm: 85, depthMm: 70 },
+  { id: "mcb-3p", label: "MCB 3P (54×85mm)", name: "MCB 3P", widthMm: 54, heightMm: 85, depthMm: 70 },
+  { id: "psu-24v", label: "Power Supply 24V (72×125mm)", name: "Power Supply 24V", widthMm: 72, heightMm: 125, depthMm: 100 },
+  { id: "terminal-block", label: "Terminal Block (6×50mm)", name: "Terminal Block", widthMm: 6, heightMm: 50, depthMm: 45 },
+  { id: "panel-meter", label: "Panel Meter (96×96mm)", name: "Panel Meter", widthMm: 96, heightMm: 96, depthMm: 65 },
+];
+
+/**
+ * Calculate aspect ratio (width / height).
+ */
+export function calculateAspectRatio(width: number, height: number): number {
+  if (height <= 0 || width <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) {
+    return 1;
+  }
+  return width / height;
+}
+
+/**
+ * Calculate height from width keeping aspect ratio.
+ */
+export function calculateHeightFromWidth(widthMm: number, aspectRatio: number): number {
+  if (aspectRatio <= 0 || !Number.isFinite(aspectRatio)) return Math.max(1, Math.round(widthMm));
+  return Math.max(1, Math.round(widthMm / aspectRatio));
+}
+
+/**
+ * Calculate width from height keeping aspect ratio.
+ */
+export function calculateWidthFromHeight(heightMm: number, aspectRatio: number): number {
+  if (aspectRatio <= 0 || !Number.isFinite(aspectRatio)) return Math.max(1, Math.round(heightMm));
+  return Math.max(1, Math.round(heightMm * aspectRatio));
+}
+
+/**
+ * Find bounding box of non-white / non-transparent content in RGBA ImageData.
+ * Pixels with brightness < brightnessThreshold (default 245) or visible alpha (> alphaThreshold) are detected as component content.
+ */
+export function findContentBoundingBox(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+  brightnessThreshold = 245,
+  alphaThreshold = 10,
+  invert = false
+): ContentBoundingBox | null {
+  if (width <= 0 || height <= 0 || data.length < width * height * 4) {
+    return null;
+  }
+
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = (y * width + x) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+      const a = data[idx + 3];
+
+      if (a > alphaThreshold) {
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        const isContent = invert ? lum >= brightnessThreshold : lum < brightnessThreshold;
+        if (isContent) {
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+        }
+      }
+    }
+  }
+
+  if (maxX < minX || maxY < minY) {
+    return null;
+  }
+
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    width: maxX - minX + 1,
+    height: maxY - minY + 1,
+  };
+}
+
+/**
+ * Trim whitespace margin from an image so dimensions scale strictly to the component body.
+ */
+export function trimImageWhitespace(
+  img: HTMLImageElement,
+  options?: {
+    brightnessThreshold?: number;
+    alphaThreshold?: number;
+    padding?: number;
+    invert?: boolean;
+  }
+): TrimResult | null {
+  if (typeof window === "undefined" || typeof document === "undefined") {
+    return null;
+  }
+
+  const { brightnessThreshold = 245, alphaThreshold = 10, padding = 4, invert = false } = options || {};
+
+  const origW = img.naturalWidth || img.width;
+  const origH = img.naturalHeight || img.height;
+  if (!origW || !origH) return null;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = origW;
+  canvas.height = origH;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.drawImage(img, 0, 0, origW, origH);
+  const imgData = ctx.getImageData(0, 0, origW, origH);
+  const bbox = findContentBoundingBox(
+    imgData.data,
+    origW,
+    origH,
+    brightnessThreshold,
+    alphaThreshold,
+    invert
+  );
+
+  if (!bbox) return null;
+
+  const minX = Math.max(0, bbox.minX - padding);
+  const minY = Math.max(0, bbox.minY - padding);
+  const maxX = Math.min(origW - 1, bbox.maxX + padding);
+  const maxY = Math.min(origH - 1, bbox.maxY + padding);
+  const cropW = maxX - minX + 1;
+  const cropH = maxY - minY + 1;
+
+  if (cropW <= 0 || cropH <= 0) return null;
+
+  const croppedCanvas = document.createElement("canvas");
+  croppedCanvas.width = cropW;
+  croppedCanvas.height = cropH;
+  const croppedCtx = croppedCanvas.getContext("2d");
+  if (!croppedCtx) return null;
+
+  croppedCtx.drawImage(canvas, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
+
+  return {
+    dataUrl: croppedCanvas.toDataURL("image/png"),
+    originalWidth: origW,
+    originalHeight: origH,
+    trimmedWidth: cropW,
+    trimmedHeight: cropH,
+    aspectRatio: cropW / cropH,
+    boundingBox: bbox,
+  };
+}
+
 /**
  * Perpendicular distance from point P to line segment (A, B).
  */
