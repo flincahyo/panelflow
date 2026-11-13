@@ -414,6 +414,7 @@ interface PanelStore {
   pasteFromClipboard: (offsetMm?: { x: number; y: number }) => SelectedTarget[];
   groupSelectedItems: () => string | null;
   ungroupSelectedItems: () => void;
+  renameGroup: (groupId: string, newName: string) => void;
   toggleLockSelectedItems: (forceLocked?: boolean) => void;
 
   // Rails & Ducts
@@ -469,7 +470,10 @@ interface PanelStore {
   rotateCadAsset: (id: string, deltaDeg?: 90 | 180 | 270) => void;
   duplicateCadAsset: (id: string, offsetMm?: { x: number; y: number }) => string | null;
   addPinToAsset: (assetId: string, pin: Omit<PinTerminal, "id">) => void;
+  updatePinInAsset: (assetId: string, pinId: string, partial: Partial<PinTerminal>) => void;
   removePinFromAsset: (assetId: string, pinId: string) => void;
+  updateComponentPin: (componentId: string, pinId: string, partial: Partial<PinTerminal>) => void;
+  removePinFromComponent: (componentId: string, pinId: string) => void;
 
   // Project Import / Restore / Reset
   loadProjectState: (params: {
@@ -1187,6 +1191,32 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
               a.groupId && targetGroupIds.has(a.groupId)
                 ? { ...a, groupId: undefined }
                 : a
+            ),
+          }
+        : s
+    );
+    const active = updated.find((s) => s.id === activeSheetId)!;
+    set({
+      sheets: updated,
+      canUndo: true,
+      canRedo: false,
+      ...syncActiveSheetProjection(active),
+    });
+  },
+
+  renameGroup: (groupId, newName) => {
+    const { sheets, activeSheetId } = get();
+    const cleanName = newName.trim();
+    pushHistory(sheets);
+    const updated = sheets.map((s) =>
+      s.id === activeSheetId
+        ? {
+            ...s,
+            components: s.components.map((c) =>
+              c.groupId === groupId ? { ...c, groupName: cleanName || undefined } : c
+            ),
+            cadAssets: s.cadAssets.map((a) =>
+              a.groupId === groupId ? { ...a, groupName: cleanName || undefined } : a
             ),
           }
         : s
@@ -2641,6 +2671,95 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
           a.id === assetId
             ? { ...a, pins: a.pins.filter((p) => p.id !== pinId) }
             : a
+        ),
+        wires: s.wires.filter(
+          (w) =>
+            !(
+              (w.fromComponentId === assetId && w.fromPinId === pinId) ||
+              (w.toComponentId === assetId && w.toPinId === pinId)
+            )
+        ),
+      };
+    });
+    const active = updated.find((s) => s.id === activeSheetId)!;
+    set({
+      sheets: updated,
+      canUndo: true,
+      canRedo: false,
+      ...syncActiveSheetProjection(active),
+    });
+  },
+
+  updatePinInAsset: (assetId, pinId, partial) => {
+    const { sheets, activeSheetId } = get();
+    pushHistory(sheets);
+    const updated = sheets.map((s) => {
+      if (s.id !== activeSheetId) return s;
+      return {
+        ...s,
+        cadAssets: s.cadAssets.map((a) =>
+          a.id === assetId
+            ? {
+                ...a,
+                pins: a.pins.map((p) => (p.id === pinId ? { ...p, ...partial } : p)),
+              }
+            : a
+        ),
+      };
+    });
+    const active = updated.find((s) => s.id === activeSheetId)!;
+    set({
+      sheets: updated,
+      canUndo: true,
+      canRedo: false,
+      ...syncActiveSheetProjection(active),
+    });
+  },
+
+  updateComponentPin: (componentId, pinId, partial) => {
+    const { sheets, activeSheetId } = get();
+    pushHistory(sheets);
+    const updated = sheets.map((s) => {
+      if (s.id !== activeSheetId) return s;
+      return {
+        ...s,
+        components: s.components.map((c) =>
+          c.id === componentId
+            ? {
+                ...c,
+                pins: c.pins.map((p) => (p.id === pinId ? { ...p, ...partial } : p)),
+              }
+            : c
+        ),
+      };
+    });
+    const active = updated.find((s) => s.id === activeSheetId)!;
+    set({
+      sheets: updated,
+      canUndo: true,
+      canRedo: false,
+      ...syncActiveSheetProjection(active),
+    });
+  },
+
+  removePinFromComponent: (componentId, pinId) => {
+    const { sheets, activeSheetId } = get();
+    pushHistory(sheets);
+    const updated = sheets.map((s) => {
+      if (s.id !== activeSheetId) return s;
+      return {
+        ...s,
+        components: s.components.map((c) =>
+          c.id === componentId
+            ? { ...c, pins: c.pins.filter((p) => p.id !== pinId) }
+            : c
+        ),
+        wires: s.wires.filter(
+          (w) =>
+            !(
+              (w.fromComponentId === componentId && w.fromPinId === pinId) ||
+              (w.toComponentId === componentId && w.toPinId === pinId)
+            )
         ),
       };
     });

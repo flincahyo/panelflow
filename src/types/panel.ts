@@ -126,6 +126,7 @@ export interface PlacedComponent {
   accentColor: string;
   pins: PinTerminal[];
   groupId?: string;
+  groupName?: string;
   locked?: boolean;
 }
 
@@ -160,6 +161,7 @@ export interface CustomCadAsset {
   entityCount?: number;
   parseWarning?: string;
   groupId?: string;
+  groupName?: string;
   locked?: boolean;
 }
 

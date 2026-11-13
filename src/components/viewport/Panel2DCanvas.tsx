@@ -3,13 +3,18 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Cable,
+  Check,
   Hand,
   Hash,
+  Layers,
   Maximize2,
   MousePointer2,
   Redo2,
   Ruler,
+  Trash2,
   Undo2,
+  Users,
+  X,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -143,6 +148,8 @@ function Component2DSymbol({
   onPointerDown,
   onContextMenu,
   onPinClick,
+  onPinDoubleClick,
+  onPinContextMenu,
   hasCollision,
   isOutOfBounds,
 }: {
@@ -153,6 +160,8 @@ function Component2DSymbol({
   onPointerDown: (e: React.PointerEvent) => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onPinClick: (e: React.PointerEvent, pinId: string) => void;
+  onPinDoubleClick?: (e: React.MouseEvent, pin: import("@/types/panel").PinTerminal, worldCoords: { xMm: number; yMm: number }) => void;
+  onPinContextMenu?: (e: React.MouseEvent, pin: import("@/types/panel").PinTerminal, worldCoords: { xMm: number; yMm: number }) => void;
   hasCollision?: boolean;
   isOutOfBounds?: boolean;
 }) {
@@ -559,7 +568,19 @@ function Component2DSymbol({
                 onPinClick(e, pin.id);
               }
             }}
-            className={isWireMode ? "cursor-pointer" : undefined}
+            onDoubleClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onPinDoubleClick?.(e, pin, { xMm: px, yMm: comp.yMm + pin.localYMm });
+            }}
+            onContextMenu={(e) => {
+              if (isWireMode) {
+                e.stopPropagation();
+                e.preventDefault();
+                onPinContextMenu?.(e, pin, { xMm: px, yMm: comp.yMm + pin.localYMm });
+              }
+            }}
+            className={isWireMode ? "cursor-pointer" : "cursor-pointer"}
           >
             <circle
               cx={px}
@@ -597,6 +618,8 @@ function CadAsset2DSymbol({
   onPointerDown,
   onContextMenu,
   onPinClick,
+  onPinDoubleClick,
+  onPinContextMenu,
 }: {
   asset: CustomCadAsset;
   isSelected: boolean;
@@ -608,6 +631,8 @@ function CadAsset2DSymbol({
   onPointerDown: (e: React.PointerEvent) => void;
   onContextMenu: (e: React.MouseEvent) => void;
   onPinClick: (e: React.PointerEvent, pinId: string) => void;
+  onPinDoubleClick?: (e: React.MouseEvent, pin: import("@/types/panel").PinTerminal, worldCoords: { xMm: number; yMm: number }) => void;
+  onPinContextMenu?: (e: React.MouseEvent, pin: import("@/types/panel").PinTerminal, worldCoords: { xMm: number; yMm: number }) => void;
 }) {
   const [hoveredPinId, setHoveredPinId] = useState<string | null>(null);
 
@@ -834,7 +859,19 @@ function CadAsset2DSymbol({
                   onPinClick(e, pin.id);
                 }
               }}
-              className={isWireMode ? "cursor-pointer" : undefined}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onPinDoubleClick?.(e, pin, { xMm: px, yMm: asset.yMm + pin.localYMm });
+              }}
+              onContextMenu={(e) => {
+                if (isWireMode || isMarkingThis) {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onPinContextMenu?.(e, pin, { xMm: px, yMm: asset.yMm + pin.localYMm });
+                }
+              }}
+              className="cursor-pointer"
             >
               {/* True 100% transparent hit ring with thin stroke */}
               <circle
@@ -948,6 +985,10 @@ export function Panel2DCanvas() {
   const moveComponent = usePanelStore((s) => s.moveComponent);
   const moveCadAsset = usePanelStore((s) => s.moveCadAsset);
   const addPinToAsset = usePanelStore((s) => s.addPinToAsset);
+  const updatePinInAsset = usePanelStore((s) => s.updatePinInAsset);
+  const removePinFromAsset = usePanelStore((s) => s.removePinFromAsset);
+  const updateComponentPin = usePanelStore((s) => s.updateComponentPin);
+  const removePinFromComponent = usePanelStore((s) => s.removePinFromComponent);
   const updateRail = usePanelStore((s) => s.updateRail);
   const updateDuct = usePanelStore((s) => s.updateDuct);
   const addWire = usePanelStore((s) => s.addWire);
@@ -981,6 +1022,16 @@ export function Panel2DCanvas() {
     null
   );
   const [viewportSize, setViewportSize] = useState({ width: 960, height: 760 });
+  const [hoveredGroupId, setHoveredGroupId] = useState<string | null>(null);
+  const [inlinePinEdit, setInlinePinEdit] = useState<{
+    targetKind: "component" | "cad";
+    targetId: string;
+    pinId: string;
+    initialLabel: string;
+    label: string;
+    worldX: number;
+    worldY: number;
+  } | null>(null);
   const activePointersRef = useRef<Map<number, { x: number; y: number }>>(new Map());
   const pinchRef = useRef<{
     dist: number;
@@ -1069,6 +1120,10 @@ export function Panel2DCanvas() {
         }
       }
       if (e.code === "Escape") {
+        if (inlinePinEdit) {
+          setInlinePinEdit(null);
+          return;
+        }
         setActiveWireStartPin(null);
         setMeasureStart(null);
         setMeasureEnd(null);
@@ -1140,6 +1195,7 @@ export function Panel2DCanvas() {
       window.removeEventListener("keyup", onKeyUp);
     };
   }, [
+    inlinePinEdit,
     setActiveWireStartPin,
     clearSelection,
     deleteSelectedItems,
@@ -1927,6 +1983,31 @@ export function Panel2DCanvas() {
           </button>
         </div>
 
+        {/* Group / Ungroup in Floating Toolbar (When items selected) */}
+        {(selectedIds.length >= 2 || selected) && (
+          <div className="flex shrink-0 items-center rounded-full border border-purple-500/40 bg-purple-50/50 dark:bg-purple-950/30 p-0.5">
+            <button
+              type="button"
+              disabled={selectedIds.length < 2}
+              onClick={groupSelectedItems}
+              title="Group (Ctrl+G)"
+              className="flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] text-purple-700 dark:text-purple-300 hover:bg-purple-200/50 dark:hover:bg-purple-800/40 disabled:opacity-40 transition-all font-medium"
+            >
+              <Users className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+              <span>Group (Ctrl+G)</span>
+            </button>
+            <button
+              type="button"
+              onClick={ungroupSelectedItems}
+              title="Ungroup (Ctrl+Shift+G)"
+              className="flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[10px] text-purple-700 dark:text-purple-300 hover:bg-purple-200/50 dark:hover:bg-purple-800/40 transition-all font-medium"
+            >
+              <Layers className="h-3 w-3 text-purple-600 dark:text-purple-400" />
+              <span>Ungroup (Ctrl+Shift+G)</span>
+            </button>
+          </div>
+        )}
+
         {/* Undo / Redo in Toolbar */}
         <div className="flex shrink-0 items-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#0c0e14] p-0.5">
           <button
@@ -2571,6 +2652,122 @@ export function Panel2DCanvas() {
             })}
           </g>
 
+          {/* Visual Group Boxes Layer */}
+          {(() => {
+            // Find unique groupIds present in components or cadAssets
+            const groupsMap = new Map<string, {
+              groupId: string;
+              groupName?: string;
+              items: Array<{ kind: "component" | "cad"; id: string; x1: number; y1: number; x2: number; y2: number }>;
+            }>();
+
+            for (const c of components) {
+              if (c.groupId) {
+                if (!groupsMap.has(c.groupId)) {
+                  groupsMap.set(c.groupId, { groupId: c.groupId, groupName: c.groupName, items: [] });
+                }
+                const g = groupsMap.get(c.groupId)!;
+                if (!g.groupName && c.groupName) g.groupName = c.groupName;
+                const minX = c.xMm - c.widthMm / 2;
+                const maxX = c.xMm + c.widthMm / 2;
+                const minY = -(c.yMm + c.heightMm / 2);
+                const maxY = -(c.yMm - c.heightMm / 2);
+                g.items.push({ kind: "component", id: c.id, x1: minX, y1: minY, x2: maxX, y2: maxY });
+              }
+            }
+
+            for (const a of cadAssets) {
+              if (a.groupId) {
+                if (!groupsMap.has(a.groupId)) {
+                  groupsMap.set(a.groupId, { groupId: a.groupId, groupName: a.groupName, items: [] });
+                }
+                const g = groupsMap.get(a.groupId)!;
+                if (!g.groupName && a.groupName) g.groupName = a.groupName;
+                const eff = getEffectiveCadBounds(a);
+                const minX = a.xMm - eff.widthMm / 2;
+                const maxX = a.xMm + eff.widthMm / 2;
+                const minY = -(a.yMm + eff.heightMm / 2);
+                const maxY = -(a.yMm - eff.heightMm / 2);
+                g.items.push({ kind: "cad", id: a.id, x1: minX, y1: minY, x2: maxX, y2: maxY });
+              }
+            }
+
+            return Array.from(groupsMap.values()).map((group) => {
+              const isGroupHovered = hoveredGroupId === group.groupId;
+              const hasItemSelected = group.items.some((item) => isItemSelected(item.kind, item.id));
+
+              if (!isGroupHovered && !hasItemSelected) return null;
+
+              let minX = Infinity;
+              let minY = Infinity;
+              let maxX = -Infinity;
+              let maxY = -Infinity;
+
+              for (const it of group.items) {
+                minX = Math.min(minX, it.x1);
+                minY = Math.min(minY, it.y1);
+                maxX = Math.max(maxX, it.x2);
+                maxY = Math.max(maxY, it.y2);
+              }
+
+              const pad = 4;
+              const bx = minX - pad;
+              const by = minY - pad;
+              const bw = maxX - minX + pad * 2;
+              const bh = maxY - minY + pad * 2;
+
+              return (
+                <g
+                  key={group.groupId}
+                  onPointerEnter={() => setHoveredGroupId(group.groupId)}
+                  onPointerLeave={() => setHoveredGroupId((curr) => curr === group.groupId ? null : curr)}
+                  onDoubleClick={(e) => {
+                    e.stopPropagation();
+                    // Select first child component/cad in group to allow sub-selection
+                    const first = group.items[0];
+                    if (first) {
+                      setSelected({ kind: first.kind, id: first.id });
+                    }
+                  }}
+                  className="cursor-pointer"
+                >
+                  <rect
+                    x={bx}
+                    y={by}
+                    width={bw}
+                    height={bh}
+                    fill="rgba(99, 102, 241, 0.04)"
+                    stroke="#818cf8"
+                    strokeWidth={1.2}
+                    strokeDasharray="4 2"
+                    rx={3}
+                  />
+                  {/* Badge tag on top edge */}
+                  <g transform={`translate(${bx}, ${by - 6.5})`}>
+                    <rect
+                      x={0}
+                      y={0}
+                      width={Math.max(28, (group.groupName || group.groupId).length * 2.8 + 14)}
+                      height={6}
+                      rx={2}
+                      fill="#6366f1"
+                    />
+                    <text
+                      x={3}
+                      y={4.5}
+                      fontSize={3.2}
+                      fontFamily="system-ui, -apple-system, sans-serif"
+                      fontWeight="bold"
+                      fill="#ffffff"
+                    >
+                      Group: {group.groupName || group.groupId}
+                    </text>
+                  </g>
+                </g>
+              );
+            });
+          })()}
+
           {/* Components Layer */}
           <g>
             {components.map((comp) => {
@@ -2634,6 +2831,28 @@ export function Panel2DCanvas() {
                 onPinClick={(e, pinId) => {
                   e.stopPropagation();
                   handlePinClick(comp.id, pinId);
+                }}
+                onPinDoubleClick={(e, pin, worldCoords) => {
+                  setInlinePinEdit({
+                    targetKind: "component",
+                    targetId: comp.id,
+                    pinId: pin.id,
+                    initialLabel: pin.label,
+                    label: pin.label,
+                    worldX: worldCoords.xMm,
+                    worldY: worldCoords.yMm,
+                  });
+                }}
+                onPinContextMenu={(e, pin, worldCoords) => {
+                  setInlinePinEdit({
+                    targetKind: "component",
+                    targetId: comp.id,
+                    pinId: pin.id,
+                    initialLabel: pin.label,
+                    label: pin.label,
+                    worldX: worldCoords.xMm,
+                    worldY: worldCoords.yMm,
+                  });
                 }}
               />
               );
@@ -2718,6 +2937,28 @@ export function Panel2DCanvas() {
                   onPinClick={(e, pinId) => {
                     e.stopPropagation();
                     handlePinClick(asset.id, pinId);
+                  }}
+                  onPinDoubleClick={(e, pin, worldCoords) => {
+                    setInlinePinEdit({
+                      targetKind: "cad",
+                      targetId: asset.id,
+                      pinId: pin.id,
+                      initialLabel: pin.label,
+                      label: pin.label,
+                      worldX: worldCoords.xMm,
+                      worldY: worldCoords.yMm,
+                    });
+                  }}
+                  onPinContextMenu={(e, pin, worldCoords) => {
+                    setInlinePinEdit({
+                      targetKind: "cad",
+                      targetId: asset.id,
+                      pinId: pin.id,
+                      initialLabel: pin.label,
+                      label: pin.label,
+                      worldX: worldCoords.xMm,
+                      worldY: worldCoords.yMm,
+                    });
                   }}
                 />
               );
@@ -3153,6 +3394,84 @@ export function Panel2DCanvas() {
           </g>
         </g>
       </svg>
+
+      {/* Inline Pin Quick Rename & Delete Popup Badge */}
+      {inlinePinEdit && (() => {
+        const sx = pan.x + inlinePinEdit.worldX * zoom;
+        const sy = pan.y - inlinePinEdit.worldY * zoom;
+
+        const handleSave = () => {
+          const finalLabel = inlinePinEdit.label.trim() || inlinePinEdit.initialLabel;
+          if (inlinePinEdit.targetKind === "component") {
+            updateComponentPin(inlinePinEdit.targetId, inlinePinEdit.pinId, { label: finalLabel });
+          } else {
+            updatePinInAsset(inlinePinEdit.targetId, inlinePinEdit.pinId, { label: finalLabel });
+          }
+          setInlinePinEdit(null);
+        };
+
+        const handleDelete = () => {
+          if (inlinePinEdit.targetKind === "component") {
+            removePinFromComponent(inlinePinEdit.targetId, inlinePinEdit.pinId);
+          } else {
+            removePinFromAsset(inlinePinEdit.targetId, inlinePinEdit.pinId);
+          }
+          setInlinePinEdit(null);
+        };
+
+        return (
+          <div
+            className="fixed inset-0 z-50 pointer-events-auto"
+            onClick={handleSave}
+          >
+            <div
+              className="absolute z-50 flex items-center gap-1 rounded-lg border border-amber-500/60 bg-white/95 dark:bg-[#111318]/95 px-2 py-1 shadow-2xl backdrop-blur-md"
+              style={{
+                left: `${sx}px`,
+                top: `${sy - 38}px`,
+                transform: "translateX(-50%)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <input
+                autoFocus
+                type="text"
+                value={inlinePinEdit.label}
+                onChange={(e) =>
+                  setInlinePinEdit({ ...inlinePinEdit, label: e.target.value })
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleSave();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    setInlinePinEdit(null);
+                  }
+                }}
+                className="w-16 rounded border border-amber-400 bg-white dark:bg-[#1e222d] px-1.5 py-0.5 font-mono text-xs font-bold text-amber-600 dark:text-amber-300 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                placeholder="Label"
+              />
+              <button
+                type="button"
+                onClick={handleSave}
+                title="Save Pin Label (Enter)"
+                className="rounded p-1 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+              >
+                <Check className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                title="Delete Pin"
+                className="rounded p-1 text-rose-500 dark:text-rose-400 hover:bg-rose-500/10 transition-colors"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       <ContextMenu
         menu={contextMenu}

@@ -1,6 +1,19 @@
 "use client";
 
-import { ClipboardList, Crop, MapPin, RotateCcw, Sliders, Trash2, X, AlertTriangle, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  ClipboardList,
+  Copy,
+  Crop,
+  Layers,
+  MapPin,
+  RotateCcw,
+  Sliders,
+  Trash2,
+  X,
+  AlertTriangle,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
 import { useEffect, useMemo, useRef } from "react";
 import { BomPanelTab } from "@/components/ui/BomPanelTab";
 import { computeDoorCutouts, getDoorDimensions } from "@/lib/door-cutout";
@@ -57,6 +70,11 @@ export function RightInspector({ onClose }: RightInspectorProps) {
   const updateTitleBlock = usePanelStore((s) => s.updateTitleBlock);
   const setPinMarkingMode = usePanelStore((s) => s.setPinMarkingMode);
   const removePinFromAsset = usePanelStore((s) => s.removePinFromAsset);
+  const updatePinInAsset = usePanelStore((s) => s.updatePinInAsset);
+  const updateComponentPin = usePanelStore((s) => s.updateComponentPin);
+  const removePinFromComponent = usePanelStore((s) => s.removePinFromComponent);
+  const renameGroup = usePanelStore((s) => s.renameGroup);
+  const selectedIds = usePanelStore((s) => s.selectedIds);
 
   const step = inputStepForUnit(displayUnit);
 
@@ -282,7 +300,54 @@ export function RightInspector({ onClose }: RightInspectorProps) {
         </div>
       )}
 
-      {!selected && (
+      {!selected && selectedIds.length > 1 && (() => {
+        // Find if multiple selected items share a common groupId
+        const selectedComps = components.filter((c) => selectedIds.some((s) => s.kind === "component" && s.id === c.id));
+        const selectedCads = cadAssets.filter((a) => selectedIds.some((s) => s.kind === "cad" && s.id === a.id));
+        const groupIds = new Set<string>();
+        for (const c of selectedComps) if (c.groupId) groupIds.add(c.groupId);
+        for (const a of selectedCads) if (a.groupId) groupIds.add(a.groupId);
+        const singleGroupId = groupIds.size === 1 ? Array.from(groupIds)[0] : null;
+        const currentGroupItem = singleGroupId
+          ? selectedComps.find((c) => c.groupId === singleGroupId) || selectedCads.find((a) => a.groupId === singleGroupId)
+          : null;
+
+        return (
+          <div className="space-y-3">
+            <div className={`${cardClass} space-y-3`}>
+              <div className="flex items-center justify-between border-b border-[#e2e8f0] dark:border-white/10 pb-2">
+                <span className="font-mono text-xs font-semibold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                  <Layers className="h-4 w-4" />
+                  Multiple Selection ({selectedIds.length})
+                </span>
+              </div>
+              <div className={`${subBoxClass} p-2 text-xs text-[#64748b] dark:text-slate-400 space-y-1`}>
+                <div>Components: {selectedComps.length}</div>
+                <div>Custom CADs: {selectedCads.length}</div>
+                {singleGroupId && (
+                  <div className="pt-1 border-t border-[#e2e8f0] dark:border-white/10 text-purple-600 dark:text-purple-400 font-semibold">
+                    Shared Group: {currentGroupItem?.groupName || singleGroupId}
+                  </div>
+                )}
+              </div>
+              {singleGroupId && (
+                <label className="block space-y-1">
+                  <span className="text-xs text-[#64748b] dark:text-slate-400">Rename Group</span>
+                  <input
+                    type="text"
+                    value={currentGroupItem?.groupName ?? ""}
+                    placeholder={singleGroupId}
+                    onChange={(e) => renameGroup(singleGroupId, e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {!selected && selectedIds.length <= 1 && (
         <div className="space-y-3 text-xs text-[#64748b] dark:text-slate-400">
           {activeSheetType === "door-cutout" && doorCutoutSpec && (
             <div className={`${cardClass} space-y-3 border-sky-500/30 bg-sky-500/5`}>
@@ -718,12 +783,22 @@ export function RightInspector({ onClose }: RightInspectorProps) {
               <br />
               Rail: {rails.find((r) => r.id === comp.railId)?.name ?? "Unmounted"}
               {comp.groupId && (
-                <>
-                  <br />
-                  <span className="text-purple-500 font-sans text-[11px]">
-                    Group Assembly: {comp.groupId}
-                  </span>
-                </>
+                <div className="mt-1.5 pt-1.5 border-t border-[#e2e8f0] dark:border-white/10 space-y-1">
+                  <div className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400 font-sans text-[11px] font-semibold">
+                    <Layers className="h-3.5 w-3.5" />
+                    <span>Group Assembly: {comp.groupName || comp.groupId}</span>
+                  </div>
+                  <label className="block space-y-0.5">
+                    <span className="text-[10px] text-[#64748b] dark:text-slate-400">Rename Group</span>
+                    <input
+                      type="text"
+                      value={comp.groupName ?? ""}
+                      placeholder={comp.groupId}
+                      onChange={(e) => renameGroup(comp.groupId!, e.target.value)}
+                      className={inputClass}
+                    />
+                  </label>
+                </div>
               )}
               {comp.locked && (
                 <>
@@ -779,18 +854,45 @@ export function RightInspector({ onClose }: RightInspectorProps) {
             <div className="font-mono text-xs font-semibold uppercase tracking-wider text-[#64748b] dark:text-slate-400">
               Pin Terminals ({comp.pins.length})
             </div>
-            <div className="max-h-48 space-y-1 overflow-y-auto">
+            <div className="max-h-56 space-y-1 overflow-y-auto">
               {comp.pins.map((pin) => (
                 <div
                   key={pin.id}
-                  className={`flex items-center justify-between ${subBoxClass} px-2.5 py-1.5 font-mono text-[11px] tabular-nums`}
+                  className={`flex items-center justify-between gap-1.5 ${subBoxClass} px-2 py-1 font-mono text-[11px] tabular-nums`}
                 >
-                  <span className="font-semibold text-amber-600 dark:text-amber-300">
-                    {pin.label}
+                  <input
+                    type="text"
+                    value={pin.label}
+                    onChange={(e) =>
+                      updateComponentPin(comp.id, pin.id, { label: e.target.value })
+                    }
+                    className="w-16 rounded border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#171a21] px-1.5 py-0.5 text-xs text-amber-600 dark:text-amber-300 font-semibold focus:outline-none focus:border-amber-500"
+                    title="Edit pin label"
+                  />
+                  <span className="text-[#64748b] dark:text-slate-400 text-[10px]">
+                    ({pin.localXMm}, {pin.localYMm})
                   </span>
-                  <span className="text-[#64748b] dark:text-slate-400">
-                    ({pin.localXMm}, {pin.localYMm}, {pin.localZMm}) mm
-                  </span>
+                  <div className="flex items-center gap-1 ml-auto">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const coord = `${pin.localXMm}, ${pin.localYMm}, ${pin.localZMm ?? 0}`;
+                        navigator.clipboard?.writeText(coord);
+                      }}
+                      title="Copy coordinates (mm)"
+                      className="rounded p-1 text-[#94a3b8] dark:text-slate-500 hover:text-sky-500 dark:hover:text-sky-400 hover:bg-sky-500/10 transition-colors"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => removePinFromComponent(comp.id, pin.id)}
+                      title="Delete pin"
+                      className="rounded p-1 text-[#94a3b8] dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -835,8 +937,21 @@ export function RightInspector({ onClose }: RightInspectorProps) {
               </div>
             )}
             {cad.groupId && (
-              <div className="text-purple-500 font-sans text-[11px]">
-                Group Assembly: {cad.groupId}
+              <div className="mt-1.5 pt-1.5 border-t border-[#e2e8f0] dark:border-white/10 space-y-1">
+                <div className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400 font-sans text-[11px] font-semibold">
+                  <Layers className="h-3.5 w-3.5" />
+                  <span>Group Assembly: {cad.groupName || cad.groupId}</span>
+                </div>
+                <label className="block space-y-0.5">
+                  <span className="text-[10px] text-[#64748b] dark:text-slate-400">Rename Group</span>
+                  <input
+                    type="text"
+                    value={cad.groupName ?? ""}
+                    placeholder={cad.groupId}
+                    onChange={(e) => renameGroup(cad.groupId!, e.target.value)}
+                    className={inputClass}
+                  />
+                </label>
               </div>
             )}
             {cad.locked && (
@@ -994,29 +1109,41 @@ export function RightInspector({ onClose }: RightInspectorProps) {
             {cad.pins.map((pin) => (
               <div
                 key={pin.id}
-                className={`flex items-center justify-between gap-1 ${subBoxClass} px-2 py-1 font-mono text-[11px] tabular-nums`}
+                className={`flex items-center justify-between gap-1.5 ${subBoxClass} px-2 py-1 font-mono text-[11px] tabular-nums`}
               >
                 <input
                   type="text"
                   value={pin.label}
-                  onChange={(e) => {
-                    const nextPins = cad.pins.map((p) =>
-                      p.id === pin.id ? { ...p, label: e.target.value } : p
-                    );
-                    updateCadAsset(cad.id, { pins: nextPins });
-                  }}
-                  className="w-16 rounded border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#171a21] px-1 py-0.5 text-xs text-amber-600 dark:text-amber-300"
+                  onChange={(e) =>
+                    updatePinInAsset(cad.id, pin.id, { label: e.target.value })
+                  }
+                  className="w-16 rounded border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#171a21] px-1.5 py-0.5 text-xs text-amber-600 dark:text-amber-300 font-semibold focus:outline-none focus:border-amber-500"
+                  title="Edit pin label"
                 />
-                <span className="text-[#64748b] dark:text-slate-400">
-                  ({pin.localXMm},{pin.localYMm},{pin.localZMm})
+                <span className="text-[#64748b] dark:text-slate-400 text-[10px]">
+                  ({pin.localXMm},{pin.localYMm})
                 </span>
-                <button
-                  type="button"
-                  onClick={() => removePinFromAsset(cad.id, pin.id)}
-                  className="text-[#94a3b8] dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
+                <div className="flex items-center gap-1 ml-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const coord = `${pin.localXMm}, ${pin.localYMm}, ${pin.localZMm ?? 0}`;
+                      navigator.clipboard?.writeText(coord);
+                    }}
+                    title="Copy coordinates (mm)"
+                    className="rounded p-1 text-[#94a3b8] dark:text-slate-500 hover:text-sky-500 dark:hover:text-sky-400 hover:bg-sky-500/10 transition-colors"
+                  >
+                    <Copy className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => removePinFromAsset(cad.id, pin.id)}
+                    title="Delete pin"
+                    className="rounded p-1 text-[#94a3b8] dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
             ))}
           </div>

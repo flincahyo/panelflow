@@ -110,6 +110,7 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
   const pasteFromClipboard = usePanelStore((s) => s.pasteFromClipboard);
   const groupSelectedItems = usePanelStore((s) => s.groupSelectedItems);
   const ungroupSelectedItems = usePanelStore((s) => s.ungroupSelectedItems);
+  const renameGroup = usePanelStore((s) => s.renameGroup);
   const toggleLockSelectedItems = usePanelStore((s) => s.toggleLockSelectedItems);
 
   // Position clamping & auto-fit into viewport
@@ -291,18 +292,34 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
             </button>
 
             {currentComp.groupId && (
-              <button
-                type="button"
-                onClick={() => {
-                  ungroupSelectedItems();
-                  onClose();
-                }}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
-              >
-                <Layers className="h-3.5 w-3.5 text-purple-400" />
-                <span>Ungroup Assembly</span>
-                <span className="ml-auto font-mono text-[9px] text-slate-500">Ctrl+Shift+G</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = window.prompt("Rename Group:", currentComp.groupName || currentComp.groupId);
+                    if (next !== null) {
+                      renameGroup(currentComp.groupId!, next);
+                    }
+                    onClose();
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+                >
+                  <Users className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>Rename Group</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    ungroupSelectedItems();
+                    onClose();
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+                >
+                  <Layers className="h-3.5 w-3.5 text-purple-400" />
+                  <span>Ungroup (Ctrl+Shift+G)</span>
+                  <span className="ml-auto font-mono text-[9px] text-slate-500">Ctrl+Shift+G</span>
+                </button>
+              </>
             )}
 
             <button
@@ -435,18 +452,34 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
             </button>
 
             {currentCad.groupId && (
-              <button
-                type="button"
-                onClick={() => {
-                  ungroupSelectedItems();
-                  onClose();
-                }}
-                className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
-              >
-                <Layers className="h-3.5 w-3.5 text-purple-400" />
-                <span>Ungroup Assembly</span>
-                <span className="ml-auto font-mono text-[9px] text-slate-500">Ctrl+Shift+G</span>
-              </button>
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = window.prompt("Rename Group:", currentCad.groupName || currentCad.groupId);
+                    if (next !== null) {
+                      renameGroup(currentCad.groupId!, next);
+                    }
+                    onClose();
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+                >
+                  <Users className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>Rename Group</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    ungroupSelectedItems();
+                    onClose();
+                  }}
+                  className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+                >
+                  <Layers className="h-3.5 w-3.5 text-purple-400" />
+                  <span>Ungroup (Ctrl+Shift+G)</span>
+                  <span className="ml-auto font-mono text-[9px] text-slate-500">Ctrl+Shift+G</span>
+                </button>
+              </>
             )}
 
             <button
@@ -820,14 +853,15 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
 
             <button
               type="button"
+              disabled={selectedIds.length < 2}
               onClick={() => {
                 groupSelectedItems();
                 onClose();
               }}
-              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300 disabled:opacity-40"
             >
               <Users className="h-3.5 w-3.5 text-indigo-400" />
-              <span>Group Assembly</span>
+              <span>Group (Ctrl+G)</span>
               <span className="ml-auto font-mono text-[9px] text-slate-500">Ctrl+G</span>
             </button>
 
@@ -840,7 +874,7 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
               className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
             >
               <Layers className="h-3.5 w-3.5 text-purple-400" />
-              <span>Ungroup Assembly</span>
+              <span>Ungroup (Ctrl+Shift+G)</span>
               <span className="ml-auto font-mono text-[9px] text-slate-500">Ctrl+Shift+G</span>
             </button>
 

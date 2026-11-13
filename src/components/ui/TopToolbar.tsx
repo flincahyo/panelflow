@@ -32,6 +32,7 @@ import {
   Moon,
   Hash,
   Undo2,
+  Users,
   Zap,
   Cloud,
   LogIn,
@@ -106,6 +107,8 @@ export function TopToolbar({
   const clipboardItems = usePanelStore((s) => s.clipboardItems);
   const copySelectedToClipboard = usePanelStore((s) => s.copySelectedToClipboard);
   const pasteFromClipboard = usePanelStore((s) => s.pasteFromClipboard);
+  const groupSelectedItems = usePanelStore((s) => s.groupSelectedItems);
+  const ungroupSelectedItems = usePanelStore((s) => s.ungroupSelectedItems);
 
   const setViewportMode = usePanelStore((s) => s.setViewportMode);
   const setDisplayUnit = usePanelStore((s) => s.setDisplayUnit);
