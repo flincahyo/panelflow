@@ -1061,6 +1061,22 @@ export function RightInspector({ onClose }: RightInspectorProps) {
             </div>
           </div>
 
+          {cad.imageOverlayUrl && (
+            <label className="flex items-center justify-between border-t border-[#e2e8f0] dark:border-white/10 pt-2.5 cursor-pointer">
+              <span className="text-xs font-medium text-[#0f172a] dark:text-slate-200">
+                Show Image Overlay
+              </span>
+              <input
+                type="checkbox"
+                checked={cad.showImageOverlay ?? true}
+                onChange={(e) =>
+                  updateCadAsset(cad.id, { showImageOverlay: e.target.checked })
+                }
+                className="rounded border-[#cbd5e1] text-[#0284c7] focus:ring-[#0284c7]"
+              />
+            </label>
+          )}
+
           <label className="block space-y-1 border-t border-[#e2e8f0] dark:border-white/10 pt-2.5">
             <span className="text-xs text-[#64748b] dark:text-slate-400">
               Label Position

@@ -716,7 +716,7 @@ function CadAsset2DSymbol({
         width={effW}
         height={effH}
         fill={asset.format === "dxf" ? "#f0f9ff" : "#f8fafc"}
-        fillOpacity={asset.format === "dxf" ? 0.35 : 0.85}
+        fillOpacity={asset.format === "dxf" ? (asset.imageOverlayUrl ? 0.05 : 0.35) : 0.85}
         stroke={
           isMarkingThis
             ? "#f59e0b"
@@ -729,6 +729,21 @@ function CadAsset2DSymbol({
         strokeWidth={isMarkingThis || isSelected ? 1.1 : 0.7}
         strokeDasharray={asset.format === "dxf" ? "2,1.5" : undefined}
       />
+
+      {/* Optional Photo / Image Overlay (Hybrid Vector + Image Mode) */}
+      {asset.imageOverlayUrl && (
+        <image
+          href={asset.imageOverlayUrl}
+          x={effX}
+          y={effY}
+          width={effW}
+          height={effH}
+          preserveAspectRatio="none"
+          clipPath={hasCrop ? `url(#${clipId})` : undefined}
+          opacity={0.8}
+          className="pointer-events-none"
+        />
+      )}
 
       {/* Selection / Marking Halo */}
       {(isSelected || isMarkingThis) && (

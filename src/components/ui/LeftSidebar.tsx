@@ -8,6 +8,7 @@ import {
   Clock,
   Cpu,
   FileUp,
+  Image as ImageIcon,
   Layers,
   MapPin,
   Pencil,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState, type ChangeEvent } from "react";
 import { CadPreviewThumbnail } from "@/components/ui/CadPreviewThumbnail";
+import { ImageToCadModal } from "@/components/modals/ImageToCadModal";
 import {
   COMPONENT_CATALOG,
   COMPONENT_CATEGORIES,
@@ -250,6 +252,7 @@ export function LeftSidebar() {
   const [editingLibraryName, setEditingLibraryName] = useState("");
   const [editingCadId, setEditingCadId] = useState<string | null>(null);
   const [editingCadName, setEditingCadName] = useState("");
+  const [showImageToCadModal, setShowImageToCadModal] = useState(false);
 
   const hydratePartPreferences = usePanelStore((s) => s.hydratePartPreferences);
 
@@ -1296,6 +1299,15 @@ export function LeftSidebar() {
                   className="hidden"
                 />
               </label>
+
+              <button
+                type="button"
+                onClick={() => setShowImageToCadModal(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 p-2.5 text-center transition-colors font-medium text-[13px]"
+              >
+                <ImageIcon className="h-4 w-4" />
+                <span>Convert Image to CAD</span>
+              </button>
             </div>
 
             <div className="space-y-1.5">
@@ -1434,6 +1446,9 @@ export function LeftSidebar() {
         )}
       </div>
     </aside>
+    {showImageToCadModal && (
+      <ImageToCadModal onClose={() => setShowImageToCadModal(false)} />
+    )}
     </>
   );
 }

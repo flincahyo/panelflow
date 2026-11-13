@@ -16,6 +16,8 @@ export interface CustomLibraryCadItem {
   pins: CustomCadAsset["pins"];
   rawText?: string;
   dataUrl?: string;
+  imageOverlayUrl?: string;
+  showImageOverlay?: boolean;
   entityCount?: number;
   parseWarning?: string;
   cloudId?: string;
@@ -123,6 +125,8 @@ export async function saveCustomCadToLibrary(
     pins: asset.pins.map((p) => ({ ...p })),
     rawText: asset.rawText,
     dataUrl: asset.dataUrl,
+    imageOverlayUrl: asset.imageOverlayUrl,
+    showImageOverlay: asset.showImageOverlay,
     entityCount: asset.entityCount,
     parseWarning: asset.parseWarning,
     createdAt: Date.now(),

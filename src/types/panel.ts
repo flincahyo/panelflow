@@ -160,6 +160,8 @@ export interface CustomCadAsset {
   rawText?: string;
   entityCount?: number;
   parseWarning?: string;
+  imageOverlayUrl?: string;
+  showImageOverlay?: boolean;
   groupId?: string;
   groupName?: string;
   locked?: boolean;
