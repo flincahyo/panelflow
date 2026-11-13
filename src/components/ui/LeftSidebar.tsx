@@ -830,6 +830,7 @@ export function LeftSidebar() {
                             <CadPreviewThumbnail
                               format={item.format}
                               rawText={item.rawText}
+                              imageOverlayUrl={item.imageOverlayUrl || item.dataUrl}
                               sourceUnit={item.sourceUnit}
                               boundingBoxMm={item.boundingBoxMm}
                               pins={item.pins}
@@ -1334,6 +1335,7 @@ export function LeftSidebar() {
                           <CadPreviewThumbnail
                             format={asset.format}
                             rawText={asset.rawText}
+                            imageOverlayUrl={asset.imageOverlayUrl || asset.dataUrl}
                             sourceUnit={asset.sourceUnit}
                             boundingBoxMm={asset.boundingBoxMm}
                             pins={asset.pins}

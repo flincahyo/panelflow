@@ -7,6 +7,7 @@ import type { CadFormat, CadImportUnit, PinTerminal } from "@/types/panel";
 interface CadPreviewThumbnailProps {
   format: CadFormat;
   rawText?: string;
+  imageOverlayUrl?: string;
   sourceUnit?: CadImportUnit;
   boundingBoxMm: { w: number; h: number; d: number };
   pins?: PinTerminal[];
@@ -16,11 +17,31 @@ interface CadPreviewThumbnailProps {
 export function CadPreviewThumbnail({
   format,
   rawText,
+  imageOverlayUrl,
   sourceUnit = "mm",
   boundingBoxMm,
   pins = [],
   className = "h-14 w-full",
 }: CadPreviewThumbnailProps) {
+  // If item is an Image Component with a valid imageOverlayUrl / dataUrl
+  if (imageOverlayUrl) {
+    return (
+      <div className={`relative flex items-center justify-center overflow-hidden ${className}`}>
+        <img
+          src={imageOverlayUrl}
+          alt="Component Thumbnail"
+          className="h-full w-full object-contain pointer-events-none select-none"
+          style={{ imageRendering: "crisp-edges" }}
+        />
+        {pins.length > 0 && (
+          <span className="absolute bottom-0.5 right-0.5 rounded bg-black/70 px-1 py-0.2 font-mono text-[8px] font-bold text-amber-400">
+            {pins.length}P
+          </span>
+        )}
+      </div>
+    );
+  }
+
   const preview = useMemo(
     () =>
       getCadPreviewSvgData({
