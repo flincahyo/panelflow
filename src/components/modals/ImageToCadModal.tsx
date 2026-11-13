@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useId } from "react";
+import React, { useState, useRef, useId, useCallback } from "react";
 import {
   X,
   Upload,
@@ -57,6 +57,41 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
   // Manual Crop Margins (mm)
   const [cropMm, setCropMm] = useState({ top: 0, bottom: 0, left: 0, right: 0 });
   const [showCropControls, setShowCropControls] = useState<boolean>(false);
+
+  // Re-crop image when manual crop margins or image source change
+  const applyCropAndTrim = useCallback(
+    (sourceUrl: string, marginsMm: { top: number; right: number; bottom: number; left: number }, wMm: number, hMm: number) => {
+      const img = new Image();
+      img.onload = () => {
+        const rawW = img.naturalWidth || img.width;
+        const rawH = img.naturalHeight || img.height;
+        const marginsPercent = {
+          top: Math.min(45, (marginsMm.top / Math.max(1, hMm)) * 100),
+          bottom: Math.min(45, (marginsMm.bottom / Math.max(1, hMm)) * 100),
+          left: Math.min(45, (marginsMm.left / Math.max(1, wMm)) * 100),
+          right: Math.min(45, (marginsMm.right / Math.max(1, wMm)) * 100),
+        };
+
+        try {
+          const trim = trimImageWhitespace(img, {
+            brightnessThreshold: 220,
+            padding: 0,
+            cropMarginsPercent: marginsPercent,
+          });
+          if (trim) {
+            setPreviewDataUrl(trim.dataUrl);
+            setImageAspectRatio(trim.aspectRatio);
+          } else {
+            setPreviewDataUrl(sourceUrl);
+          }
+        } catch {
+          setPreviewDataUrl(sourceUrl);
+        }
+      };
+      img.src = sourceUrl;
+    },
+    []
+  );
 
   // Wiring Pins
   const [pins, setPins] = useState<PinTerminal[]>([]);
@@ -641,9 +676,12 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                           min="0"
                           max={Math.max(0, heightMm - 1)}
                           value={cropMm.top}
-                          onChange={(e) =>
-                            setCropMm((prev) => ({ ...prev, top: Math.max(0, Number(e.target.value) || 0) }))
-                          }
+                          onChange={(e) => {
+                            const val = Math.max(0, Number(e.target.value) || 0);
+                            const next = { ...cropMm, top: val };
+                            setCropMm(next);
+                            if (rawImageDataUrl) applyCropAndTrim(rawImageDataUrl, next, widthMm, heightMm);
+                          }}
                           className="w-full rounded border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-1.5 py-1 text-[11px] font-mono"
                         />
                       </label>
@@ -654,9 +692,12 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                           min="0"
                           max={Math.max(0, heightMm - 1)}
                           value={cropMm.bottom}
-                          onChange={(e) =>
-                            setCropMm((prev) => ({ ...prev, bottom: Math.max(0, Number(e.target.value) || 0) }))
-                          }
+                          onChange={(e) => {
+                            const val = Math.max(0, Number(e.target.value) || 0);
+                            const next = { ...cropMm, bottom: val };
+                            setCropMm(next);
+                            if (rawImageDataUrl) applyCropAndTrim(rawImageDataUrl, next, widthMm, heightMm);
+                          }}
                           className="w-full rounded border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-1.5 py-1 text-[11px] font-mono"
                         />
                       </label>
@@ -667,9 +708,12 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                           min="0"
                           max={Math.max(0, widthMm - 1)}
                           value={cropMm.left}
-                          onChange={(e) =>
-                            setCropMm((prev) => ({ ...prev, left: Math.max(0, Number(e.target.value) || 0) }))
-                          }
+                          onChange={(e) => {
+                            const val = Math.max(0, Number(e.target.value) || 0);
+                            const next = { ...cropMm, left: val };
+                            setCropMm(next);
+                            if (rawImageDataUrl) applyCropAndTrim(rawImageDataUrl, next, widthMm, heightMm);
+                          }}
                           className="w-full rounded border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-1.5 py-1 text-[11px] font-mono"
                         />
                       </label>
@@ -680,9 +724,12 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                           min="0"
                           max={Math.max(0, widthMm - 1)}
                           value={cropMm.right}
-                          onChange={(e) =>
-                            setCropMm((prev) => ({ ...prev, right: Math.max(0, Number(e.target.value) || 0) }))
-                          }
+                          onChange={(e) => {
+                            const val = Math.max(0, Number(e.target.value) || 0);
+                            const next = { ...cropMm, right: val };
+                            setCropMm(next);
+                            if (rawImageDataUrl) applyCropAndTrim(rawImageDataUrl, next, widthMm, heightMm);
+                          }}
                           className="w-full rounded border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-1.5 py-1 text-[11px] font-mono"
                         />
                       </label>
