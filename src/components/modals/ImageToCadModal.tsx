@@ -1,13 +1,10 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useRef, useId } from "react";
 import {
   X,
   Upload,
-  Sliders,
-  Maximize2,
   MapPin,
-  Download,
   FolderPlus,
   Play,
   Check,
@@ -21,13 +18,11 @@ import {
 import { usePanelStore } from "@/store/usePanelStore";
 import { saveCustomCadToLibrary } from "@/lib/indexed-db";
 import {
-  vectorizeImage,
   STANDARD_COMPONENT_PRESETS,
   calculateAspectRatio,
   calculateHeightFromWidth,
   calculateWidthFromHeight,
   trimImageWhitespace,
-  type ImageToCadResult,
   type ComponentDimensionPreset,
 } from "@/lib/image-to-cad";
 import type { CustomCadAsset, PinTerminal } from "@/types/panel";
@@ -38,9 +33,7 @@ interface ImageToCadModalProps {
 
 export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
   const { addCadAsset, setSelected } = usePanelStore();
-
-  // Wizard Step: 1 = Upload, 2 = Configure & Pins, 3 = Finish & Save
-  const [step, setStep] = useState<1 | 2 | 3>(1);
+  const patternId = useId();
 
   // File & Image state
   const [file, setFile] = useState<File | null>(null);
@@ -49,7 +42,7 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
   const [previewDataUrl, setPreviewDataUrl] = useState<string | null>(null);
   const [componentName, setComponentName] = useState("");
 
-  // Aspect ratio & auto-crop whitespace
+  // Aspect ratio & auto-crop
   const [lockAspectRatio, setLockAspectRatio] = useState<boolean>(false);
   const [autoTrimWhitespace, setAutoTrimWhitespace] = useState<boolean>(true);
   const [rawAspectRatio, setRawAspectRatio] = useState<number>(1);
@@ -61,42 +54,31 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
   const [heightMm, setHeightMm] = useState<number>(85);
   const [depthMm, setDepthMm] = useState<number>(70);
 
-  // Trace Calibration (Optional Vectorization)
-  const [enableVectorTrace, setEnableVectorTrace] = useState<boolean>(false);
-  const [threshold, setThreshold] = useState<number>(128);
-  const [invert, setInvert] = useState<boolean>(false);
-  const [toleranceMm, setToleranceMm] = useState<number>(0.35);
+  // Manual Crop Margins (mm)
+  const [cropMm, setCropMm] = useState({ top: 0, bottom: 0, left: 0, right: 0 });
+  const [showCropControls, setShowCropControls] = useState<boolean>(false);
 
-  // Vectorized Result
-  const [isTracing, setIsTracing] = useState<boolean>(false);
-  const [traceResult, setTraceResult] = useState<ImageToCadResult | null>(null);
-  const [traceError, setTraceError] = useState<string | null>(null);
-
-  // Pins & Crop
+  // Wiring Pins
   const [pins, setPins] = useState<PinTerminal[]>([]);
   const [newPinLabel, setNewPinLabel] = useState<string>("L1");
-  const [cropMm, setCropMm] = useState({ top: 0, bottom: 0, left: 0, right: 0 });
-  const [showCropInputs, setShowCropInputs] = useState<boolean>(false);
-  const [overlayOpacity, setOverlayOpacity] = useState<number>(1.0);
-  const [showTraceVectors, setShowTraceVectors] = useState<boolean>(false);
 
-  // Success states
+  // Success states & Errors
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [savedToLibrarySuccess, setSavedToLibrarySuccess] = useState<boolean>(false);
   const [placedOnCanvasSuccess, setPlacedOnCanvasSuccess] = useState<boolean>(false);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const previewContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Handle file select
   const handleFile = (selectedFile: File) => {
     if (!selectedFile.type.startsWith("image/")) {
-      setTraceError("Please upload an image file (PNG, JPG, WebP)");
+      setErrorMessage("Please upload an image file (PNG, JPG, WebP)");
       return;
     }
     setFile(selectedFile);
     const baseName = selectedFile.name.replace(/\.[^/.]+$/, "");
     setComponentName(baseName || "Custom Component");
-    setTraceError(null);
+    setErrorMessage(null);
 
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -113,7 +95,7 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
         let finalTrimmedUrl: string | null = null;
         let finalTrimmedRatio: number | null = null;
         try {
-          const trim = trimImageWhitespace(img, { brightnessThreshold: 235, padding: 0 });
+          const trim = trimImageWhitespace(img, { brightnessThreshold: 220, padding: 0 });
           if (trim && (trim.trimmedWidth < rawW || trim.trimmedHeight < rawH)) {
             finalTrimmedUrl = trim.dataUrl;
             finalTrimmedRatio = trim.aspectRatio;
@@ -133,13 +115,10 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
           autoTrimWhitespace && finalTrimmedUrl ? finalTrimmedUrl : url;
         setPreviewDataUrl(activeUrl);
 
-        // Initial dimension: default width = 45 mm, heightMm proportional to image
         const initW = 45;
         const initH = calculateHeightFromWidth(initW, effectiveRatio);
         setWidthMm(initW);
         setHeightMm(initH);
-
-        setStep(2);
       };
       img.src = url;
     };
@@ -190,43 +169,12 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
     }
   };
 
-  // Run vectorization engine
-  const runVectorization = useCallback(async () => {
-    if (!previewDataUrl) return;
-    setIsTracing(true);
-    setTraceError(null);
-
-    try {
-      const res = await vectorizeImage(previewDataUrl, {
-        widthMm: Math.max(5, widthMm),
-        heightMm: Math.max(5, heightMm),
-        depthMm: Math.max(1, depthMm),
-        threshold,
-        invert,
-        toleranceMm,
-      });
-      setTraceResult(res);
-    } catch (err: unknown) {
-      setTraceError(err instanceof Error ? err.message : "Failed to vectorize image");
-    } finally {
-      setIsTracing(false);
-    }
-  }, [previewDataUrl, widthMm, heightMm, depthMm, threshold, invert, toleranceMm]);
-
-  // Auto re-trace when entering Step 2 or changing params (debounced)
-  useEffect(() => {
-    if (enableVectorTrace && step >= 2 && previewDataUrl) {
-      const timer = setTimeout(() => {
-        runVectorization();
-      }, 250);
-      return () => clearTimeout(timer);
-    }
-  }, [enableVectorTrace, step, previewDataUrl, widthMm, heightMm, threshold, invert, toleranceMm, runVectorization]);
-
   // Interactive Pin Placement on Preview SVG
   const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (step !== 2) return;
+    if (!previewDataUrl) return;
     const svgRect = e.currentTarget.getBoundingClientRect();
+    if (svgRect.width <= 0 || svgRect.height <= 0) return;
+
     const clickX = e.clientX - svgRect.left;
     const clickY = e.clientY - svgRect.top;
 
@@ -244,7 +192,7 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
 
     setPins((prev) => [...prev, newPin]);
 
-    // Next suggested label standard
+    // Next suggested standard label
     const standardLabels = ["L1", "L2", "L3", "N", "PE", "13", "14", "21", "22", "A1", "A2"];
     const currIdx = standardLabels.indexOf(newPinLabel.trim());
     if (currIdx >= 0 && currIdx < standardLabels.length - 1) {
@@ -256,7 +204,7 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
     setPins((prev) => prev.filter((p) => p.id !== pinId));
   };
 
-  // Build the CustomCadAsset object
+  // Build CustomCadAsset
   const buildCustomCadAsset = (): CustomCadAsset => {
     const id = `cad-img-${Date.now()}`;
     const allZeroCrop =
@@ -278,22 +226,20 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
       },
       cropMm: allZeroCrop ? undefined : cropMm,
       pins,
-      rawText: traceResult?.dxfText || "",
+      rawText: "",
       dataUrl: previewDataUrl || undefined,
       imageOverlayUrl: previewDataUrl || undefined,
       showImageOverlay: true,
-      imageOpacity: overlayOpacity,
+      imageOpacity: 1.0,
       lockAspectRatio,
-      entityCount: traceResult?.segments.length || 0,
+      entityCount: 0,
     };
   };
 
-  // Actions
   const handleSaveToLibrary = async () => {
     const asset = buildCustomCadAsset();
     try {
       await saveCustomCadToLibrary(asset);
-      // Sync cloud if endpoint available
       fetch("/api/custom-parts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -315,19 +261,6 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
     }
   };
 
-  const handleDownloadDxf = () => {
-    if (!traceResult?.dxfText) return;
-    const blob = new Blob([traceResult.dxfText], { type: "application/dxf" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${(componentName || "component").replace(/[^a-zA-Z0-9_-]/g, "_")}.dxf`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  };
-
   const handlePlaceOnCanvas = () => {
     const asset = buildCustomCadAsset();
     addCadAsset(asset);
@@ -335,12 +268,15 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
     setPlacedOnCanvasSuccess(true);
     setTimeout(() => {
       onClose();
-    }, 400);
+    }, 300);
   };
+
+  const hasManualCrop =
+    cropMm.top > 0 || cropMm.bottom > 0 || cropMm.left > 0 || cropMm.right > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-xs p-4 select-none">
-      <div className="flex flex-col h-[90vh] max-h-[820px] w-full max-w-4xl rounded-2xl border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#111318] text-[#0f172a] dark:text-slate-100 shadow-2xl overflow-hidden">
+      <div className="flex flex-col h-[90vh] max-h-[820px] w-full max-w-5xl rounded-2xl border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#111318] text-[#0f172a] dark:text-slate-100 shadow-2xl overflow-hidden">
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-[#e2e8f0] dark:border-white/10 px-5 py-3.5 bg-[#f8fafc] dark:bg-[#161922]">
           <div className="flex items-center gap-2.5">
@@ -352,60 +288,36 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                 Image Component Creator
               </h2>
               <p className="text-[11px] text-[#64748b] dark:text-slate-400">
-                Turn PNG/JPG component photos or datasheet graphics into real-size 2D layout components with wiring pins
+                Upload photo or datasheet, set physical dimensions, and place wiring terminals
               </p>
             </div>
           </div>
 
-          {/* Stepper Tabs */}
-          <div className="hidden sm:flex items-center gap-1 rounded-lg border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#0c0e14] p-1 text-[11px] font-medium">
+          <div className="flex items-center gap-2">
+            {previewDataUrl && (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="flex items-center gap-1.5 rounded-lg border border-[#cbd5e1] dark:border-white/10 px-3 py-1.5 text-xs font-medium text-[#475569] dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                <span>Replace Image</span>
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => previewDataUrl && setStep(1)}
-              className={`rounded px-2.5 py-1 transition-colors ${
-                step === 1 ? "bg-white dark:bg-[#202430] text-sky-500 shadow-xs" : "text-[#64748b] dark:text-slate-400"
-              }`}
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-[#94a3b8] hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white transition-colors"
             >
-              1. Upload
-            </button>
-            <button
-              type="button"
-              disabled={!previewDataUrl}
-              onClick={() => previewDataUrl && setStep(2)}
-              className={`rounded px-2.5 py-1 transition-colors ${
-                step === 2 ? "bg-white dark:bg-[#202430] text-sky-500 shadow-xs" : "text-[#64748b] dark:text-slate-400"
-              } ${!previewDataUrl ? "opacity-50 cursor-not-allowed" : ""}`}
-            >
-              2. Dimensions & Pins
-            </button>
-            <button
-              type="button"
-              disabled={!previewDataUrl}
-              onClick={() => previewDataUrl && setStep(3)}
-              className={`rounded px-2.5 py-1 transition-colors ${
-                step === 3 ? "bg-white dark:bg-[#202430] text-sky-500 shadow-xs" : "text-[#64748b] dark:text-slate-400"
-              } ${!previewDataUrl ? "opacity-50 cursor-not-allowed" : ""}`}
-            >
-              3. Save & Place
+              <X className="h-4 w-4" />
             </button>
           </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-[#94a3b8] hover:bg-[#f1f5f9] dark:hover:bg-white/10 hover:text-[#0f172a] dark:hover:text-white transition-colors"
-          >
-            <X className="h-4 w-4" />
-          </button>
         </div>
 
-        {/* Modal Body */}
+        {/* Modal Body: Left Preview, Right Controls */}
         <div className="flex-1 overflow-hidden grid grid-cols-1 md:grid-cols-12">
-          {/* Main Visual Preview Area */}
-          <div
-            ref={previewContainerRef}
-            className="md:col-span-7 lg:col-span-8 flex flex-col items-center justify-center p-4 bg-[#f8fafc] dark:bg-[#090b10] border-b md:border-b-0 md:border-r border-[#e2e8f0] dark:border-white/10 relative overflow-hidden"
-          >
+          {/* Left Panel: Crisp Image Preview + Checkerboard Contrast */}
+          <div className="md:col-span-7 lg:col-span-8 flex flex-col items-center justify-center p-4 bg-[#f8fafc] dark:bg-[#090b10] border-b md:border-b-0 md:border-r border-[#e2e8f0] dark:border-white/10 relative overflow-hidden">
             {!previewDataUrl ? (
               <div
                 onClick={() => fileInputRef.current?.click()}
@@ -415,7 +327,7 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                   const dropped = e.dataTransfer.files[0];
                   if (dropped) handleFile(dropped);
                 }}
-                className="flex flex-col items-center justify-center gap-3 w-full max-w-md h-72 rounded-2xl border-2 border-dashed border-[#cbd5e1] dark:border-white/20 bg-white dark:bg-[#141720] hover:border-sky-500 hover:bg-sky-500/5 transition-all cursor-pointer p-6 text-center"
+                className="flex flex-col items-center justify-center gap-3 w-full max-w-md h-80 rounded-2xl border-2 border-dashed border-[#cbd5e1] dark:border-white/20 bg-white dark:bg-[#141720] hover:border-sky-500 hover:bg-sky-500/5 transition-all cursor-pointer p-6 text-center"
               >
                 <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-500/10 text-sky-500">
                   <Upload className="h-7 w-7" />
@@ -425,222 +337,191 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                     Click to upload or drag image here
                   </div>
                   <div className="text-xs text-[#64748b] dark:text-slate-400 mt-1">
-                    PNG, JPG, WebP (datasheet schematic, component photo, CAD raster)
+                    PNG, JPG, WebP (datasheet graphic, component photo)
                   </div>
                 </div>
-                <div className="font-mono text-[11px] text-[#94a3b8] dark:text-slate-500">
-                  Runs 100% locally in browser (Zero backend lag)
-                </div>
+                {errorMessage && (
+                  <div className="text-xs text-rose-500 font-medium">
+                    {errorMessage}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center w-full h-full relative">
-                {/* SVG Calibration & Vector Overlay Display */}
-                <div className="relative max-h-[460px] max-w-full flex items-center justify-center bg-white dark:bg-[#141720] rounded-xl border border-[#cbd5e1] dark:border-white/10 shadow-inner overflow-hidden p-2">
+                {/* Checkerboard Container for clear transparency/contrast */}
+                <div
+                  className="relative max-h-[480px] max-w-full flex items-center justify-center rounded-xl border border-[#cbd5e1] dark:border-white/10 shadow-inner overflow-hidden p-3"
+                  style={{
+                    backgroundImage: `
+                      linear-gradient(45deg, rgba(0, 0, 0, 0.05) 25%, transparent 25%),
+                      linear-gradient(-45deg, rgba(0, 0, 0, 0.05) 25%, transparent 25%),
+                      linear-gradient(45deg, transparent 75%, rgba(0, 0, 0, 0.05) 75%),
+                      linear-gradient(-45deg, transparent 75%, rgba(0, 0, 0, 0.05) 75%)
+                    `,
+                    backgroundSize: "16px 16px",
+                    backgroundPosition: "0 0, 0 8px, 8px -8px, -8px 0px",
+                    backgroundColor: "#f1f5f9",
+                  }}
+                >
                   <svg
-                    viewBox={`-${widthMm / 2} -${heightMm / 2} ${widthMm} ${heightMm}`}
-                    className="max-h-[420px] max-w-full cursor-crosshair"
+                    viewBox={`0 0 ${widthMm} ${heightMm}`}
+                    className="max-h-[440px] max-w-full cursor-crosshair select-none"
                     style={{ aspectRatio: `${widthMm} / ${heightMm}` }}
                     onClick={handleSvgClick}
                   >
-                    {/* Background Grid Lines in mm */}
                     <defs>
-                      <pattern id="grid-pattern-mm" width="10" height="10" patternUnits="userSpaceOnUse">
-                        <path d="M 10 0 L 0 0 0 10" fill="none" stroke="currentColor" strokeWidth="0.15" className="text-slate-300 dark:text-slate-800" />
+                      <pattern
+                        id={`grid-${patternId}`}
+                        width="10"
+                        height="10"
+                        patternUnits="userSpaceOnUse"
+                      >
+                        <path
+                          d="M 10 0 L 0 0 0 10"
+                          fill="none"
+                          stroke="rgba(100, 116, 139, 0.25)"
+                          strokeWidth="0.2"
+                        />
                       </pattern>
+                      {hasManualCrop && (
+                        <clipPath id={`crop-clip-${patternId}`}>
+                          <rect
+                            x={cropMm.left}
+                            y={cropMm.top}
+                            width={Math.max(1, widthMm - cropMm.left - cropMm.right)}
+                            height={Math.max(1, heightMm - cropMm.top - cropMm.bottom)}
+                          />
+                        </clipPath>
+                      )}
                     </defs>
+
+                    {/* Background Grid Lines */}
                     <rect
-                      x={-widthMm / 2}
-                      y={-heightMm / 2}
+                      x="0"
+                      y="0"
                       width={widthMm}
                       height={heightMm}
-                      fill="url(#grid-pattern-mm)"
+                      fill={`url(#grid-${patternId})`}
                     />
 
-                    {/* Calibrated Raster Image Overlay (Crisp 1.0 Opacity by default) */}
-                    {previewDataUrl && (
-                      <image
-                        href={previewDataUrl}
-                        x={-widthMm / 2}
-                        y={-heightMm / 2}
-                        width={widthMm}
-                        height={heightMm}
-                        preserveAspectRatio="none"
-                        opacity={overlayOpacity}
-                        style={{ imageRendering: "crisp-edges" }}
-                      />
-                    )}
-
-                    {/* Vector Segments (Only shown if enabled) */}
-                    {showTraceVectors && traceResult?.segments.map((seg, i) => (
-                      <line
-                        key={i}
-                        x1={seg.x1}
-                        y1={-seg.y1} // SVG y is down, DXF y is up
-                        x2={seg.x2}
-                        y2={-seg.y2}
-                        stroke="#0284c7"
-                        strokeWidth="0.5"
-                        strokeLinecap="round"
-                      />
-                    ))}
+                    {/* Image Layer (clean 0,0 viewBox, no negative offset bugs) */}
+                    <image
+                      href={previewDataUrl}
+                      x="0"
+                      y="0"
+                      width={widthMm}
+                      height={heightMm}
+                      preserveAspectRatio="none"
+                      clipPath={hasManualCrop ? `url(#crop-clip-${patternId})` : undefined}
+                      style={{ imageRendering: "crisp-edges" }}
+                    />
 
                     {/* Outer Bounding Box Stroke */}
                     <rect
-                      x={-widthMm / 2}
-                      y={-heightMm / 2}
+                      x="0"
+                      y="0"
                       width={widthMm}
                       height={heightMm}
                       fill="none"
-                      stroke="#94a3b8"
+                      stroke="#0284c7"
                       strokeWidth="0.4"
                       strokeDasharray="2,2"
                     />
 
-                    {/* Crop guide if active */}
-                    {(cropMm.top > 0 || cropMm.bottom > 0 || cropMm.left > 0 || cropMm.right > 0) && (
+                    {/* Manual Crop Guide Lines */}
+                    {hasManualCrop && (
                       <rect
-                        x={-widthMm / 2 + cropMm.left}
-                        y={-heightMm / 2 + cropMm.top}
+                        x={cropMm.left}
+                        y={cropMm.top}
                         width={Math.max(1, widthMm - cropMm.left - cropMm.right)}
                         height={Math.max(1, heightMm - cropMm.top - cropMm.bottom)}
                         fill="none"
                         stroke="#f59e0b"
-                        strokeWidth="0.6"
+                        strokeWidth="0.5"
                         strokeDasharray="3,1.5"
                       />
                     )}
 
                     {/* Terminal Pins Markers */}
-                    {pins.map((p) => (
-                      <g key={p.id} transform={`translate(${p.localXMm}, ${-p.localYMm})`}>
-                        <circle r="1.8" fill="#f59e0b" fillOpacity="0.3" stroke="#f59e0b" strokeWidth="0.4" />
-                        <line x1="-1" y1="0" x2="1" y2="0" stroke="#f59e0b" strokeWidth="0.3" />
-                        <line x1="0" y1="-1" x2="0" y2="1" stroke="#f59e0b" strokeWidth="0.3" />
-                        <text
-                          x="2.4"
-                          y="1"
-                          fontSize="2.8"
-                          fontWeight="bold"
-                          fontFamily="monospace"
-                          fill="#f59e0b"
-                          stroke="#000000"
-                          strokeWidth="0.4"
-                          style={{ paintOrder: "stroke fill" }}
-                        >
-                          {p.label}
-                        </text>
-                      </g>
-                    ))}
+                    {pins.map((p) => {
+                      // Map local center-origin coordinates (normX, normY) back to SVG 0..W, 0..H
+                      const svgPinX = p.localXMm + widthMm / 2;
+                      const svgPinY = heightMm / 2 - p.localYMm;
+                      return (
+                        <g key={p.id} transform={`translate(${svgPinX}, ${svgPinY})`}>
+                          <circle
+                            r="2"
+                            fill="#f59e0b"
+                            fillOpacity="0.35"
+                            stroke="#f59e0b"
+                            strokeWidth="0.4"
+                          />
+                          <line x1="-1.2" y1="0" x2="1.2" y2="0" stroke="#f59e0b" strokeWidth="0.3" />
+                          <line x1="0" y1="-1.2" x2="0" y2="1.2" stroke="#f59e0b" strokeWidth="0.3" />
+                          <text
+                            x="2.6"
+                            y="1.1"
+                            fontSize="3"
+                            fontWeight="bold"
+                            fontFamily="monospace"
+                            fill="#f59e0b"
+                            stroke="#000000"
+                            strokeWidth="0.4"
+                            style={{ paintOrder: "stroke fill" }}
+                          >
+                            {p.label}
+                          </text>
+                        </g>
+                      );
+                    })}
                   </svg>
                 </div>
 
-                {/* Bottom preview toolbar */}
-                <div className="flex items-center justify-between w-full max-w-md mt-2 px-2 text-[11px] text-[#64748b] dark:text-slate-400">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono">
-                      {widthMm}×{heightMm} mm
-                    </span>
+                {/* Bottom preview info */}
+                <div className="flex items-center justify-between w-full max-w-md mt-2 px-1 text-[11px] text-[#64748b] dark:text-slate-400">
+                  <div className="flex items-center gap-2 font-mono">
+                    <span>{widthMm}×{heightMm} mm</span>
                     <span>•</span>
-                    <span className="font-mono">{traceResult?.segments.length || 0} vectors</span>
-                    <span>•</span>
-                    <span className="font-mono">{pins.length} pins</span>
+                    <span>{pins.length} pins</span>
+                    {autoTrimWhitespace && trimmedDataUrl && (
+                      <>
+                        <span>•</span>
+                        <span className="text-emerald-500 font-sans font-medium">Auto-Cropped</span>
+                      </>
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <label className="flex items-center gap-1 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={showTraceVectors}
-                        onChange={(e) => setShowTraceVectors(e.target.checked)}
-                        className="rounded accent-sky-500"
-                      />
-                      <span>Wireframe Trace</span>
-                    </label>
+                  <div className="text-[10px] text-amber-500 font-medium">
+                    Click image to add pin
                   </div>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Controls & Configuration Sidebar */}
+          {/* Right Panel: Clean, Zero-Fluff Single Screen */}
           <div className="md:col-span-5 lg:col-span-4 p-5 flex flex-col justify-between overflow-y-auto bg-white dark:bg-[#111318]">
-            {step === 1 && (
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-[#64748b] dark:text-slate-400">
-                    Step 1: Choose Image Source
-                  </h3>
-                  <p className="text-xs text-[#0f172a] dark:text-slate-200">
-                    Upload a front-view photograph, manufacturer 2D layout drawing, or catalog graphic.
-                  </p>
-                </div>
-
-                <div className="space-y-3 pt-2">
-                  <label className="block space-y-1">
-                    <span className="text-xs font-medium text-[#64748b] dark:text-slate-400">
-                      Component Name / Reference
-                    </span>
-                    <input
-                      type="text"
-                      value={componentName}
-                      onChange={(e) => setComponentName(e.target.value)}
-                      placeholder="e.g. Fuji Electric SC-03 Contactor"
-                      className="w-full rounded-lg border border-[#cbd5e1] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] px-3 py-2 text-xs text-[#0f172a] dark:text-slate-100 focus:border-sky-500 focus:outline-none"
-                    />
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-sky-500 hover:bg-sky-600 px-4 py-2.5 text-xs font-semibold text-white shadow-xs transition-colors"
-                  >
-                    <Upload className="h-4 w-4" />
-                    Browse Photo / Image
-                  </button>
-                </div>
+            <div className="space-y-4">
+              {/* 1) Component Name */}
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold uppercase tracking-wider text-[#64748b] dark:text-slate-400">
+                  Component Name
+                </label>
+                <input
+                  type="text"
+                  value={componentName}
+                  onChange={(e) => setComponentName(e.target.value)}
+                  placeholder="e.g. Fuji Electric SC-03 Contactor"
+                  className="w-full rounded-lg border border-[#cbd5e1] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] px-3 py-2 text-xs font-medium text-[#0f172a] dark:text-slate-100 focus:border-sky-500 focus:outline-none"
+                />
               </div>
-            )}
 
-            {step === 2 && (
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-[#64748b] dark:text-slate-400">
-                    Step 2: Calibrate Dimensions & Place Pins
-                  </h3>
-                  <p className="text-xs text-[#0f172a] dark:text-slate-300">
-                    Set physical mm dimensions and click directly on the image to place wiring pins (L1, L2, A1, etc).
-                  </p>
-                </div>
-
-                {/* Auto-Crop Whitespace Margin */}
-                <div className="flex items-center justify-between rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] p-3">
-                  <div className="space-y-0.5 pr-2">
-                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-[#0f172a] dark:text-slate-200">
-                      <Crop className="h-3.5 w-3.5 text-sky-500" />
-                      <span>Auto-Crop Whitespace Margin</span>
-                      {trimmedDataUrl && (
-                        <span className="rounded bg-sky-500/10 px-1.5 py-0.2 text-[9px] font-medium text-sky-500">
-                          Trimmed
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-[#64748b] dark:text-slate-400">
-                      Crop blank datasheet background so mm scale applies cleanly to component body
-                    </p>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={autoTrimWhitespace}
-                    onChange={(e) => handleToggleAutoTrim(e.target.checked)}
-                    className="h-4 w-4 rounded border-[#cbd5e1] text-sky-500 focus:ring-sky-500 cursor-pointer"
-                  />
-                </div>
-
-                {/* Dimensions (W, H, D) */}
-                <div className="space-y-2.5 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] p-3">
-                  <div className="flex items-center justify-between">
-                    <div className="text-[11px] font-semibold text-[#0f172a] dark:text-slate-200">
-                      Physical Dimensions (mm)
-                    </div>
+              {/* 2) Physical Dimensions (mm) */}
+              <div className="space-y-2.5 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-[#0f172a] dark:text-slate-200">
+                    Physical Dimensions (mm)
+                  </span>
+                  <div className="flex items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => setLockAspectRatio(!lockAspectRatio)}
@@ -649,254 +530,248 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                           ? "bg-sky-500/10 text-sky-500 border border-sky-500/20"
                           : "bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 border border-[#cbd5e1] dark:border-white/10"
                       }`}
-                      title={lockAspectRatio ? "Aspect Ratio Locked (proportional scale)" : "Aspect Ratio Unlocked (freeform scale)"}
+                      title={lockAspectRatio ? "Ratio Locked" : "Ratio Unlocked"}
                     >
-                      {lockAspectRatio ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
-                      <span>{lockAspectRatio ? "Lock Ratio" : "Free Ratio"}</span>
+                      {lockAspectRatio ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3 text-slate-400" />}
+                      <span>{lockAspectRatio ? "Locked" : "Free"}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleResetToImageRatio}
+                      className="p-1 rounded text-[#64748b] hover:text-sky-500 transition-colors cursor-pointer"
+                      title="Reset height to match image aspect ratio"
+                    >
+                      <RotateCcw className="h-3 w-3" />
                     </button>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-[#64748b] dark:text-slate-400">Width (W)</span>
-                      <input
-                        type="number"
-                        min="5"
-                        max="2000"
-                        value={widthMm}
-                        onChange={(e) => handleWidthChange(Number(e.target.value))}
-                        className="w-full rounded-md border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2 py-1 text-xs font-mono"
-                      />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-[#64748b] dark:text-slate-400">Height (H)</span>
-                      <input
-                        type="number"
-                        min="5"
-                        max="2000"
-                        value={heightMm}
-                        onChange={(e) => handleHeightChange(Number(e.target.value))}
-                        className="w-full rounded-md border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2 py-1 text-xs font-mono"
-                      />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="text-[10px] text-[#64748b] dark:text-slate-400">Depth (D)</span>
-                      <input
-                        type="number"
-                        min="1"
-                        max="1000"
-                        value={depthMm}
-                        onChange={(e) => setDepthMm(Math.max(1, Number(e.target.value) || 1))}
-                        className="w-full rounded-md border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2 py-1 text-xs font-mono"
-                      />
-                    </label>
-                  </div>
-
-                  {/* Standard Component Presets & Reset to Image Ratio */}
-                  <div className="pt-2 border-t border-[#e2e8f0] dark:border-white/10 space-y-1.5">
-                    <div className="flex items-center justify-between text-[10px] text-[#64748b] dark:text-slate-400">
-                      <span className="font-medium">Industry Presets:</span>
-                      <button
-                        type="button"
-                        onClick={handleResetToImageRatio}
-                        className="flex items-center gap-1 text-sky-500 hover:text-sky-600 transition-colors font-medium cursor-pointer"
-                        title="Recalculate height to match original photo/trimmed aspect ratio"
-                      >
-                        <RotateCcw className="h-2.5 w-2.5" />
-                        <span>Reset to Image Ratio</span>
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {STANDARD_COMPONENT_PRESETS.map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={() => handleApplyPreset(p)}
-                          className="rounded bg-white dark:bg-[#0c0e14] border border-[#cbd5e1] dark:border-white/10 px-2 py-0.5 text-[10px] font-medium text-[#475569] dark:text-slate-300 hover:border-sky-500 hover:text-sky-500 transition-colors cursor-pointer"
-                        >
-                          {p.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 </div>
 
-                {/* Add pin label helper */}
-                <div className="space-y-2 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] p-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-[#0f172a] dark:text-slate-200 flex items-center gap-1.5">
-                      <MapPin className="h-3.5 w-3.5 text-amber-500" />
-                      Wiring Terminal Pins
-                    </span>
-                    <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400">
-                      {pins.length} placed
-                    </span>
-                  </div>
-                  <label className="block space-y-1">
-                    <span className="text-[10px] text-[#64748b] dark:text-slate-400 font-semibold uppercase">
-                      Next Pin Label (Click photo to place)
-                    </span>
+                {/* Independent W x H x D Inputs */}
+                <div className="grid grid-cols-3 gap-2">
+                  <label className="space-y-1">
+                    <span className="text-[10px] text-[#64748b] dark:text-slate-400 font-medium">Width (W)</span>
                     <input
-                      type="text"
-                      value={newPinLabel}
-                      onChange={(e) => setNewPinLabel(e.target.value)}
-                      placeholder="e.g. L1, L2, A1, 13"
-                      className="w-full rounded-md border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2.5 py-1.5 text-xs font-mono font-semibold text-amber-500"
+                      type="number"
+                      min="5"
+                      max="2000"
+                      value={widthMm}
+                      onChange={(e) => handleWidthChange(Number(e.target.value))}
+                      className="w-full rounded-md border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2.5 py-1.5 text-xs font-mono font-semibold"
                     />
                   </label>
-                  <div className="text-[10px] text-[#94a3b8] dark:text-slate-400 italic">
-                    Click anywhere on the photo preview to place pins.
+                  <label className="space-y-1">
+                    <span className="text-[10px] text-[#64748b] dark:text-slate-400 font-medium">Height (H)</span>
+                    <input
+                      type="number"
+                      min="5"
+                      max="2000"
+                      value={heightMm}
+                      onChange={(e) => handleHeightChange(Number(e.target.value))}
+                      className="w-full rounded-md border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2.5 py-1.5 text-xs font-mono font-semibold"
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="text-[10px] text-[#64748b] dark:text-slate-400 font-medium">Depth (D)</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="1000"
+                      value={depthMm}
+                      onChange={(e) => setDepthMm(Math.max(1, Number(e.target.value) || 1))}
+                      className="w-full rounded-md border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2.5 py-1.5 text-xs font-mono font-semibold"
+                    />
+                  </label>
+                </div>
+
+                {/* 1-Row Quick Presets */}
+                <div className="pt-2 border-t border-[#e2e8f0] dark:border-white/10">
+                  <div className="text-[10px] text-[#64748b] dark:text-slate-400 font-medium mb-1.5">
+                    Quick Presets:
                   </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {STANDARD_COMPONENT_PRESETS.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handleApplyPreset(p)}
+                        className="rounded-md bg-white dark:bg-[#0c0e14] border border-[#cbd5e1] dark:border-white/10 px-2 py-1 text-[10px] font-medium text-[#475569] dark:text-slate-300 hover:border-sky-500 hover:text-sky-500 transition-colors cursor-pointer"
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
 
-                  {/* Placed Pins List */}
-                  {pins.length > 0 && (
-                    <div className="space-y-1 max-h-28 overflow-y-auto pt-1">
-                      {pins.map((p) => (
-                        <div
-                          key={p.id}
-                          className="flex items-center justify-between rounded-md border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2 py-0.5 text-xs"
+              {/* 3) Auto-Crop & Manual Crop Sliders */}
+              <div className="space-y-2 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] p-3">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={autoTrimWhitespace}
+                      onChange={(e) => handleToggleAutoTrim(e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-[#cbd5e1] text-sky-500 focus:ring-sky-500 cursor-pointer"
+                    />
+                    <span className="text-[11px] font-semibold text-[#0f172a] dark:text-slate-200 flex items-center gap-1">
+                      <Crop className="h-3 w-3 text-sky-500" />
+                      Auto-Crop Whitespace & Shadows
+                    </span>
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowCropControls(!showCropControls)}
+                    className="text-[10px] text-sky-500 hover:underline font-medium cursor-pointer"
+                  >
+                    {showCropControls ? "Hide Manual Margins" : "Manual Crop Margins"}
+                  </button>
+                </div>
+
+                {showCropControls && (
+                  <div className="pt-2 space-y-2 border-t border-[#e2e8f0] dark:border-white/10">
+                    <p className="text-[10px] text-[#64748b] dark:text-slate-400">
+                      Crop text, catalog tables, or margins (mm):
+                    </p>
+                    <div className="grid grid-cols-4 gap-2">
+                      <label className="space-y-0.5">
+                        <span className="text-[9px] text-[#64748b]">Top (mm)</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max={Math.max(0, heightMm - 1)}
+                          value={cropMm.top}
+                          onChange={(e) =>
+                            setCropMm((prev) => ({ ...prev, top: Math.max(0, Number(e.target.value) || 0) }))
+                          }
+                          className="w-full rounded border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-1.5 py-1 text-[11px] font-mono"
+                        />
+                      </label>
+                      <label className="space-y-0.5">
+                        <span className="text-[9px] text-[#64748b]">Bottom (mm)</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max={Math.max(0, heightMm - 1)}
+                          value={cropMm.bottom}
+                          onChange={(e) =>
+                            setCropMm((prev) => ({ ...prev, bottom: Math.max(0, Number(e.target.value) || 0) }))
+                          }
+                          className="w-full rounded border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-1.5 py-1 text-[11px] font-mono"
+                        />
+                      </label>
+                      <label className="space-y-0.5">
+                        <span className="text-[9px] text-[#64748b]">Left (mm)</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max={Math.max(0, widthMm - 1)}
+                          value={cropMm.left}
+                          onChange={(e) =>
+                            setCropMm((prev) => ({ ...prev, left: Math.max(0, Number(e.target.value) || 0) }))
+                          }
+                          className="w-full rounded border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-1.5 py-1 text-[11px] font-mono"
+                        />
+                      </label>
+                      <label className="space-y-0.5">
+                        <span className="text-[9px] text-[#64748b]">Right (mm)</span>
+                        <input
+                          type="number"
+                          min="0"
+                          max={Math.max(0, widthMm - 1)}
+                          value={cropMm.right}
+                          onChange={(e) =>
+                            setCropMm((prev) => ({ ...prev, right: Math.max(0, Number(e.target.value) || 0) }))
+                          }
+                          className="w-full rounded border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-1.5 py-1 text-[11px] font-mono"
+                        />
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 4) Wiring Terminal Pins */}
+              <div className="space-y-2 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] p-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-[#0f172a] dark:text-slate-200 flex items-center gap-1.5">
+                    <MapPin className="h-3.5 w-3.5 text-amber-500" />
+                    Wiring Terminal Pins
+                  </span>
+                  <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400 font-semibold">
+                    {pins.length} placed
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newPinLabel}
+                    onChange={(e) => setNewPinLabel(e.target.value)}
+                    placeholder="Pin label (L1, L2, A1...)"
+                    className="flex-1 rounded-md border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2.5 py-1.5 text-xs font-mono font-semibold text-amber-500 focus:outline-none focus:border-amber-500"
+                  />
+                  <span className="text-[10px] text-[#64748b] dark:text-slate-400">
+                    Click image to place
+                  </span>
+                </div>
+
+                {/* Placed Pins List */}
+                {pins.length > 0 && (
+                  <div className="space-y-1 max-h-24 overflow-y-auto pt-1">
+                    {pins.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex items-center justify-between rounded-md border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2 py-1 text-xs"
+                      >
+                        <span className="font-mono font-bold text-amber-500">{p.label}</span>
+                        <span className="font-mono text-[10px] text-[#64748b]">
+                          ({p.localXMm}, {p.localYMm})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removePin(p.id)}
+                          className="text-[#94a3b8] hover:text-rose-500 transition-colors cursor-pointer"
                         >
-                          <span className="font-mono font-bold text-amber-500">{p.label}</span>
-                          <span className="font-mono text-[10px] text-[#64748b]">
-                            ({p.localXMm}, {p.localYMm})
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removePin(p.id)}
-                            className="text-[#94a3b8] hover:text-rose-500"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setStep(1)}
-                    className="rounded-lg border border-[#cbd5e1] dark:border-white/10 px-3 py-2 text-xs font-medium text-[#64748b] dark:text-slate-300 hover:bg-[#f8fafc] dark:hover:bg-white/5"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStep(3)}
-                    className="flex-1 rounded-lg bg-sky-500 hover:bg-sky-600 px-3 py-2 text-xs font-semibold text-white shadow-xs transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <span>Proceed to Save & Place</span>
-                    <span>→</span>
-                  </button>
-                </div>
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
 
-            {step === 3 && (
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-[#64748b] dark:text-slate-400">
-                    Step 3: Save to Library & Use
-                  </h3>
-                  <p className="text-xs text-[#0f172a] dark:text-slate-300">
-                    Direct crisp image component ready with {widthMm}×{heightMm} mm dimensions and {pins.length} connection terminals.
-                  </p>
-                </div>
+            {/* Bottom Actions: Place on Canvas & Save to Library */}
+            <div className="pt-4 border-t border-[#e2e8f0] dark:border-white/10 space-y-2">
+              <button
+                type="button"
+                disabled={!previewDataUrl}
+                onClick={handlePlaceOnCanvas}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 hover:bg-black dark:bg-white dark:hover:bg-slate-200 dark:text-black text-white px-4 py-2.5 text-xs font-semibold shadow-xs transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {placedOnCanvasSuccess ? (
+                  <Check className="h-4 w-4 text-emerald-500" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
+                <span>Place on Canvas</span>
+              </button>
 
-                <div className="space-y-2.5 pt-2">
-                  {/* Action: Save to Library */}
-                  <button
-                    type="button"
-                    onClick={handleSaveToLibrary}
-                    className="flex w-full items-center justify-between rounded-xl border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 px-4 py-3 text-left transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky-500 text-white">
-                        <FolderPlus className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <div className="font-semibold text-xs text-[#0f172a] dark:text-white">
-                          Save to My CAD Library
-                        </div>
-                        <div className="text-[10px] text-[#64748b] dark:text-slate-400">
-                          Appears in Parts & CAD custom library immediately
-                        </div>
-                      </div>
-                    </div>
-                    {savedToLibrarySuccess ? (
-                      <Check className="h-4 w-4 text-emerald-500" />
-                    ) : (
-                      <span className="text-xs text-sky-500 font-semibold">Save</span>
-                    )}
-                  </button>
-
-                  {/* Action: Place on Active Canvas */}
-                  <button
-                    type="button"
-                    onClick={handlePlaceOnCanvas}
-                    className="flex w-full items-center justify-between rounded-xl border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-500/20 px-4 py-3 text-left transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-emerald-500 text-white">
-                        <Play className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <div className="font-semibold text-xs text-[#0f172a] dark:text-white">
-                          Place on Active Canvas
-                        </div>
-                        <div className="text-[10px] text-[#64748b] dark:text-slate-400">
-                          Add component right away to 2D & 3D panel workspace
-                        </div>
-                      </div>
-                    </div>
-                    {placedOnCanvasSuccess ? (
-                      <Check className="h-4 w-4 text-emerald-500" />
-                    ) : (
-                      <span className="text-xs text-emerald-500 font-semibold">Place</span>
-                    )}
-                  </button>
-
-                  {/* Action: Download .DXF File */}
-                  <button
-                    type="button"
-                    onClick={handleDownloadDxf}
-                    className="flex w-full items-center justify-between rounded-xl border border-[#cbd5e1] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] hover:bg-[#f1f5f9] dark:hover:bg-white/5 px-4 py-3 text-left transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#0f172a] dark:bg-white/10 text-white">
-                        <Download className="h-4 w-4" />
-                      </div>
-                      <div>
-                        <div className="font-semibold text-xs text-[#0f172a] dark:text-white">
-                          Download as .DXF File
-                        </div>
-                        <div className="text-[10px] text-[#64748b] dark:text-slate-400">
-                          Standard AutoCAD R12 DXF format (mm scaled)
-                        </div>
-                      </div>
-                    </div>
-                    <span className="text-xs text-[#64748b] font-medium">Export</span>
-                  </button>
-                </div>
-
-                <div className="flex gap-2 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => setStep(3)}
-                    className="rounded-lg border border-[#cbd5e1] dark:border-white/10 px-3 py-2 text-xs font-medium text-[#64748b] dark:text-slate-300 hover:bg-[#f8fafc] dark:hover:bg-white/5"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="flex-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 px-3 py-2 text-xs font-semibold text-white transition-colors"
-                  >
-                    Done & Close
-                  </button>
-                </div>
-              </div>
-            )}
+              <button
+                type="button"
+                disabled={!previewDataUrl}
+                onClick={handleSaveToLibrary}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#cbd5e1] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] hover:bg-[#f1f5f9] dark:hover:bg-white/5 text-[#0f172a] dark:text-slate-200 px-4 py-2 text-xs font-medium transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savedToLibrarySuccess ? (
+                  <Check className="h-3.5 w-3.5 text-emerald-500" />
+                ) : (
+                  <FolderPlus className="h-3.5 w-3.5 text-sky-500" />
+                )}
+                <span>Save to Library</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

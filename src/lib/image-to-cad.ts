@@ -100,7 +100,7 @@ export function findContentBoundingBox(
   data: Uint8ClampedArray,
   width: number,
   height: number,
-  brightnessThreshold = 235,
+  brightnessThreshold = 220,
   alphaThreshold = 10,
   invert = false
 ): ContentBoundingBox | null {
@@ -132,7 +132,8 @@ export function findContentBoundingBox(
           }
         } else {
           // Standard dark-content on white/light background:
-          // Background: pure white or near-white/light gray (RGB all >= 235, or lum > 230 with near-zero saturation)
+          // Background: pure white, broken-white, light gray, or faint shadow
+          // (luminance > 220 and color difference max(R,G,B)-min(R,G,B) < 25)
           const maxChannel = Math.max(r, g, b);
           const minChannel = Math.min(r, g, b);
           const diff = maxChannel - minChannel;
@@ -140,8 +141,8 @@ export function findContentBoundingBox(
 
           const isBackground =
             (r >= brightnessThreshold && g >= brightnessThreshold && b >= brightnessThreshold) ||
-            (lum >= brightnessThreshold) ||
-            (lum > 230 && diff < 8);
+            lum >= brightnessThreshold ||
+            (lum > 220 && diff < 25);
 
           if (!isBackground) {
             if (x < minX) minX = x;
@@ -178,13 +179,20 @@ export function trimImageWhitespace(
     alphaThreshold?: number;
     padding?: number;
     invert?: boolean;
+    cropMarginsPercent?: { top: number; right: number; bottom: number; left: number };
   }
 ): TrimResult | null {
   if (typeof window === "undefined" || typeof document === "undefined") {
     return null;
   }
 
-  const { brightnessThreshold = 235, alphaThreshold = 15, padding = 0, invert = false } = options || {};
+  const {
+    brightnessThreshold = 220,
+    alphaThreshold = 15,
+    padding = 0,
+    invert = false,
+    cropMarginsPercent,
+  } = options || {};
 
   const origW = img.naturalWidth || img.width;
   const origH = img.naturalHeight || img.height;
@@ -207,12 +215,33 @@ export function trimImageWhitespace(
     invert
   );
 
-  if (!bbox) return null;
+  let minX = 0;
+  let minY = 0;
+  let maxX = origW - 1;
+  let maxY = origH - 1;
 
-  const minX = Math.max(0, bbox.minX - padding);
-  const minY = Math.max(0, bbox.minY - padding);
-  const maxX = Math.min(origW - 1, bbox.maxX + padding);
-  const maxY = Math.min(origH - 1, bbox.maxY + padding);
+  if (bbox) {
+    minX = Math.max(0, bbox.minX - padding);
+    minY = Math.max(0, bbox.minY - padding);
+    maxX = Math.min(origW - 1, bbox.maxX + padding);
+    maxY = Math.min(origH - 1, bbox.maxY + padding);
+  }
+
+  // Apply manual crop margins (percentage of detected or full bounding box)
+  if (cropMarginsPercent) {
+    const boxW = maxX - minX + 1;
+    const boxH = maxY - minY + 1;
+    const extraLeft = Math.round((boxW * (cropMarginsPercent.left || 0)) / 100);
+    const extraRight = Math.round((boxW * (cropMarginsPercent.right || 0)) / 100);
+    const extraTop = Math.round((boxH * (cropMarginsPercent.top || 0)) / 100);
+    const extraBottom = Math.round((boxH * (cropMarginsPercent.bottom || 0)) / 100);
+
+    minX = Math.min(maxX, minX + extraLeft);
+    maxX = Math.max(minX, maxX - extraRight);
+    minY = Math.min(maxY, minY + extraTop);
+    maxY = Math.max(minY, maxY - extraBottom);
+  }
+
   const cropW = maxX - minX + 1;
   const cropH = maxY - minY + 1;
 
@@ -233,7 +262,7 @@ export function trimImageWhitespace(
     trimmedWidth: cropW,
     trimmedHeight: cropH,
     aspectRatio: cropW / cropH,
-    boundingBox: bbox,
+    boundingBox: bbox || { minX, minY, maxX, maxY, width: cropW, height: cropH },
   };
 }
 

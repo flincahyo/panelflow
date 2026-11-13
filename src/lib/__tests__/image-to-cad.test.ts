@@ -226,6 +226,39 @@ describe("Image-to-CAD Vectorizer Engine", () => {
       expect(bbox?.height).toBe(6);
     });
 
+    it("treats light gray, broken-white, or light shadow as whitespace background", () => {
+      const w = 8;
+      const h = 8;
+      const data = new Uint8ClampedArray(w * h * 4);
+      // Fill with broken-white / light shadow background (225, 226, 227) -> lum ~ 226, diff = 2 < 25
+      for (let i = 0; i < w * h; i++) {
+        data[i * 4 + 0] = 225;
+        data[i * 4 + 1] = 226;
+        data[i * 4 + 2] = 227;
+        data[i * 4 + 3] = 255;
+      }
+
+      // Draw component in center 2x2: (3,3) to (4,4)
+      for (let y = 3; y <= 4; y++) {
+        for (let x = 3; x <= 4; x++) {
+          const idx = (y * w + x) * 4;
+          data[idx] = 50;
+          data[idx + 1] = 50;
+          data[idx + 2] = 50;
+          data[idx + 3] = 255;
+        }
+      }
+
+      const bbox = findContentBoundingBox(data, w, h);
+      expect(bbox).not.toBeNull();
+      expect(bbox?.minX).toBe(3);
+      expect(bbox?.maxX).toBe(4);
+      expect(bbox?.minY).toBe(3);
+      expect(bbox?.maxY).toBe(4);
+      expect(bbox?.width).toBe(2);
+      expect(bbox?.height).toBe(2);
+    });
+
     it("treats light gray or near-white background as whitespace", () => {
       const w = 8;
       const h = 8;
