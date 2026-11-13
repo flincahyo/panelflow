@@ -136,4 +136,43 @@ describe("sheet-export", () => {
     expect(svg).toContain('fill="transparent"');
     expect(svg).toContain("24V");
   });
+
+  it("exports Direct Photo / Image Component with full resolution and custom opacity", () => {
+    const svg = generateEplanSheetSvg({
+      enclosure,
+      rails,
+      ducts,
+      components: [],
+      cadAssets: [
+        {
+          id: "cad-photo-1",
+          name: "Contactor SC-03",
+          fileName: "sc-03.png",
+          format: "dxf",
+          sourceUnit: "mm",
+          xMm: 0,
+          yMm: 0,
+          zMm: 35,
+          boundingBoxMm: { w: 45, h: 77, d: 70 },
+          pins: [
+            { id: "p-L1", label: "L1", localXMm: -15, localYMm: 30, localZMm: 0 },
+            { id: "p-A1", label: "A1", localXMm: 15, localYMm: 30, localZMm: 0 },
+          ],
+          imageOverlayUrl: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+          showImageOverlay: true,
+          imageOpacity: 1.0,
+        },
+      ],
+      wires: [],
+      meta,
+    });
+
+    expect(svg).toContain('data-id="cad-photo-1"');
+    expect(svg).toContain('<image href="data:image/png;base64,');
+    expect(svg).toContain('opacity="1"');
+    expect(svg).toContain('image-rendering: crisp-edges;');
+    expect(svg).toContain("Contactor SC-03");
+    expect(svg).toContain("L1");
+    expect(svg).toContain("A1");
+  });
 });
