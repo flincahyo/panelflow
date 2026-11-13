@@ -93,8 +93,8 @@ export function calculateWidthFromHeight(heightMm: number, aspectRatio: number):
 
 /**
  * Find bounding box of non-white / non-transparent content in RGBA ImageData.
- * Pixels with brightness < brightnessThreshold (default 235), or light gray (brightness > 230 with low saturation),
- * or visible alpha (> alphaThreshold) are detected as component content.
+ * Uses corner background color distance sampling and brightness/luminance thresholds
+ * to remove white backgrounds, faint gradients, and jpeg shadow artifacts.
  */
 export function findContentBoundingBox(
   data: Uint8ClampedArray,
@@ -102,11 +102,70 @@ export function findContentBoundingBox(
   height: number,
   brightnessThreshold = 220,
   alphaThreshold = 10,
-  invert = false
+  invert = false,
+  colorTolerance = 30
 ): ContentBoundingBox | null {
   if (width <= 0 || height <= 0 || data.length < width * height * 4) {
     return null;
   }
+
+  // Sample 4 corner regions (up to 5x5 box each corner) to estimate background color
+  const sampleCornerColors = (): { r: number; g: number; b: number }[] => {
+    const corners: { r: number; g: number; b: number }[] = [];
+    const sampleSize = Math.max(1, Math.min(5, Math.floor(Math.min(width, height) / 4)));
+
+    const cornerStarts = [
+      { startX: 0, startY: 0 }, // Top-left
+      { startX: Math.max(0, width - sampleSize), startY: 0 }, // Top-right
+      { startX: 0, startY: Math.max(0, height - sampleSize) }, // Bottom-left
+      { startX: Math.max(0, width - sampleSize), startY: Math.max(0, height - sampleSize) }, // Bottom-right
+    ];
+
+    for (const { startX, startY } of cornerStarts) {
+      let rSum = 0, gSum = 0, bSum = 0, count = 0;
+      for (let cy = 0; cy < sampleSize; cy++) {
+        for (let cx = 0; cx < sampleSize; cx++) {
+          const px = startX + cx;
+          const py = startY + cy;
+          if (px < width && py < height) {
+            const idx = (py * width + px) * 4;
+            if (data[idx + 3] > alphaThreshold) {
+              rSum += data[idx];
+              gSum += data[idx + 1];
+              bSum += data[idx + 2];
+              count++;
+            }
+          }
+        }
+      }
+      if (count > 0) {
+        corners.push({
+          r: rSum / count,
+          g: gSum / count,
+          b: bSum / count,
+        });
+      }
+    }
+    return corners;
+  };
+
+  const cornerSamples = sampleCornerColors();
+
+  // Color distance helper (Euclidean in RGB)
+  const isCloseToCornerBg = (r: number, g: number, b: number, tol: number): boolean => {
+    for (const c of cornerSamples) {
+      // If corner sample is bright (typical white/gray paper background)
+      const cLum = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
+      if (cLum >= 180) {
+        const dr = r - c.r;
+        const dg = g - c.g;
+        const db = b - c.b;
+        const dist = Math.sqrt(dr * dr + dg * dg + db * db);
+        if (dist <= tol) return true;
+      }
+    }
+    return false;
+  };
 
   let minX = width;
   let minY = height;
@@ -132,17 +191,30 @@ export function findContentBoundingBox(
           }
         } else {
           // Standard dark-content on white/light background:
-          // Background: pure white, broken-white, light gray, or faint shadow
-          // (luminance > 220 and color difference max(R,G,B)-min(R,G,B) < 25)
+          // Background if:
+          // 1. Matches / within color distance of bright corner background samples
+          // 2. Or pure white / broken-white (r,g,b >= brightnessThreshold)
+          // 3. Or luminance >= brightnessThreshold
+          // 4. Or high luminance with low saturation (faint shadow)
           const maxChannel = Math.max(r, g, b);
           const minChannel = Math.min(r, g, b);
           const diff = maxChannel - minChannel;
           const lum = 0.299 * r + 0.587 * g + 0.114 * b;
 
+          // Euclidean color distance to sampled background
+          // Calculate distance to nearest corner background sample
+          let minCornerDist = 999;
+          for (const c of cornerSamples) {
+            const dist = Math.hypot(r - c.r, g - c.g, b - c.b);
+            if (dist < minCornerDist) minCornerDist = dist;
+          }
+
+          const isNearCorner = minCornerDist <= colorTolerance;
           const isBackground =
             (r >= brightnessThreshold && g >= brightnessThreshold && b >= brightnessThreshold) ||
             lum >= brightnessThreshold ||
-            (lum > 220 && diff < 25);
+            (lum > 175 && isNearCorner) ||
+            (lum > 195 && diff < 30);
 
           if (!isBackground) {
             if (x < minX) minX = x;
@@ -180,6 +252,10 @@ export function trimImageWhitespace(
     padding?: number;
     invert?: boolean;
     cropMarginsPercent?: { top: number; right: number; bottom: number; left: number };
+    colorTolerance?: number;
+    cropMarginsMm?: { top: number; right: number; bottom: number; left: number };
+    widthMm?: number;
+    heightMm?: number;
   }
 ): TrimResult | null {
   if (typeof window === "undefined" || typeof document === "undefined") {
@@ -192,6 +268,10 @@ export function trimImageWhitespace(
     padding = 0,
     invert = false,
     cropMarginsPercent,
+    cropMarginsMm,
+    widthMm,
+    heightMm,
+    colorTolerance = 30,
   } = options || {};
 
   const origW = img.naturalWidth || img.width;
@@ -212,7 +292,8 @@ export function trimImageWhitespace(
     origH,
     brightnessThreshold,
     alphaThreshold,
-    invert
+    invert,
+    colorTolerance
   );
 
   let minX = 0;
@@ -227,8 +308,20 @@ export function trimImageWhitespace(
     maxY = Math.min(origH - 1, bbox.maxY + padding);
   }
 
-  // Apply manual crop margins (percentage of detected or full bounding box)
-  if (cropMarginsPercent) {
+  // Apply manual crop margins (percentage or mm of bounding box)
+  if (cropMarginsMm && widthMm && heightMm && widthMm > 0 && heightMm > 0) {
+    const boxW = maxX - minX + 1;
+    const boxH = maxY - minY + 1;
+    const extraLeft = Math.round((boxW * Math.max(0, cropMarginsMm.left || 0)) / widthMm);
+    const extraRight = Math.round((boxW * Math.max(0, cropMarginsMm.right || 0)) / widthMm);
+    const extraTop = Math.round((boxH * Math.max(0, cropMarginsMm.top || 0)) / heightMm);
+    const extraBottom = Math.round((boxH * Math.max(0, cropMarginsMm.bottom || 0)) / heightMm);
+
+    minX = Math.min(maxX, minX + extraLeft);
+    maxX = Math.max(minX, maxX - extraRight);
+    minY = Math.min(maxY, minY + extraTop);
+    maxY = Math.max(minY, maxY - extraBottom);
+  } else if (cropMarginsPercent) {
     const boxW = maxX - minX + 1;
     const boxH = maxY - minY + 1;
     const extraLeft = Math.round((boxW * (cropMarginsPercent.left || 0)) / 100);

@@ -334,5 +334,44 @@ describe("Image-to-CAD Vectorizer Engine", () => {
       expect(bbox?.minY).toBe(2);
       expect(bbox?.maxY).toBe(4);
     });
+
+    it("removes right-side jpeg shadow/gradient using corner background color distance sampling", () => {
+      const w = 10;
+      const h = 10;
+      const data = new Uint8ClampedArray(w * h * 4);
+      // Background white 245, 245, 245
+      for (let i = 0; i < w * h; i++) {
+        data[i * 4 + 0] = 245;
+        data[i * 4 + 1] = 245;
+        data[i * 4 + 2] = 245;
+        data[i * 4 + 3] = 255;
+      }
+      // Right edge (x = 7..9) has slight shadow / gradient artifact (e.g. 215, 215, 215, diff=0, lum ~215)
+      for (let y = 0; y < h; y++) {
+        for (let x = 7; x < w; x++) {
+          const idx = (y * w + x) * 4;
+          data[idx] = 215;
+          data[idx + 1] = 215;
+          data[idx + 2] = 215;
+        }
+      }
+      // Component black body at x=2..5, y=2..7 (RGB 30, 30, 30)
+      for (let y = 2; y <= 7; y++) {
+        for (let x = 2; x <= 5; x++) {
+          const idx = (y * w + x) * 4;
+          data[idx] = 30;
+          data[idx + 1] = 30;
+          data[idx + 2] = 30;
+        }
+      }
+
+      // With colorTolerance 55 (corner sample is 245/215, dist ~ 51.96), right shadow is ignored
+      const bbox = findContentBoundingBox(data, w, h, 220, 10, false, 55);
+      expect(bbox).not.toBeNull();
+      expect(bbox?.minX).toBe(2);
+      expect(bbox?.maxX).toBe(5);
+      expect(bbox?.minY).toBe(2);
+      expect(bbox?.maxY).toBe(7);
+    });
   });
 });

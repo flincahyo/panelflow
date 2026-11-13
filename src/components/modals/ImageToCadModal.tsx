@@ -45,6 +45,7 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
   // Aspect ratio & auto-crop
   const [lockAspectRatio, setLockAspectRatio] = useState<boolean>(false);
   const [autoTrimWhitespace, setAutoTrimWhitespace] = useState<boolean>(true);
+  const [colorTolerance, setColorTolerance] = useState<number>(35);
   const [rawAspectRatio, setRawAspectRatio] = useState<number>(1);
   const [trimmedAspectRatio, setTrimmedAspectRatio] = useState<number | null>(null);
   const [imageAspectRatio, setImageAspectRatio] = useState<number>(1);
@@ -60,11 +61,15 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
 
   // Re-crop image when manual crop margins or image source change
   const applyCropAndTrim = useCallback(
-    (sourceUrl: string, marginsMm: { top: number; right: number; bottom: number; left: number }, wMm: number, hMm: number) => {
+    (
+      sourceUrl: string,
+      marginsMm: { top: number; right: number; bottom: number; left: number },
+      wMm: number,
+      hMm: number,
+      tol: number = colorTolerance
+    ) => {
       const img = new Image();
       img.onload = () => {
-        const rawW = img.naturalWidth || img.width;
-        const rawH = img.naturalHeight || img.height;
         const marginsPercent = {
           top: Math.min(45, (marginsMm.top / Math.max(1, hMm)) * 100),
           bottom: Math.min(45, (marginsMm.bottom / Math.max(1, hMm)) * 100),
@@ -77,6 +82,7 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
             brightnessThreshold: 220,
             padding: 0,
             cropMarginsPercent: marginsPercent,
+            colorTolerance: tol,
           });
           if (trim) {
             setPreviewDataUrl(trim.dataUrl);
@@ -90,7 +96,7 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
       };
       img.src = sourceUrl;
     },
-    []
+    [colorTolerance]
   );
 
   // Wiring Pins
@@ -130,7 +136,11 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
         let finalTrimmedUrl: string | null = null;
         let finalTrimmedRatio: number | null = null;
         try {
-          const trim = trimImageWhitespace(img, { brightnessThreshold: 220, padding: 0 });
+          const trim = trimImageWhitespace(img, {
+            brightnessThreshold: 220,
+            padding: 0,
+            colorTolerance,
+          });
           if (trim && (trim.trimmedWidth < rawW || trim.trimmedHeight < rawH)) {
             finalTrimmedUrl = trim.dataUrl;
             finalTrimmedRatio = trim.aspectRatio;
@@ -398,118 +408,117 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                     backgroundColor: "#f1f5f9",
                   }}
                 >
-                  <svg
-                    viewBox={`0 0 ${widthMm} ${heightMm}`}
-                    className="max-h-[440px] max-w-full cursor-crosshair select-none"
+                  {/* Aspect Ratio Box with direct HTML <img> and transparent SVG Overlay */}
+                  <div
+                    className="relative max-h-[440px] max-w-full flex items-center justify-center select-none"
                     style={{ aspectRatio: `${widthMm} / ${heightMm}` }}
-                    onClick={handleSvgClick}
                   >
-                    <defs>
-                      <pattern
-                        id={`grid-${patternId}`}
-                        width="10"
-                        height="10"
-                        patternUnits="userSpaceOnUse"
-                      >
-                        <path
-                          d="M 10 0 L 0 0 0 10"
-                          fill="none"
-                          stroke="rgba(100, 116, 139, 0.25)"
-                          strokeWidth="0.2"
-                        />
-                      </pattern>
-                      {hasManualCrop && (
-                        <clipPath id={`crop-clip-${patternId}`}>
-                          <rect
-                            x={cropMm.left}
-                            y={cropMm.top}
-                            width={Math.max(1, widthMm - cropMm.left - cropMm.right)}
-                            height={Math.max(1, heightMm - cropMm.top - cropMm.bottom)}
-                          />
-                        </clipPath>
-                      )}
-                    </defs>
-
-                    {/* Background Grid Lines */}
-                    <rect
-                      x="0"
-                      y="0"
-                      width={widthMm}
-                      height={heightMm}
-                      fill={`url(#grid-${patternId})`}
-                    />
-
-                    {/* Image Layer (clean 0,0 viewBox, no negative offset bugs) */}
-                    <image
-                      href={previewDataUrl}
-                      x="0"
-                      y="0"
-                      width={widthMm}
-                      height={heightMm}
-                      preserveAspectRatio="none"
-                      clipPath={hasManualCrop ? `url(#crop-clip-${patternId})` : undefined}
-                      style={{ imageRendering: "crisp-edges" }}
-                    />
-
-                    {/* Outer Bounding Box Stroke */}
-                    <rect
-                      x="0"
-                      y="0"
-                      width={widthMm}
-                      height={heightMm}
-                      fill="none"
-                      stroke="#0284c7"
-                      strokeWidth="0.4"
-                      strokeDasharray="2,2"
-                    />
-
-                    {/* Manual Crop Guide Lines */}
-                    {hasManualCrop && (
-                      <rect
-                        x={cropMm.left}
-                        y={cropMm.top}
-                        width={Math.max(1, widthMm - cropMm.left - cropMm.right)}
-                        height={Math.max(1, heightMm - cropMm.top - cropMm.bottom)}
-                        fill="none"
-                        stroke="#f59e0b"
-                        strokeWidth="0.5"
-                        strokeDasharray="3,1.5"
+                    {/* HTML <img> tag with object-fit: contain (instant 100% render, zero blank) */}
+                    {previewDataUrl && (
+                      <img
+                        src={previewDataUrl}
+                        alt={componentName || "Component Preview"}
+                        className="w-full h-full object-contain pointer-events-none select-none"
+                        style={{
+                          clipPath: hasManualCrop
+                            ? `inset(${((cropMm.top / heightMm) * 100).toFixed(2)}% ${((cropMm.right / widthMm) * 100).toFixed(2)}% ${((cropMm.bottom / heightMm) * 100).toFixed(2)}% ${((cropMm.left / widthMm) * 100).toFixed(2)}%)`
+                            : undefined,
+                        }}
                       />
                     )}
 
-                    {/* Terminal Pins Markers */}
-                    {pins.map((p) => {
-                      // Map local center-origin coordinates (normX, normY) back to SVG 0..W, 0..H
-                      const svgPinX = p.localXMm + widthMm / 2;
-                      const svgPinY = heightMm / 2 - p.localYMm;
-                      return (
-                        <g key={p.id} transform={`translate(${svgPinX}, ${svgPinY})`}>
-                          <circle
-                            r="2"
-                            fill="#f59e0b"
-                            fillOpacity="0.35"
-                            stroke="#f59e0b"
-                            strokeWidth="0.4"
+                    {/* Transparent SVG Overlay for grid, bounds, crop guides, and terminal pins */}
+                    <svg
+                      viewBox={`0 0 ${widthMm} ${heightMm}`}
+                      className="absolute inset-0 w-full h-full cursor-crosshair select-none"
+                      style={{ pointerEvents: "auto" }}
+                      onClick={handleSvgClick}
+                    >
+                      <defs>
+                        <pattern
+                          id={`grid-${patternId}`}
+                          width="10"
+                          height="10"
+                          patternUnits="userSpaceOnUse"
+                        >
+                          <path
+                            d="M 10 0 L 0 0 0 10"
+                            fill="none"
+                            stroke="rgba(100, 116, 139, 0.25)"
+                            strokeWidth="0.2"
                           />
-                          <line x1="-1.2" y1="0" x2="1.2" y2="0" stroke="#f59e0b" strokeWidth="0.3" />
-                          <line x1="0" y1="-1.2" x2="0" y2="1.2" stroke="#f59e0b" strokeWidth="0.3" />
-                          <text
-                            x="2.6"
-                            y="1.1"
-                            fontSize="3"
-                            fontWeight="bold"
-                            fontFamily="monospace"
-                            fill="#f59e0b"
-                            stroke="#000000"
-                            strokeWidth="0.4"
-                            style={{ paintOrder: "stroke fill" }}
-                          >
-                            {p.label}
-                          </text>
-                        </g>
-                      );
-                    })}
-                  </svg>
+                        </pattern>
+                      </defs>
+
+                      {/* Background Grid Lines */}
+                      <rect
+                        x="0"
+                        y="0"
+                        width={widthMm}
+                        height={heightMm}
+                        fill={`url(#grid-${patternId})`}
+                      />
+
+                      {/* Outer Bounding Box Stroke */}
+                      <rect
+                        x="0"
+                        y="0"
+                        width={widthMm}
+                        height={heightMm}
+                        fill="none"
+                        stroke="#0284c7"
+                        strokeWidth="0.4"
+                        strokeDasharray="2,2"
+                      />
+
+                      {/* Manual Crop Guide Lines */}
+                      {hasManualCrop && (
+                        <rect
+                          x={cropMm.left}
+                          y={cropMm.top}
+                          width={Math.max(1, widthMm - cropMm.left - cropMm.right)}
+                          height={Math.max(1, heightMm - cropMm.top - cropMm.bottom)}
+                          fill="none"
+                          stroke="#f59e0b"
+                          strokeWidth="0.5"
+                          strokeDasharray="3,1.5"
+                        />
+                      )}
+
+                      {/* Terminal Pins Markers */}
+                      {pins.map((p) => {
+                        // Map local center-origin coordinates (normX, normY) back to SVG 0..W, 0..H
+                        const svgPinX = p.localXMm + widthMm / 2;
+                        const svgPinY = heightMm / 2 - p.localYMm;
+                        return (
+                          <g key={p.id} transform={`translate(${svgPinX}, ${svgPinY})`}>
+                            <circle
+                              r="2"
+                              fill="#f59e0b"
+                              fillOpacity="0.35"
+                              stroke="#f59e0b"
+                              strokeWidth="0.4"
+                            />
+                            <line x1="-1.2" y1="0" x2="1.2" y2="0" stroke="#f59e0b" strokeWidth="0.3" />
+                            <line x1="0" y1="-1.2" x2="0" y2="1.2" stroke="#f59e0b" strokeWidth="0.3" />
+                            <text
+                              x="2.6"
+                              y="1.1"
+                              fontSize="3"
+                              fontWeight="bold"
+                              fontFamily="monospace"
+                              fill="#f59e0b"
+                              stroke="#000000"
+                              strokeWidth="0.4"
+                              style={{ paintOrder: "stroke fill" }}
+                            >
+                              {p.label}
+                            </text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  </div>
                 </div>
 
                 {/* Bottom preview info */}
@@ -664,7 +673,28 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                 </div>
 
                 {showCropControls && (
-                  <div className="pt-2 space-y-2 border-t border-[#e2e8f0] dark:border-white/10">
+                  <div className="pt-2 space-y-3 border-t border-[#e2e8f0] dark:border-white/10">
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-[#64748b] dark:text-slate-400 font-medium">
+                          Shadow & Background Tolerance
+                        </span>
+                        <span className="font-mono text-sky-500 font-semibold">{colorTolerance}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="10"
+                        max="80"
+                        value={colorTolerance}
+                        onChange={(e) => {
+                          const tol = Number(e.target.value) || 35;
+                          setColorTolerance(tol);
+                          if (rawImageDataUrl) applyCropAndTrim(rawImageDataUrl, cropMm, widthMm, heightMm, tol);
+                        }}
+                        className="w-full h-1.5 bg-slate-200 dark:bg-white/10 rounded-lg appearance-none cursor-pointer accent-sky-500"
+                      />
+                    </div>
+
                     <p className="text-[10px] text-[#64748b] dark:text-slate-400">
                       Crop text, catalog tables, or margins (mm):
                     </p>
