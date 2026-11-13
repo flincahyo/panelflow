@@ -47,7 +47,7 @@ import {
   sanitizeProjectFilename,
   serializeProjectAsync,
 } from "@/lib/project-io";
-import { generateEplanSheetSvg } from "@/lib/sheet-export";
+import { generatePanelFlowSheetSvg } from "@/lib/sheet-export";
 import { generateDrillingDxf, generateDrillingSvg } from "@/lib/template-export";
 import { generateDoorDrillingDxf, generateDoorDrillingSvg } from "@/lib/door-cutout";
 import { formatDim } from "@/lib/units";
@@ -179,7 +179,7 @@ export function TopToolbar({
   };
 
   const get2DSheetSvg = () =>
-    generateEplanSheetSvg({
+    generatePanelFlowSheetSvg({
       enclosure,
       plateConfig,
       rails,
@@ -188,6 +188,7 @@ export function TopToolbar({
       cadAssets,
       wires,
       meta: titleBlock,
+      showDuctFillBadge: false,
     });
 
   const handleSavePflow = useCallback(async () => {
@@ -332,21 +333,95 @@ export function TopToolbar({
 
   const handleExport2DSheetPdf = () => {
     const svg = get2DSheetSvg();
-    const win = window.open("", "_blank");
-    if (!win) return;
-    win.document.write(`<!DOCTYPE html>
+    const cleanSvg = svg.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "");
+    const blob = new Blob(
+      [
+        `<!DOCTYPE html>
 <html>
 <head>
+  <meta charset="utf-8" />
   <title>${titleBlock.projectName} - Sheet ${titleBlock.sheetNo}</title>
   <style>
-    @page { size: landscape; margin: 6mm; }
-    body { margin: 0; display: flex; justify-content: center; align-items: center; background: #fff; }
-    svg { width: 100%; height: auto; max-height: 98vh; }
+    @page { size: landscape; margin: 5mm; }
+    @media print {
+      body { margin: 0; background: #fff !important; }
+      .no-print { display: none !important; }
+      svg { width: 100% !important; height: auto !important; max-height: 98vh; page-break-inside: avoid; }
+    }
+    body {
+      margin: 0;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      background: #f1f5f9;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .toolbar {
+      width: 100%;
+      max-width: 1200px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      padding: 8px 16px;
+      background: #ffffff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+    }
+    .btn {
+      background: #0284c7;
+      color: #fff;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .sheet-card {
+      background: #ffffff;
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+      max-width: 98vw;
+      overflow: auto;
+    }
+    svg { width: 100%; height: auto; display: block; max-height: 85vh; }
   </style>
 </head>
-<body>${svg}<script>window.onload = () => { window.print(); };</script></body>
-</html>`);
-    win.document.close();
+<body>
+  <div class="toolbar no-print">
+    <div>
+      <strong>${titleBlock.projectName}</strong> — Sheet ${titleBlock.sheetNo}
+    </div>
+    <button class="btn" onclick="window.print()">Print / Save as PDF</button>
+  </div>
+  <div class="sheet-card">
+    ${cleanSvg}
+  </div>
+  <script>
+    // Auto-open print dialog once ready
+    window.addEventListener("DOMContentLoaded", () => {
+      setTimeout(() => { window.print(); }, 400);
+    });
+  </script>
+</body>
+</html>`
+      ],
+      { type: "text/html;charset=utf-8" }
+    );
+    const blobUrl = URL.createObjectURL(blob);
+    const win = window.open(blobUrl, "_blank");
+    if (!win) {
+      // Fallback if popup blocked
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.target = "_blank";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
   };
 
   const dropdownPanelClass =

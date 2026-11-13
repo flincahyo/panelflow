@@ -2115,7 +2115,7 @@ export function Panel2DCanvas() {
               type="button"
               disabled={wires.length === 0}
               onClick={() => autoNumberWires()}
-              title="Auto-number all wires on active sheet (EPLAN: L1-x, L2-x, N-x, PE-x, W01...)"
+              title="Auto-number all wires on active sheet (Industrial Standard: L1-x, L2-x, N-x, PE-x, W01...)"
               className="flex items-center gap-1 rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14] px-2.5 py-0.5 font-mono text-[10px] text-[#0f172a] dark:text-slate-200 hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 disabled:opacity-40 transition-all"
             >
               <Hash className="h-3 w-3 text-emerald-500" />

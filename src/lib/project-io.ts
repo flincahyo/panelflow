@@ -55,6 +55,56 @@ export function stripTransientCadAsset(asset: CustomCadAsset): CustomCadAsset {
   return rest;
 }
 
+export async function compressDataUrlForExport(
+  dataUrl: string,
+  maxDimension = 900,
+  quality = 0.88
+): Promise<string> {
+  if (typeof window === "undefined" || !dataUrl.startsWith("data:image/")) {
+    return dataUrl;
+  }
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.naturalWidth || img.width;
+      let h = img.naturalHeight || img.height;
+      if (w <= maxDimension && h <= maxDimension && dataUrl.length < 350000) {
+        resolve(dataUrl);
+        return;
+      }
+      if (w > maxDimension || h > maxDimension) {
+        if (w > h) {
+          h = Math.round((h * maxDimension) / w);
+          w = maxDimension;
+        } else {
+          w = Math.round((w * maxDimension) / h);
+          h = maxDimension;
+        }
+      }
+      const cvs = document.createElement("canvas");
+      cvs.width = w;
+      cvs.height = h;
+      const ctx = cvs.getContext("2d");
+      if (!ctx) {
+        resolve(dataUrl);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, w, h);
+      try {
+        const webp = cvs.toDataURL("image/webp", quality);
+        if (webp.startsWith("data:image/webp") && webp.length < dataUrl.length) {
+          resolve(webp);
+          return;
+        }
+      } catch {}
+      const png = cvs.toDataURL("image/png");
+      resolve(png.length < dataUrl.length ? png : dataUrl);
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 export async function prepareSheetsForSerialization(
   sheets: PanelSheet[]
 ): Promise<PanelSheet[]> {
@@ -63,12 +113,17 @@ export async function prepareSheetsForSerialization(
       ...sheet,
       cadAssets: await Promise.all(
         sheet.cadAssets.map(async (asset) => {
-          let dataUrl = asset.dataUrl;
+          let dataUrl = asset.dataUrl || asset.imageOverlayUrl;
           if (!dataUrl && asset.objectUrl && asset.objectUrl.startsWith("blob:")) {
             dataUrl = await blobUrlToDataUrl(asset.objectUrl);
           }
+          if (dataUrl && dataUrl.startsWith("data:image/")) {
+            dataUrl = await compressDataUrlForExport(dataUrl, 900, 0.88);
+          }
           const clean = stripTransientCadAsset(asset);
-          return dataUrl ? { ...clean, dataUrl } : clean;
+          return dataUrl
+            ? { ...clean, dataUrl, imageOverlayUrl: dataUrl }
+            : clean;
         })
       ),
     }))

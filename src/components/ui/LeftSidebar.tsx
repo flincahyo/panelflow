@@ -881,7 +881,7 @@ export function LeftSidebar() {
               </div>
             )}
 
-            {/* Standard EPLAN Categories */}
+            {/* Standard Component Categories */}
             {COMPONENT_CATEGORIES.map((cat) => {
               const catItems = filteredComponents.filter(
                 (c) => c.category === cat

@@ -348,8 +348,39 @@ export function trimImageWhitespace(
 
   croppedCtx.drawImage(canvas, minX, minY, cropW, cropH, 0, 0, cropW, cropH);
 
+  // Downscale trimmed component image to max 900px and compress to webp/png to keep file & canvas memory lightweight
+  const maxExportDim = 900;
+  let finalW = cropW;
+  let finalH = cropH;
+  if (finalW > maxExportDim || finalH > maxExportDim) {
+    if (finalW > finalH) {
+      finalH = Math.round((finalH * maxExportDim) / finalW);
+      finalW = maxExportDim;
+    } else {
+      finalW = Math.round((finalW * maxExportDim) / finalH);
+      finalH = maxExportDim;
+    }
+  }
+
+  const exportCanvas = document.createElement("canvas");
+  exportCanvas.width = finalW;
+  exportCanvas.height = finalH;
+  const exportCtx = exportCanvas.getContext("2d");
+  if (!exportCtx) return null;
+  exportCtx.drawImage(croppedCanvas, 0, 0, cropW, cropH, 0, 0, finalW, finalH);
+
+  let finalDataUrl = "";
+  try {
+    finalDataUrl = exportCanvas.toDataURL("image/webp", 0.88);
+    if (!finalDataUrl.startsWith("data:image/webp")) {
+      finalDataUrl = exportCanvas.toDataURL("image/png");
+    }
+  } catch {
+    finalDataUrl = exportCanvas.toDataURL("image/png");
+  }
+
   return {
-    dataUrl: croppedCanvas.toDataURL("image/png"),
+    dataUrl: finalDataUrl,
     originalWidth: origW,
     originalHeight: origH,
     trimmedWidth: cropW,

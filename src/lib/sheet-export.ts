@@ -24,7 +24,7 @@ import {
   routeOrthogonalWire,
 } from "./wire-router";
 
-export interface EplanSheetParams {
+export interface PanelFlowSheetParams {
   enclosure: EnclosureConfig;
   plateConfig?: PlateConfig;
   rails: DinRail[];
@@ -33,7 +33,11 @@ export interface EplanSheetParams {
   cadAssets?: CustomCadAsset[];
   wires: WireConnection[];
   meta: TitleBlockMeta;
+  showDuctFillBadge?: boolean;
 }
+
+export type EplanSheetParams = PanelFlowSheetParams;
+export const generateEplanSheetSvg = generatePanelFlowSheetSvg;
 
 export const WIRE_COLOR_MAP: Record<string, string> = {
   R: "#dc2626", // Red (L1/R)
@@ -47,7 +51,7 @@ export const WIRE_COLOR_MAP: Record<string, string> = {
 
 export { type TitleBlockMeta };
 
-export function generateEplanSheetSvg(params: EplanSheetParams): string {
+export function generatePanelFlowSheetSvg(params: PanelFlowSheetParams): string {
   const {
     enclosure,
     plateConfig,
@@ -57,6 +61,7 @@ export function generateEplanSheetSvg(params: EplanSheetParams): string {
     cadAssets = [],
     wires,
     meta,
+    showDuctFillBadge = false,
   } = params;
   const { widthMm: plateW, heightMm: plateH } = getBackplateDimensions(
     enclosure,
@@ -98,7 +103,7 @@ export function generateEplanSheetSvg(params: EplanSheetParams): string {
       const stats = ductFillMap.get(d.id);
       const colors = stats ? getDuctFillStatusColor(stats.status) : null;
       const badgeSvg =
-        stats && colors
+        showDuctFillBadge && stats && colors
           ? `<rect x="${(x + d.widthMm - 24).toFixed(2)}" y="${(y + 2).toFixed(2)}" width="22" height="9" rx="1.5" fill="${colors.badgeBg}" stroke="${colors.badgeBorder}" stroke-width="0.3" />
       <text x="${(x + d.widthMm - 13).toFixed(2)}" y="${(y + 7.5).toFixed(2)}" font-family="monospace" font-size="4" font-weight="bold" fill="${colors.badgeText}" text-anchor="middle">${stats.fillRatioPercent}%</text>`
           : "";
@@ -373,7 +378,7 @@ export function generateEplanSheetSvg(params: EplanSheetParams): string {
     <!-- Project & Organization -->
     <text x="${tbX + 5}" y="${tbY + 10}" font-family="sans-serif" font-size="6" font-weight="bold" fill="#0f172a">PROJECT: ${meta.projectName}</text>
     <text x="${tbX + 5}" y="${tbY + 24}" font-family="sans-serif" font-size="5.5" fill="#334155">DRAWER: ${meta.drawer}</text>
-    <text x="${tbX + 5}" y="${tbY + 39}" font-family="sans-serif" font-size="5" fill="#64748b">EPLAN PRO PANEL 2D MOUNTING LAYOUT</text>
+    <text x="${tbX + 5}" y="${tbY + 39}" font-family="sans-serif" font-size="5" font-weight="600" fill="#0284c7">PANELFLOW 2D MOUNTING LAYOUT</text>
 
     <!-- Meta Details -->
     <text x="${tbX + 135}" y="${tbY + 10}" font-family="sans-serif" font-size="5.5" fill="#334155">DATE: ${meta.date}</text>
