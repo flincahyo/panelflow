@@ -50,7 +50,7 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
   const [componentName, setComponentName] = useState("");
 
   // Aspect ratio & auto-crop whitespace
-  const [lockAspectRatio, setLockAspectRatio] = useState<boolean>(true);
+  const [lockAspectRatio, setLockAspectRatio] = useState<boolean>(false);
   const [autoTrimWhitespace, setAutoTrimWhitespace] = useState<boolean>(true);
   const [rawAspectRatio, setRawAspectRatio] = useState<number>(1);
   const [trimmedAspectRatio, setTrimmedAspectRatio] = useState<number | null>(null);
@@ -113,8 +113,8 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
         let finalTrimmedUrl: string | null = null;
         let finalTrimmedRatio: number | null = null;
         try {
-          const trim = trimImageWhitespace(img);
-          if (trim && (trim.trimmedWidth < rawW * 0.99 || trim.trimmedHeight < rawH * 0.99)) {
+          const trim = trimImageWhitespace(img, { brightnessThreshold: 235, padding: 0 });
+          if (trim && (trim.trimmedWidth < rawW || trim.trimmedHeight < rawH)) {
             finalTrimmedUrl = trim.dataUrl;
             finalTrimmedRatio = trim.aspectRatio;
           }

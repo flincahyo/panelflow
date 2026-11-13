@@ -999,21 +999,21 @@ export function RightInspector({ onClose }: RightInspectorProps) {
                 type="button"
                 onClick={() =>
                   updateCadAsset(cad.id, {
-                    lockAspectRatio: !(cad.lockAspectRatio ?? true),
+                    lockAspectRatio: !(cad.lockAspectRatio ?? false),
                   })
                 }
                 className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                  (cad.lockAspectRatio ?? true)
+                  (cad.lockAspectRatio ?? false)
                     ? "bg-sky-500/10 text-sky-500 border border-sky-500/20"
                     : "bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 border border-[#cbd5e1] dark:border-white/10"
                 }`}
                 title={
-                  (cad.lockAspectRatio ?? true)
+                  (cad.lockAspectRatio ?? false)
                     ? "Lock Aspect Ratio active"
-                    : "Aspect Ratio unlocked"
+                    : "Aspect Ratio unlocked (independent W & H)"
                 }
               >
-                <span>{(cad.lockAspectRatio ?? true) ? "🔒 Lock Ratio" : "🔓 Free Ratio"}</span>
+                <span>{(cad.lockAspectRatio ?? false) ? "🔒 Lock Ratio" : "🔓 Free Ratio"}</span>
               </button>
             </div>
 
@@ -1027,7 +1027,7 @@ export function RightInspector({ onClose }: RightInspectorProps) {
                   value={Number(fromMm(cad.boundingBoxMm.w, displayUnit).toFixed(2))}
                   onChange={(e) => {
                     const newW = Math.max(1, toMm(Number.parseFloat(e.target.value) || 1, displayUnit));
-                    const isLocked = cad.lockAspectRatio ?? true;
+                    const isLocked = cad.lockAspectRatio ?? false;
                     const ratio = cad.boundingBoxMm.w > 0 ? cad.boundingBoxMm.h / cad.boundingBoxMm.w : 1;
                     const newH = isLocked ? Number((newW * ratio).toFixed(2)) : cad.boundingBoxMm.h;
                     updateCadAsset(cad.id, {
@@ -1051,7 +1051,7 @@ export function RightInspector({ onClose }: RightInspectorProps) {
                   value={Number(fromMm(cad.boundingBoxMm.h, displayUnit).toFixed(2))}
                   onChange={(e) => {
                     const newH = Math.max(1, toMm(Number.parseFloat(e.target.value) || 1, displayUnit));
-                    const isLocked = cad.lockAspectRatio ?? true;
+                    const isLocked = cad.lockAspectRatio ?? false;
                     const ratio = cad.boundingBoxMm.h > 0 ? cad.boundingBoxMm.w / cad.boundingBoxMm.h : 1;
                     const newW = isLocked ? Number((newH * ratio).toFixed(2)) : cad.boundingBoxMm.w;
                     updateCadAsset(cad.id, {

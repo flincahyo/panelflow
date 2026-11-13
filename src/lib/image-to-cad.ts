@@ -93,13 +93,14 @@ export function calculateWidthFromHeight(heightMm: number, aspectRatio: number):
 
 /**
  * Find bounding box of non-white / non-transparent content in RGBA ImageData.
- * Pixels with brightness < brightnessThreshold (default 245) or visible alpha (> alphaThreshold) are detected as component content.
+ * Pixels with brightness < brightnessThreshold (default 235), or light gray (brightness > 230 with low saturation),
+ * or visible alpha (> alphaThreshold) are detected as component content.
  */
 export function findContentBoundingBox(
   data: Uint8ClampedArray,
   width: number,
   height: number,
-  brightnessThreshold = 245,
+  brightnessThreshold = 235,
   alphaThreshold = 10,
   invert = false
 ): ContentBoundingBox | null {
@@ -121,13 +122,33 @@ export function findContentBoundingBox(
       const a = data[idx + 3];
 
       if (a > alphaThreshold) {
-        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-        const isContent = invert ? lum >= brightnessThreshold : lum < brightnessThreshold;
-        if (isContent) {
-          if (x < minX) minX = x;
-          if (x > maxX) maxX = x;
-          if (y < minY) minY = y;
-          if (y > maxY) maxY = y;
+        if (invert) {
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+          if (lum >= brightnessThreshold) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
+        } else {
+          // Standard dark-content on white/light background:
+          // Background: pure white or near-white/light gray (RGB all >= 235, or lum > 230 with near-zero saturation)
+          const maxChannel = Math.max(r, g, b);
+          const minChannel = Math.min(r, g, b);
+          const diff = maxChannel - minChannel;
+          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+
+          const isBackground =
+            (r >= brightnessThreshold && g >= brightnessThreshold && b >= brightnessThreshold) ||
+            (lum >= brightnessThreshold) ||
+            (lum > 230 && diff < 8);
+
+          if (!isBackground) {
+            if (x < minX) minX = x;
+            if (x > maxX) maxX = x;
+            if (y < minY) minY = y;
+            if (y > maxY) maxY = y;
+          }
         }
       }
     }
@@ -163,7 +184,7 @@ export function trimImageWhitespace(
     return null;
   }
 
-  const { brightnessThreshold = 245, alphaThreshold = 10, padding = 4, invert = false } = options || {};
+  const { brightnessThreshold = 235, alphaThreshold = 15, padding = 0, invert = false } = options || {};
 
   const origW = img.naturalWidth || img.width;
   const origH = img.naturalHeight || img.height;
