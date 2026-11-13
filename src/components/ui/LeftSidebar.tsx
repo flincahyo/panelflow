@@ -18,7 +18,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { CadPreviewThumbnail } from "@/components/ui/CadPreviewThumbnail";
 import { ImageToCadModal } from "@/components/modals/ImageToCadModal";
 import {
@@ -349,8 +349,24 @@ export function LeftSidebar() {
       a.name.toLowerCase().includes(q) ||
       a.fileName.toLowerCase().includes(q)
   );
-  const filteredLibrary = customLibrary.filter(
-    (item) =>
+  // Deduplicate library items by name + format or cloudId to prevent double-entry glitches
+  const deduplicatedLibrary = useMemo(() => {
+    const seen = new Set<string>();
+    const out: CustomLibraryCadItem[] = [];
+    for (const item of customLibrary) {
+      const key = item.cloudId
+        ? `cloud:${item.cloudId}`
+        : `${item.name.toLowerCase()}::${item.format}::${item.boundingBoxMm.w}x${item.boundingBoxMm.h}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        out.push(item);
+      }
+    }
+    return out;
+  }, [customLibrary]);
+
+  const filteredLibrary = deduplicatedLibrary.filter(
+    (item: CustomLibraryCadItem) =>
       !q ||
       item.name.toLowerCase().includes(q) ||
       item.fileName.toLowerCase().includes(q) ||
@@ -793,7 +809,7 @@ export function LeftSidebar() {
 
                 {openCategories["My CAD Library"] && (
                   <div className="grid grid-cols-2 gap-2 pt-1">
-                    {filteredLibrary.map((item) => (
+                    {filteredLibrary.map((item: CustomLibraryCadItem) => (
                       <div
                         key={item.id}
                         className="group relative flex flex-col justify-between rounded-xl border border-sky-200 dark:border-sky-500/30 bg-white dark:bg-[#171a21] p-2 transition-all hover:border-sky-400 dark:hover:border-sky-400"

@@ -16,7 +16,7 @@ import {
   Unlock,
 } from "lucide-react";
 import { usePanelStore } from "@/store/usePanelStore";
-import { saveCustomCadToLibrary } from "@/lib/indexed-db";
+import { saveCustomCadToLibrary, updateCustomCadCloudId } from "@/lib/indexed-db";
 import {
   STANDARD_COMPONENT_PRESETS,
   calculateAspectRatio,
@@ -284,7 +284,7 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
   const handleSaveToLibrary = async () => {
     const asset = buildCustomCadAsset();
     try {
-      await saveCustomCadToLibrary(asset);
+      const saved = await saveCustomCadToLibrary(asset);
       fetch("/api/custom-parts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -297,7 +297,19 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
           pins: asset.pins,
           cad_data: asset.rawText || asset.dataUrl || null,
         }),
-      }).catch(() => {});
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          const cloudId = data?.part?.id;
+          if (typeof cloudId === "string" && cloudId) {
+            updateCustomCadCloudId(saved.id, cloudId).catch(() => {});
+          }
+        })
+        .catch(() => {});
+
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("panelflow:custom-library-updated"));
+      }
 
       setSavedToLibrarySuccess(true);
       setTimeout(() => setSavedToLibrarySuccess(false), 2500);

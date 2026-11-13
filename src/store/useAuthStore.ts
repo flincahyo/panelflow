@@ -111,6 +111,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                   right: Number(rawBb.cropMm.right) || 0,
                 }
               : undefined;
+
+          // Detect if cad_data is base64 image data URL
+          const cadData = typeof p.cad_data === "string" ? p.cad_data : undefined;
+          const isImage = cadData && cadData.startsWith("data:image/");
+
           const asset: CustomCadAsset = {
             id: p.id,
             name: p.name,
@@ -128,7 +133,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             },
             cropMm,
             pins: Array.isArray(p.pins) ? p.pins : [],
-            rawText: typeof p.cad_data === "string" ? p.cad_data : undefined,
+            rawText: isImage ? undefined : cadData,
+            dataUrl: isImage ? cadData : undefined,
+            imageOverlayUrl: isImage ? cadData : undefined,
+            showImageOverlay: isImage ? true : undefined,
           };
           await saveCustomCadToLibrary(asset).catch(() => {});
         }
