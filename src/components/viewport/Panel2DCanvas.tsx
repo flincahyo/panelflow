@@ -1696,10 +1696,10 @@ export function Panel2DCanvas() {
   const xSubTicks = computePlateRulerSubTicks(plateXMin, plateXMax, rulerSteps);
   const ySubTicks = computePlateRulerSubTicks(plateYMin, plateYMax, rulerSteps);
 
-  const plateLeftRulerPx = pan.x + plateToWorldX(0, plateW) * zoom - 24;
-  const plateRightRulerPx = pan.x + plateToWorldX(plateW, plateW) * zoom - 24;
-  const plateTopRulerPx = pan.y - plateToWorldY(0, plateH) * zoom - 24;
-  const plateBottomRulerPx = pan.y - plateToWorldY(plateH, plateH) * zoom - 24;
+  const plateLeftRulerPx = pan.x + plateToWorldX(0, plateW) * zoom;
+  const plateRightRulerPx = pan.x + plateToWorldX(plateW, plateW) * zoom;
+  const plateTopRulerPx = pan.y - plateToWorldY(0, plateH) * zoom;
+  const plateBottomRulerPx = pan.y - plateToWorldY(plateH, plateH) * zoom;
 
   const selectionFootprint = useMemo(
     () =>
@@ -1720,8 +1720,8 @@ export function Panel2DCanvas() {
     ? {
         xMm: worldToPlateX(cursorWorld.xMm, plateW),
         yMm: worldToPlateY(cursorWorld.yMm, plateH),
-        topRulerLeftPx: pan.x + cursorWorld.xMm * zoom - 24,
-        leftRulerTopPx: pan.y - cursorWorld.yMm * zoom - 24,
+        topRulerLeftPx: pan.x + cursorWorld.xMm * zoom,
+        leftRulerTopPx: pan.y - cursorWorld.yMm * zoom,
       }
     : null;
 
@@ -1755,7 +1755,7 @@ export function Panel2DCanvas() {
       }}
     >
       {/* Top Engineering Ruler (Plate Top-Left Origin: 0 -> plateW) */}
-      <div className="pointer-events-none absolute top-0 right-0 left-6 z-20 h-6 overflow-hidden border-b border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#0c0e14]/90 font-mono text-[9px] text-[#64748b] dark:text-slate-400 backdrop-blur-md">
+      <div className="pointer-events-none absolute top-0 right-0 left-0 z-20 h-6 overflow-hidden border-b border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#0c0e14]/90 font-mono text-[9px] text-[#64748b] dark:text-slate-400 backdrop-blur-md">
         {/* Dimmed out-of-plate zones */}
         {plateLeftRulerPx > 0 && (
           <div
@@ -1770,8 +1770,8 @@ export function Panel2DCanvas() {
 
         {/* Selection Footprint Highlight (X1..X2) */}
         {selectionFootprint && (() => {
-          const fpLeft = pan.x + plateToWorldX(selectionFootprint.x1Mm, plateW) * zoom - 24;
-          const fpRight = pan.x + plateToWorldX(selectionFootprint.x2Mm, plateW) * zoom - 24;
+          const fpLeft = pan.x + plateToWorldX(selectionFootprint.x1Mm, plateW) * zoom;
+          const fpRight = pan.x + plateToWorldX(selectionFootprint.x2Mm, plateW) * zoom;
           const fpWidth = Math.max(2, fpRight - fpLeft);
           return (
             <div
@@ -1783,7 +1783,7 @@ export function Panel2DCanvas() {
 
         {/* Ruler Sub-Ticks (Major 10px + label, Medium 6px, Minor 3px) */}
         {xSubTicks.map((tick) => {
-          const left = pan.x + plateToWorldX(tick.mm, plateW) * zoom - 24;
+          const left = pan.x + plateToWorldX(tick.mm, plateW) * zoom;
           if (left < 0) return null;
           const isOutsidePlate = tick.mm < 0 || tick.mm > plateW;
           const isOrigin = tick.mm === 0;
@@ -1846,7 +1846,7 @@ export function Panel2DCanvas() {
       </div>
 
       {/* Left Engineering Ruler (Plate Top-Left Origin: 0 -> plateH downward) */}
-      <div className="pointer-events-none absolute top-6 bottom-0 left-0 z-20 w-6 overflow-hidden border-r border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#0c0e14]/90 font-mono text-[9px] text-[#64748b] dark:text-slate-400 backdrop-blur-md">
+      <div className="pointer-events-none absolute top-0 bottom-0 left-0 z-20 w-6 overflow-hidden border-r border-[#e2e8f0] dark:border-white/10 bg-white/95 dark:bg-[#0c0e14]/90 font-mono text-[9px] text-[#64748b] dark:text-slate-400 backdrop-blur-md">
         {/* Dimmed out-of-plate zones */}
         {plateTopRulerPx > 0 && (
           <div
@@ -1861,8 +1861,8 @@ export function Panel2DCanvas() {
 
         {/* Selection Footprint Highlight (Y1..Y2) */}
         {selectionFootprint && (() => {
-          const fpTop = pan.y - plateToWorldY(selectionFootprint.y1Mm, plateH) * zoom - 24;
-          const fpBottom = pan.y - plateToWorldY(selectionFootprint.y2Mm, plateH) * zoom - 24;
+          const fpTop = pan.y - plateToWorldY(selectionFootprint.y1Mm, plateH) * zoom;
+          const fpBottom = pan.y - plateToWorldY(selectionFootprint.y2Mm, plateH) * zoom;
           const fpHeight = Math.max(2, fpBottom - fpTop);
           return (
             <div
@@ -1874,7 +1874,7 @@ export function Panel2DCanvas() {
 
         {/* Ruler Sub-Ticks (Major 10px + label, Medium 6px, Minor 3px) */}
         {ySubTicks.map((tick) => {
-          const top = pan.y - plateToWorldY(tick.mm, plateH) * zoom - 24;
+          const top = pan.y - plateToWorldY(tick.mm, plateH) * zoom;
           if (top < 0) return null;
           const isOutsidePlate = tick.mm < 0 || tick.mm > plateH;
           const isOrigin = tick.mm === 0;
