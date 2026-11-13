@@ -253,15 +253,16 @@ export function generateEplanSheetSvg(params: EplanSheetParams): string {
         : "";
       const clipAttr = hasCrop ? ` clip-path="url(#${clipId})"` : "";
 
+      const imageOpacity = asset.imageOpacity ?? 1.0;
       const imageOverlaySvg =
         asset.imageOverlayUrl && (asset.showImageOverlay ?? true)
-          ? `<image href="${asset.imageOverlayUrl}" x="${effX.toFixed(2)}" y="${effY.toFixed(2)}" width="${effW.toFixed(2)}" height="${effH.toFixed(2)}" preserveAspectRatio="none"${clipAttr} opacity="0.75" />`
+          ? `<image href="${asset.imageOverlayUrl}" x="${effX.toFixed(2)}" y="${effY.toFixed(2)}" width="${effW.toFixed(2)}" height="${effH.toFixed(2)}" preserveAspectRatio="none"${clipAttr} opacity="${imageOpacity}" style="image-rendering: crisp-edges;" />`
           : "";
 
       return `
     <g class="cad-asset" data-id="${asset.id}">
       ${clipDef}
-      <rect x="${effX.toFixed(2)}" y="${effY.toFixed(2)}" width="${effW.toFixed(2)}" height="${effH.toFixed(2)}" fill="${asset.format === "dxf" ? "#f0f9ff" : "#f8fafc"}" fill-opacity="${asset.format === "dxf" ? "0.3" : "0.85"}" stroke="${asset.format === "dxf" ? "#94a3b8" : "#0f172a"}" stroke-width="0.7" stroke-dasharray="${asset.format === "dxf" ? "2,1.5" : "none"}" />
+      <rect x="${effX.toFixed(2)}" y="${effY.toFixed(2)}" width="${effW.toFixed(2)}" height="${effH.toFixed(2)}" fill="${asset.format === "dxf" ? "#f0f9ff" : "#f8fafc"}" fill-opacity="${asset.imageOverlayUrl ? "0.0" : asset.format === "dxf" ? "0.3" : "0.85"}" stroke="${asset.imageOverlayUrl ? "#94a3b8" : asset.format === "dxf" ? "#94a3b8" : "#0f172a"}" stroke-width="${asset.imageOverlayUrl ? "0.6" : "0.7"}" stroke-dasharray="${asset.imageOverlayUrl ? "none" : asset.format === "dxf" ? "2,1.5" : "none"}" />
       ${imageOverlaySvg}
       <g pointer-events="none">
         <text x="${smartPos.x.toFixed(2)}" y="${smartPos.y.toFixed(2)}" text-anchor="${smartPos.textAnchor}" dominant-baseline="${smartPos.dominantBaseline}" font-family="system-ui, -apple-system, sans-serif" font-size="4.6" font-weight="600" fill="#0284c7" stroke="#ffffff" stroke-width="1.2" stroke-linejoin="round" style="paint-order: stroke fill">${cleanLabel}</text>

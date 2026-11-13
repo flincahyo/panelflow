@@ -716,22 +716,20 @@ function CadAsset2DSymbol({
         width={effW}
         height={effH}
         fill={asset.format === "dxf" ? "#f0f9ff" : "#f8fafc"}
-        fillOpacity={asset.format === "dxf" ? (asset.imageOverlayUrl ? 0.05 : 0.35) : 0.85}
+        fillOpacity={asset.imageOverlayUrl ? 0.0 : (asset.format === "dxf" ? 0.35 : 0.85)}
         stroke={
           isMarkingThis
             ? "#f59e0b"
             : isSelected
             ? "#0284c7"
-            : asset.format === "dxf"
-            ? "#94a3b8"
-            : "#0f172a"
+            : "#94a3b8"
         }
-        strokeWidth={isMarkingThis || isSelected ? 1.1 : 0.7}
-        strokeDasharray={asset.format === "dxf" ? "2,1.5" : undefined}
+        strokeWidth={isMarkingThis || isSelected ? 1.1 : 0.6}
+        strokeDasharray={asset.imageOverlayUrl ? undefined : (asset.format === "dxf" ? "2,1.5" : undefined)}
       />
 
-      {/* Optional Photo / Image Overlay (Hybrid Vector + Image Mode) */}
-      {asset.imageOverlayUrl && (
+      {/* Direct Crisp Photo / Image Component Overlay */}
+      {asset.imageOverlayUrl && (asset.showImageOverlay ?? true) && (
         <image
           href={asset.imageOverlayUrl}
           x={effX}
@@ -740,7 +738,8 @@ function CadAsset2DSymbol({
           height={effH}
           preserveAspectRatio="none"
           clipPath={hasCrop ? `url(#${clipId})` : undefined}
-          opacity={0.8}
+          opacity={asset.imageOpacity ?? 1.0}
+          style={{ imageRendering: "crisp-edges" }}
           className="pointer-events-none"
         />
       )}
@@ -788,7 +787,7 @@ function CadAsset2DSymbol({
         </g>
       )}
 
-      {/* DXF Vector Segments or 3D Mesh Silhouette */}
+      {/* DXF Vector Segments or 3D Mesh Silhouette (Skipped if clean image component exists) */}
       {dxfParsed && dxfParsed.segments.length > 0 ? (
         <g
           clipPath={hasCrop ? `url(#${clipId})` : undefined}
@@ -806,7 +805,7 @@ function CadAsset2DSymbol({
             />
           ))}
         </g>
-      ) : (
+      ) : asset.imageOverlayUrl ? null : (
         <g
           clipPath={hasCrop ? `url(#${clipId})` : undefined}
           stroke="#64748b"

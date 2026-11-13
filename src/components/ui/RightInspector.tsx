@@ -989,6 +989,105 @@ export function RightInspector({ onClose }: RightInspectorProps) {
             ))}
           </div>
 
+          {/* Physical Dimensions (W x H x D) with optional Aspect Ratio Lock */}
+          <div className="space-y-2 border-t border-[#e2e8f0] dark:border-white/10 pt-2.5">
+            <div className="flex items-center justify-between">
+              <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-[#64748b] dark:text-slate-400">
+                Dimensions ({displayUnit})
+              </span>
+              <button
+                type="button"
+                onClick={() =>
+                  updateCadAsset(cad.id, {
+                    lockAspectRatio: !(cad.lockAspectRatio ?? true),
+                  })
+                }
+                className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+                  (cad.lockAspectRatio ?? true)
+                    ? "bg-sky-500/10 text-sky-500 border border-sky-500/20"
+                    : "bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 border border-[#cbd5e1] dark:border-white/10"
+                }`}
+                title={
+                  (cad.lockAspectRatio ?? true)
+                    ? "Lock Aspect Ratio active"
+                    : "Aspect Ratio unlocked"
+                }
+              >
+                <span>{(cad.lockAspectRatio ?? true) ? "🔒 Lock Ratio" : "🔓 Free Ratio"}</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-1.5">
+              <label className="space-y-0.5">
+                <span className="text-[11px] text-[#64748b] dark:text-slate-400">W</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={step}
+                  value={Number(fromMm(cad.boundingBoxMm.w, displayUnit).toFixed(2))}
+                  onChange={(e) => {
+                    const newW = Math.max(1, toMm(Number.parseFloat(e.target.value) || 1, displayUnit));
+                    const isLocked = cad.lockAspectRatio ?? true;
+                    const ratio = cad.boundingBoxMm.w > 0 ? cad.boundingBoxMm.h / cad.boundingBoxMm.w : 1;
+                    const newH = isLocked ? Number((newW * ratio).toFixed(2)) : cad.boundingBoxMm.h;
+                    updateCadAsset(cad.id, {
+                      boundingBoxMm: {
+                        ...cad.boundingBoxMm,
+                        w: newW,
+                        h: newH,
+                      },
+                    });
+                  }}
+                  className={inputClass}
+                />
+              </label>
+
+              <label className="space-y-0.5">
+                <span className="text-[11px] text-[#64748b] dark:text-slate-400">H</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={step}
+                  value={Number(fromMm(cad.boundingBoxMm.h, displayUnit).toFixed(2))}
+                  onChange={(e) => {
+                    const newH = Math.max(1, toMm(Number.parseFloat(e.target.value) || 1, displayUnit));
+                    const isLocked = cad.lockAspectRatio ?? true;
+                    const ratio = cad.boundingBoxMm.h > 0 ? cad.boundingBoxMm.w / cad.boundingBoxMm.h : 1;
+                    const newW = isLocked ? Number((newH * ratio).toFixed(2)) : cad.boundingBoxMm.w;
+                    updateCadAsset(cad.id, {
+                      boundingBoxMm: {
+                        ...cad.boundingBoxMm,
+                        w: newW,
+                        h: newH,
+                      },
+                    });
+                  }}
+                  className={inputClass}
+                />
+              </label>
+
+              <label className="space-y-0.5">
+                <span className="text-[11px] text-[#64748b] dark:text-slate-400">D</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={step}
+                  value={Number(fromMm(cad.boundingBoxMm.d, displayUnit).toFixed(2))}
+                  onChange={(e) => {
+                    const newD = Math.max(1, toMm(Number.parseFloat(e.target.value) || 1, displayUnit));
+                    updateCadAsset(cad.id, {
+                      boundingBoxMm: {
+                        ...cad.boundingBoxMm,
+                        d: newD,
+                      },
+                    });
+                  }}
+                  className={inputClass}
+                />
+              </label>
+            </div>
+          </div>
+
           {/* Non-Destructive CAD Crop / Trim */}
           <div className="space-y-2 border-t border-[#e2e8f0] dark:border-white/10 pt-2.5">
             <div className="flex items-center justify-between">
@@ -1062,19 +1161,43 @@ export function RightInspector({ onClose }: RightInspectorProps) {
           </div>
 
           {cad.imageOverlayUrl && (
-            <label className="flex items-center justify-between border-t border-[#e2e8f0] dark:border-white/10 pt-2.5 cursor-pointer">
-              <span className="text-xs font-medium text-[#0f172a] dark:text-slate-200">
-                Show Image Overlay
-              </span>
-              <input
-                type="checkbox"
-                checked={cad.showImageOverlay ?? true}
-                onChange={(e) =>
-                  updateCadAsset(cad.id, { showImageOverlay: e.target.checked })
-                }
-                className="rounded border-[#cbd5e1] text-[#0284c7] focus:ring-[#0284c7]"
-              />
-            </label>
+            <div className="space-y-2 border-t border-[#e2e8f0] dark:border-white/10 pt-2.5">
+              <label className="flex items-center justify-between cursor-pointer">
+                <span className="text-xs font-medium text-[#0f172a] dark:text-slate-200">
+                  Show Image Overlay
+                </span>
+                <input
+                  type="checkbox"
+                  checked={cad.showImageOverlay ?? true}
+                  onChange={(e) =>
+                    updateCadAsset(cad.id, { showImageOverlay: e.target.checked })
+                  }
+                  className="rounded border-[#cbd5e1] text-[#0284c7] focus:ring-[#0284c7]"
+                />
+              </label>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-[#64748b] dark:text-slate-400">Image Opacity</span>
+                  <span className="font-mono text-sky-600 dark:text-sky-400">
+                    {Math.round((cad.imageOpacity ?? 1.0) * 100)}%
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="1.0"
+                  step="0.05"
+                  value={cad.imageOpacity ?? 1.0}
+                  onChange={(e) =>
+                    updateCadAsset(cad.id, {
+                      imageOpacity: Number.parseFloat(e.target.value),
+                    })
+                  }
+                  className="w-full accent-sky-500 cursor-pointer"
+                />
+              </div>
+            </div>
           )}
 
           <label className="block space-y-1 border-t border-[#e2e8f0] dark:border-white/10 pt-2.5">

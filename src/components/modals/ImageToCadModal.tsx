@@ -39,8 +39,8 @@ interface ImageToCadModalProps {
 export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
   const { addCadAsset, setSelected } = usePanelStore();
 
-  // Wizard Step: 1 = Upload, 2 = Params & Trace, 3 = Pins & Crop, 4 = Finish/Export
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  // Wizard Step: 1 = Upload, 2 = Configure & Pins, 3 = Finish & Save
+  const [step, setStep] = useState<1 | 2 | 3>(1);
 
   // File & Image state
   const [file, setFile] = useState<File | null>(null);
@@ -61,7 +61,8 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
   const [heightMm, setHeightMm] = useState<number>(85);
   const [depthMm, setDepthMm] = useState<number>(70);
 
-  // Trace Calibration
+  // Trace Calibration (Optional Vectorization)
+  const [enableVectorTrace, setEnableVectorTrace] = useState<boolean>(false);
   const [threshold, setThreshold] = useState<number>(128);
   const [invert, setInvert] = useState<boolean>(false);
   const [toleranceMm, setToleranceMm] = useState<number>(0.35);
@@ -76,7 +77,8 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
   const [newPinLabel, setNewPinLabel] = useState<string>("L1");
   const [cropMm, setCropMm] = useState({ top: 0, bottom: 0, left: 0, right: 0 });
   const [showCropInputs, setShowCropInputs] = useState<boolean>(false);
-  const [overlayOpacity, setOverlayOpacity] = useState<number>(0.4);
+  const [overlayOpacity, setOverlayOpacity] = useState<number>(1.0);
+  const [showTraceVectors, setShowTraceVectors] = useState<boolean>(false);
 
   // Success states
   const [savedToLibrarySuccess, setSavedToLibrarySuccess] = useState<boolean>(false);
@@ -213,17 +215,17 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
 
   // Auto re-trace when entering Step 2 or changing params (debounced)
   useEffect(() => {
-    if (step >= 2 && previewDataUrl) {
+    if (enableVectorTrace && step >= 2 && previewDataUrl) {
       const timer = setTimeout(() => {
         runVectorization();
       }, 250);
       return () => clearTimeout(timer);
     }
-  }, [step, previewDataUrl, widthMm, heightMm, threshold, invert, toleranceMm, runVectorization]);
+  }, [enableVectorTrace, step, previewDataUrl, widthMm, heightMm, threshold, invert, toleranceMm, runVectorization]);
 
   // Interactive Pin Placement on Preview SVG
   const handleSvgClick = (e: React.MouseEvent<SVGSVGElement>) => {
-    if (step !== 3) return;
+    if (step !== 2) return;
     const svgRect = e.currentTarget.getBoundingClientRect();
     const clickX = e.clientX - svgRect.left;
     const clickY = e.clientY - svgRect.top;
@@ -263,7 +265,7 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
     return {
       id,
       name: componentName.trim() || "Image Component",
-      fileName: file ? file.name : "component.dxf",
+      fileName: file ? file.name : "component.png",
       format: "dxf",
       sourceUnit: "mm",
       xMm: 0,
@@ -280,6 +282,8 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
       dataUrl: previewDataUrl || undefined,
       imageOverlayUrl: previewDataUrl || undefined,
       showImageOverlay: true,
+      imageOpacity: overlayOpacity,
+      lockAspectRatio,
       entityCount: traceResult?.segments.length || 0,
     };
   };
@@ -345,10 +349,10 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
             </div>
             <div>
               <h2 className="text-sm font-semibold tracking-tight text-[#0f172a] dark:text-white">
-                Image to CAD / Vector Component Converter
+                Image Component Creator
               </h2>
               <p className="text-[11px] text-[#64748b] dark:text-slate-400">
-                Transform PNG/JPG photos or datasheet drawings to calibrated DXF vectors with terminal pins
+                Turn PNG/JPG component photos or datasheet graphics into real-size 2D layout components with wiring pins
               </p>
             </div>
           </div>
@@ -372,27 +376,17 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                 step === 2 ? "bg-white dark:bg-[#202430] text-sky-500 shadow-xs" : "text-[#64748b] dark:text-slate-400"
               } ${!previewDataUrl ? "opacity-50 cursor-not-allowed" : ""}`}
             >
-              2. Dimensions & Trace
+              2. Dimensions & Pins
             </button>
             <button
               type="button"
-              disabled={!traceResult}
-              onClick={() => traceResult && setStep(3)}
+              disabled={!previewDataUrl}
+              onClick={() => previewDataUrl && setStep(3)}
               className={`rounded px-2.5 py-1 transition-colors ${
                 step === 3 ? "bg-white dark:bg-[#202430] text-sky-500 shadow-xs" : "text-[#64748b] dark:text-slate-400"
-              } ${!traceResult ? "opacity-50 cursor-not-allowed" : ""}`}
+              } ${!previewDataUrl ? "opacity-50 cursor-not-allowed" : ""}`}
             >
-              3. Pins & Crop
-            </button>
-            <button
-              type="button"
-              disabled={!traceResult}
-              onClick={() => traceResult && setStep(4)}
-              className={`rounded px-2.5 py-1 transition-colors ${
-                step === 4 ? "bg-white dark:bg-[#202430] text-sky-500 shadow-xs" : "text-[#64748b] dark:text-slate-400"
-              } ${!traceResult ? "opacity-50 cursor-not-allowed" : ""}`}
-            >
-              4. Export
+              3. Save & Place
             </button>
           </div>
 
@@ -462,7 +456,7 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                       fill="url(#grid-pattern-mm)"
                     />
 
-                    {/* Calibrated Raster Image Overlay */}
+                    {/* Calibrated Raster Image Overlay (Crisp 1.0 Opacity by default) */}
                     {previewDataUrl && (
                       <image
                         href={previewDataUrl}
@@ -472,11 +466,12 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                         height={heightMm}
                         preserveAspectRatio="none"
                         opacity={overlayOpacity}
+                        style={{ imageRendering: "crisp-edges" }}
                       />
                     )}
 
-                    {/* Vector Segments */}
-                    {traceResult?.segments.map((seg, i) => (
+                    {/* Vector Segments (Only shown if enabled) */}
+                    {showTraceVectors && traceResult?.segments.map((seg, i) => (
                       <line
                         key={i}
                         x1={seg.x1}
@@ -551,16 +546,15 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                     <span className="font-mono">{pins.length} pins</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span>Overlay:</span>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.05"
-                      value={overlayOpacity}
-                      onChange={(e) => setOverlayOpacity(Number.parseFloat(e.target.value))}
-                      className="w-20 accent-sky-500"
-                    />
+                    <label className="flex items-center gap-1 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={showTraceVectors}
+                        onChange={(e) => setShowTraceVectors(e.target.checked)}
+                        className="rounded accent-sky-500"
+                      />
+                      <span>Wireframe Trace</span>
+                    </label>
                   </div>
                 </div>
               </div>
@@ -610,10 +604,10 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
               <div className="space-y-4">
                 <div className="space-y-1">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-[#64748b] dark:text-slate-400">
-                    Step 2: Calibrate Dimensions & Vectorize
+                    Step 2: Calibrate Dimensions & Place Pins
                   </h3>
                   <p className="text-xs text-[#0f172a] dark:text-slate-300">
-                    Input real component dimensions. Adjust contrast threshold for clean edge lines.
+                    Set physical mm dimensions and click directly on the image to place wiring pins (L1, L2, A1, etc).
                   </p>
                 </div>
 
@@ -726,50 +720,56 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                   </div>
                 </div>
 
-                {/* Threshold & Simplification */}
-                <div className="space-y-3 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] p-3">
+                {/* Add pin label helper */}
+                <div className="space-y-2 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] p-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-[#0f172a] dark:text-slate-200">
-                      Binarization Threshold
+                    <span className="text-[11px] font-semibold text-[#0f172a] dark:text-slate-200 flex items-center gap-1.5">
+                      <MapPin className="h-3.5 w-3.5 text-amber-500" />
+                      Wiring Terminal Pins
                     </span>
-                    <span className="font-mono text-[11px] text-sky-500">{threshold} / 255</span>
+                    <span className="text-[10px] font-mono text-amber-600 dark:text-amber-400">
+                      {pins.length} placed
+                    </span>
                   </div>
-                  <input
-                    type="range"
-                    min="10"
-                    max="245"
-                    value={threshold}
-                    onChange={(e) => setThreshold(Number(e.target.value))}
-                    className="w-full accent-sky-500"
-                  />
-
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[11px] font-semibold text-[#0f172a] dark:text-slate-200">
-                      Invert Polarity (Light on Dark)
+                  <label className="block space-y-1">
+                    <span className="text-[10px] text-[#64748b] dark:text-slate-400 font-semibold uppercase">
+                      Next Pin Label (Click photo to place)
                     </span>
                     <input
-                      type="checkbox"
-                      checked={invert}
-                      onChange={(e) => setInvert(e.target.checked)}
-                      className="rounded border-[#cbd5e1] text-sky-500 focus:ring-sky-500"
+                      type="text"
+                      value={newPinLabel}
+                      onChange={(e) => setNewPinLabel(e.target.value)}
+                      placeholder="e.g. L1, L2, A1, 13"
+                      className="w-full rounded-md border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2.5 py-1.5 text-xs font-mono font-semibold text-amber-500"
                     />
+                  </label>
+                  <div className="text-[10px] text-[#94a3b8] dark:text-slate-400 italic">
+                    Click anywhere on the photo preview to place pins.
                   </div>
 
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-[11px] font-semibold text-[#0f172a] dark:text-slate-200">
-                      Line Smoothing (Tolerance mm)
-                    </span>
-                    <span className="font-mono text-[11px] text-sky-500">{toleranceMm} mm</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0.1"
-                    max="1.5"
-                    step="0.05"
-                    value={toleranceMm}
-                    onChange={(e) => setToleranceMm(Number.parseFloat(e.target.value))}
-                    className="w-full accent-sky-500"
-                  />
+                  {/* Placed Pins List */}
+                  {pins.length > 0 && (
+                    <div className="space-y-1 max-h-28 overflow-y-auto pt-1">
+                      {pins.map((p) => (
+                        <div
+                          key={p.id}
+                          className="flex items-center justify-between rounded-md border border-[#e2e8f0] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2 py-0.5 text-xs"
+                        >
+                          <span className="font-mono font-bold text-amber-500">{p.label}</span>
+                          <span className="font-mono text-[10px] text-[#64748b]">
+                            ({p.localXMm}, {p.localYMm})
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => removePin(p.id)}
+                            className="text-[#94a3b8] hover:text-rose-500"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex gap-2">
@@ -782,11 +782,10 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
                   </button>
                   <button
                     type="button"
-                    disabled={isTracing || !traceResult}
                     onClick={() => setStep(3)}
                     className="flex-1 rounded-lg bg-sky-500 hover:bg-sky-600 px-3 py-2 text-xs font-semibold text-white shadow-xs transition-colors flex items-center justify-center gap-1.5"
                   >
-                    <span>Proceed to Pins & Crop</span>
+                    <span>Proceed to Save & Place</span>
                     <span>→</span>
                   </button>
                 </div>
@@ -797,159 +796,10 @@ export function ImageToCadModal({ onClose }: ImageToCadModalProps) {
               <div className="space-y-4">
                 <div className="space-y-1">
                   <h3 className="text-xs font-semibold uppercase tracking-wider text-[#64748b] dark:text-slate-400">
-                    Step 3: Interactive Terminal Pins & Crop
+                    Step 3: Save to Library & Use
                   </h3>
                   <p className="text-xs text-[#0f172a] dark:text-slate-300">
-                    Click anywhere on the preview to add wire connection terminals (e.g. L1, L2, A1).
-                  </p>
-                </div>
-
-                {/* Add pin label helper */}
-                <div className="space-y-2 rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] p-3">
-                  <label className="block space-y-1">
-                    <span className="text-[10px] text-[#64748b] dark:text-slate-400 font-semibold uppercase">
-                      Next Pin Label
-                    </span>
-                    <input
-                      type="text"
-                      value={newPinLabel}
-                      onChange={(e) => setNewPinLabel(e.target.value)}
-                      placeholder="e.g. L1, L2, A1, 13"
-                      className="w-full rounded-md border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2.5 py-1.5 text-xs font-mono font-semibold text-amber-500"
-                    />
-                  </label>
-                  <div className="text-[10px] text-[#94a3b8] dark:text-slate-400 italic">
-                    Tip: Click directly on terminal screws in the component view to place.
-                  </div>
-                </div>
-
-                {/* Crop & Trim Toggle */}
-                <div className="rounded-xl border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] p-3 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-[#0f172a] dark:text-slate-200 flex items-center gap-1.5">
-                      <Crop className="h-3.5 w-3.5 text-amber-500" />
-                      Trim Margins (Crop mm)
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowCropInputs((v) => !v)}
-                      className="text-xs text-sky-500 font-medium hover:underline"
-                    >
-                      {showCropInputs ? "Hide" : "Adjust"}
-                    </button>
-                  </div>
-
-                  {showCropInputs && (
-                    <div className="grid grid-cols-2 gap-2 pt-1">
-                      <label className="space-y-0.5">
-                        <span className="text-[10px] text-[#64748b]">Top (mm)</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={cropMm.top}
-                          onChange={(e) =>
-                            setCropMm((p) => ({ ...p, top: Math.max(0, Number(e.target.value) || 0) }))
-                          }
-                          className="w-full rounded border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2 py-1 text-xs font-mono"
-                        />
-                      </label>
-                      <label className="space-y-0.5">
-                        <span className="text-[10px] text-[#64748b]">Bottom (mm)</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={cropMm.bottom}
-                          onChange={(e) =>
-                            setCropMm((p) => ({ ...p, bottom: Math.max(0, Number(e.target.value) || 0) }))
-                          }
-                          className="w-full rounded border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2 py-1 text-xs font-mono"
-                        />
-                      </label>
-                      <label className="space-y-0.5">
-                        <span className="text-[10px] text-[#64748b]">Left (mm)</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={cropMm.left}
-                          onChange={(e) =>
-                            setCropMm((p) => ({ ...p, left: Math.max(0, Number(e.target.value) || 0) }))
-                          }
-                          className="w-full rounded border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2 py-1 text-xs font-mono"
-                        />
-                      </label>
-                      <label className="space-y-0.5">
-                        <span className="text-[10px] text-[#64748b]">Right (mm)</span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={cropMm.right}
-                          onChange={(e) =>
-                            setCropMm((p) => ({ ...p, right: Math.max(0, Number(e.target.value) || 0) }))
-                          }
-                          className="w-full rounded border border-[#cbd5e1] dark:border-white/10 bg-white dark:bg-[#0c0e14] px-2 py-1 text-xs font-mono"
-                        />
-                      </label>
-                    </div>
-                  )}
-                </div>
-
-                {/* Placed Pins List */}
-                <div className="space-y-1.5 max-h-36 overflow-y-auto">
-                  <span className="text-[10px] font-semibold uppercase tracking-wider text-[#64748b]">
-                    Placed Pins ({pins.length})
-                  </span>
-                  {pins.length === 0 ? (
-                    <div className="text-[11px] text-[#94a3b8] italic">No pins placed yet. Click preview image.</div>
-                  ) : (
-                    pins.map((p) => (
-                      <div
-                        key={p.id}
-                        className="flex items-center justify-between rounded-md border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#161922] px-2 py-1 text-xs"
-                      >
-                        <span className="font-mono font-bold text-amber-500">{p.label}</span>
-                        <span className="font-mono text-[10px] text-[#64748b]">
-                          ({p.localXMm}, {p.localYMm})
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => removePin(p.id)}
-                          className="text-[#94a3b8] hover:text-rose-500"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                <div className="flex gap-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setStep(2)}
-                    className="rounded-lg border border-[#cbd5e1] dark:border-white/10 px-3 py-2 text-xs font-medium text-[#64748b] dark:text-slate-300 hover:bg-[#f8fafc] dark:hover:bg-white/5"
-                  >
-                    Back
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setStep(4)}
-                    className="flex-1 rounded-lg bg-sky-500 hover:bg-sky-600 px-3 py-2 text-xs font-semibold text-white shadow-xs transition-colors flex items-center justify-center gap-1.5"
-                  >
-                    <span>Proceed to Save & Export</span>
-                    <span>→</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {step === 4 && (
-              <div className="space-y-4">
-                <div className="space-y-1">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-[#64748b] dark:text-slate-400">
-                    Step 4: Save to Library & Use
-                  </h3>
-                  <p className="text-xs text-[#0f172a] dark:text-slate-300">
-                    Component ready with calibrated mm boundaries, terminal pins, and DXF vectors.
+                    Direct crisp image component ready with {widthMm}×{heightMm} mm dimensions and {pins.length} connection terminals.
                   </p>
                 </div>
 

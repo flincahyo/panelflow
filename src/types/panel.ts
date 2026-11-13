@@ -162,6 +162,8 @@ export interface CustomCadAsset {
   parseWarning?: string;
   imageOverlayUrl?: string;
   showImageOverlay?: boolean;
+  imageOpacity?: number;
+  lockAspectRatio?: boolean;
   groupId?: string;
   groupName?: string;
   locked?: boolean;

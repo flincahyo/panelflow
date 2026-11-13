@@ -472,6 +472,10 @@ export function LeftSidebar() {
       rawText: item.rawText,
       dataUrl: item.dataUrl,
       objectUrl: item.dataUrl,
+      imageOverlayUrl: item.imageOverlayUrl,
+      showImageOverlay: item.showImageOverlay,
+      imageOpacity: item.imageOpacity,
+      lockAspectRatio: item.lockAspectRatio,
       entityCount: item.entityCount,
       parseWarning: item.parseWarning,
     };
@@ -1306,7 +1310,7 @@ export function LeftSidebar() {
                 className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-500/30 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 p-2.5 text-center transition-colors font-medium text-[13px]"
               >
                 <ImageIcon className="h-4 w-4" />
-                <span>Convert Image to CAD</span>
+                <span>Image Component Creator</span>
               </button>
             </div>
 
