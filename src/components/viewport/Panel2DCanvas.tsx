@@ -1299,9 +1299,10 @@ export function Panel2DCanvas() {
     if (e.button === 0 && canvasTool2D === "measure") {
       e.stopPropagation();
       const raw = screenToWorld(e.clientX, e.clientY);
+      // Measure tool snaps to 1mm precision (or free unconstrained float if Alt/Shift)
       const pt = {
-        xMm: snapToGrid(raw.xMm, gridSnapMm),
-        yMm: snapToGrid(raw.yMm, gridSnapMm),
+        xMm: Math.round(raw.xMm * 10) / 10,
+        yMm: Math.round(raw.yMm * 10) / 10,
       };
       if (!measureStart || (measureStart && measureEnd)) {
         setMeasureStart(pt);
@@ -1356,8 +1357,8 @@ export function Panel2DCanvas() {
     setCursorWorld(world);
     if (canvasTool2D === "measure" && measureStart && !measureEnd) {
       setMeasureHover({
-        xMm: snapToGrid(world.xMm, gridSnapMm),
-        yMm: snapToGrid(world.yMm, gridSnapMm),
+        xMm: Math.round(world.xMm * 10) / 10,
+        yMm: Math.round(world.yMm * 10) / 10,
       });
     }
 
@@ -2046,7 +2047,7 @@ export function Panel2DCanvas() {
 
         {/* Grid Snap Selector Pill */}
         <div className="flex shrink-0 items-center rounded-full border border-[#e2e8f0] dark:border-white/10 bg-[#f1f5f9] dark:bg-[#0c0e14] p-0.5">
-          {([5, 10, 25] as GridSnapMm[]).map((snap) => (
+          {([1, 5, 10, 25] as GridSnapMm[]).map((snap) => (
             <button
               key={snap}
               type="button"

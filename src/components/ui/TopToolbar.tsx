@@ -136,7 +136,7 @@ export function TopToolbar({
   const openPflowInputRef = useRef<HTMLInputElement>(null);
 
   const units: LengthUnit[] = ["mm", "cm", "m"];
-  const snaps: GridSnapMm[] = [5, 10, 25];
+  const snaps: GridSnapMm[] = [1, 5, 10, 25];
 
   // Close menus on outside click
   useEffect(() => {

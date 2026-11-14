@@ -1,6 +1,6 @@
 export type LengthUnit = "mm" | "cm" | "m";
 export type CadImportUnit = "mm" | "cm" | "m" | "inch";
-export type GridSnapMm = 5 | 10 | 25;
+export type GridSnapMm = 1 | 5 | 10 | 25;
 export type DoorMode = "open" | "transparent" | "hidden";
 export type RotationDeg = 0 | 90 | 180 | 270;
 

@@ -198,7 +198,7 @@ export function PanelViewport() {
     { value: "transparent", label: "Glass" },
     { value: "hidden", label: "Hidden" },
   ];
-  const snaps: GridSnapMm[] = [5, 10, 25];
+  const snaps: GridSnapMm[] = [1, 5, 10, 25];
 
   return (
     <div

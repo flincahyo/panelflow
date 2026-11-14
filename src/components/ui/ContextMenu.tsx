@@ -1139,7 +1139,7 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
 
               {openSubmenu === "snap" && (
                 <div className={`absolute top-0 ${submenuPosClass} w-32 rounded-lg border border-[#e2e8f0] dark:border-slate-700/80 bg-white/98 dark:bg-[#12161f]/98 p-1 shadow-xl dark:shadow-2xl backdrop-blur-md`}>
-                  {([5, 10, 25] as GridSnapMm[]).map((val) => (
+                  {([1, 5, 10, 25] as GridSnapMm[]).map((val) => (
                     <button
                       key={val}
                       type="button"
