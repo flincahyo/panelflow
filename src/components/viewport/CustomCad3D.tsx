@@ -55,13 +55,18 @@ function CadAssetItem3D({
           scene.position.sub(center);
 
           setLoadedObject(scene);
-          updateCadAsset(asset.id, {
-            boundingBoxMm: {
-              w: Math.max(1, Number(size.x.toFixed(1))),
-              h: Math.max(1, Number(size.y.toFixed(1))),
-              d: Math.max(1, Number(size.z.toFixed(1))),
-            },
-          });
+          const nextW = Math.max(1, Number(size.x.toFixed(1)));
+          const nextH = Math.max(1, Number(size.y.toFixed(1)));
+          const nextD = Math.max(1, Number(size.z.toFixed(1)));
+          if (
+            asset.boundingBoxMm.w !== nextW ||
+            asset.boundingBoxMm.h !== nextH ||
+            asset.boundingBoxMm.d !== nextD
+          ) {
+            updateCadAsset(asset.id, {
+              boundingBoxMm: { w: nextW, h: nextH, d: nextD },
+            });
+          }
         },
         undefined,
         () => {
@@ -81,13 +86,18 @@ function CadAssetItem3D({
       obj.position.sub(center);
 
       setLoadedObject(obj);
-      updateCadAsset(asset.id, {
-        boundingBoxMm: {
-          w: Math.max(1, Number(size.x.toFixed(1))),
-          h: Math.max(1, Number(size.y.toFixed(1))),
-          d: Math.max(1, Number(size.z.toFixed(1))),
-        },
-      });
+      const nextW = Math.max(1, Number(size.x.toFixed(1)));
+      const nextH = Math.max(1, Number(size.y.toFixed(1)));
+      const nextD = Math.max(1, Number(size.z.toFixed(1)));
+      if (
+        asset.boundingBoxMm.w !== nextW ||
+        asset.boundingBoxMm.h !== nextH ||
+        asset.boundingBoxMm.d !== nextD
+      ) {
+        updateCadAsset(asset.id, {
+          boundingBoxMm: { w: nextW, h: nextH, d: nextD },
+        });
+      }
     }
 
     return () => {
@@ -116,9 +126,17 @@ function CadAssetItem3D({
 
   useEffect(() => {
     if (dxfGeometry) {
-      updateCadAsset(asset.id, { boundingBoxMm: dxfGeometry.bbox });
+      const current = asset.boundingBoxMm;
+      const next = dxfGeometry.bbox;
+      if (
+        current.w !== next.w ||
+        current.h !== next.h ||
+        current.d !== next.d
+      ) {
+        updateCadAsset(asset.id, { boundingBoxMm: next });
+      }
     }
-  }, [asset.id, dxfGeometry, updateCadAsset]);
+  }, [asset.id, asset.boundingBoxMm, dxfGeometry, updateCadAsset]);
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
     e.stopPropagation();

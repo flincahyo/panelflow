@@ -1334,6 +1334,25 @@ export function Panel2DCanvas() {
         panY: pan.y,
       };
       setDragState(null);
+      return;
+    }
+
+    // Intercept Drawing tool at container capture level so child SVGs never steal pointer
+    if (e.button === 0 && canvasTool2D === "draw") {
+      const raw = screenToWorld(e.clientX, e.clientY);
+      const snappedX = snapToGrid(raw.xMm, gridSnapMm);
+      const snappedY = snapToGrid(raw.yMm, gridSnapMm);
+      setDragState({
+        type: "draw",
+        startWorldXMm: snappedX,
+        startWorldYMm: snappedY,
+        currentWorldXMm: snappedX,
+        currentWorldYMm: snappedY,
+      });
+      // Capture pointer so moving outside container still updates smoothly
+      try {
+        (e.target as HTMLElement)?.setPointerCapture?.(e.pointerId);
+      } catch {}
     }
   };
 
@@ -1657,21 +1676,27 @@ export function Panel2DCanvas() {
       const maxX = Math.max(dragState.startWorldXMm, dragState.currentWorldXMm);
       const minY = Math.min(dragState.startWorldYMm, dragState.currentWorldYMm);
       const maxY = Math.max(dragState.startWorldYMm, dragState.currentWorldYMm);
-      const w = Math.max(10, Math.round(maxX - minX));
-      const h = Math.max(10, Math.round(maxY - minY));
-      const centerX = Math.round(minX + w / 2);
-      const centerY = Math.round(minY + h / 2);
+      const rawW = Math.round(maxX - minX);
+      const rawH = Math.round(maxY - minY);
 
-      addCustomDrawnComponent({
-        name: drawShapeMode === "circle" ? "Round Plate" : "Busbar",
-        xMm: centerX,
-        yMm: centerY,
-        widthMm: w,
-        heightMm: h,
-        depthMm: 5,
-        materialType: "copper",
-        drawShape: drawShapeMode,
-      });
+      // Only create if user dragged at least 4mm to prevent accidental tiny clicks
+      if (rawW >= 4 || rawH >= 4) {
+        const w = Math.max(10, rawW);
+        const h = Math.max(10, rawH);
+        const centerX = Math.round(minX + w / 2);
+        const centerY = Math.round(minY + h / 2);
+
+        addCustomDrawnComponent({
+          name: drawShapeMode === "circle" ? "Round Plate" : "Busbar",
+          xMm: centerX,
+          yMm: centerY,
+          widthMm: w,
+          heightMm: h,
+          depthMm: 5,
+          materialType: "copper",
+          drawShape: drawShapeMode,
+        });
+      }
       setDragState(null);
       return;
     }
@@ -3040,6 +3065,7 @@ export function Panel2DCanvas() {
                   activeWireStartPin={activeWireStartPin}
                   onPointerDown={(e) => {
                     if (e.button !== 0 || spacePressed) return;
+                    if (canvasTool2D === "draw") return; // Allow drawing over existing assets
                     if (isMarkingThis) {
                       e.stopPropagation();
                       const w = screenToWorld(e.clientX, e.clientY);
