@@ -596,4 +596,54 @@ describe("usePanelStore - Default 2D & Context Menu Actions", () => {
     expect(updated.pins[0].label).toBe("R-IN");
     expect(updated.pins[1].label).toBe("R-OUT");
   });
+
+  it("handles auto-naming for busbars and plates and wire connections to busbar pins", () => {
+    const store = usePanelStore.getState();
+    const id1 = store.addCustomDrawnComponent({
+      xMm: 100,
+      yMm: 100,
+      widthMm: 80,
+      heightMm: 15,
+      materialType: "copper",
+    });
+    const id2 = store.addCustomDrawnComponent({
+      xMm: 200,
+      yMm: 100,
+      widthMm: 50,
+      heightMm: 50,
+      materialType: "steel",
+      drawShape: "circle",
+    });
+
+    const state = usePanelStore.getState();
+    const b1 = state.cadAssets.find((a) => a.id === id1)!;
+    const b2 = state.cadAssets.find((a) => a.id === id2)!;
+    expect(b1.name).toContain("Busbar");
+    expect(b2.name).toContain("Plate");
+    expect(b2.drawShape).toBe("circle");
+
+    // Add pin to busbar 1 and connect wire from component to busbar
+    store.addPinToAsset(id1, {
+      label: "L1-MAIN",
+      localXMm: 0,
+      localYMm: 0,
+      localZMm: 0,
+    });
+    const pinId = usePanelStore.getState().cadAssets.find((a) => a.id === id1)!.pins[0].id;
+
+    store.addWire({
+      label: "W-BUS",
+      fromComponentId: "comp-1",
+      fromPinId: "comp-1-pin-1",
+      toComponentId: id1,
+      toPinId: pinId,
+      colorCode: "R",
+      gaugeMm2: "2.5",
+    });
+
+    const wires = usePanelStore.getState().wires;
+    const wire = wires.find((w) => w.toComponentId === id1);
+    expect(wire).toBeDefined();
+    expect(wire?.toPinId).toBe(pinId);
+  });
 });
