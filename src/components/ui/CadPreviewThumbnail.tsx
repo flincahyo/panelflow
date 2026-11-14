@@ -2,12 +2,14 @@
 
 import { useMemo } from "react";
 import { getCadPreviewSvgData } from "@/lib/cad-preview";
-import type { CadFormat, CadImportUnit, PinTerminal } from "@/types/panel";
+import { type CadFormat, type CadImportUnit, type DrawShapeMode, MATERIAL_PRESETS, type MaterialType, type PinTerminal } from "@/types/panel";
 
 interface CadPreviewThumbnailProps {
   format: CadFormat;
   rawText?: string;
   imageOverlayUrl?: string;
+  materialType?: MaterialType;
+  drawShape?: DrawShapeMode;
   sourceUnit?: CadImportUnit;
   boundingBoxMm: { w: number; h: number; d: number };
   pins?: PinTerminal[];
@@ -18,11 +20,39 @@ export function CadPreviewThumbnail({
   format,
   rawText,
   imageOverlayUrl,
+  materialType,
+  drawShape,
   sourceUnit = "mm",
   boundingBoxMm,
   pins = [],
   className = "h-14 w-full",
 }: CadPreviewThumbnailProps) {
+  // If item is a custom drawn busbar/plate with material
+  if (materialType && !imageOverlayUrl) {
+    const mat = MATERIAL_PRESETS[materialType] || MATERIAL_PRESETS.copper;
+    const isCircle = drawShape === "circle";
+    return (
+      <div className={`relative flex items-center justify-center p-2 ${className}`}>
+        <div
+          className={`${isCircle ? "h-8 w-8 rounded-full" : "h-7 w-4/5 rounded-xs"} border shadow-xs flex items-center justify-center`}
+          style={{
+            backgroundColor: mat.fillColor,
+            borderColor: mat.borderColor,
+          }}
+        >
+          <span className="font-mono text-[8px] font-bold text-black/70">
+            {mat.name.split(" ")[0]}
+          </span>
+        </div>
+        {pins.length > 0 && (
+          <span className="absolute bottom-0.5 right-0.5 rounded bg-black/70 px-1 py-0.2 font-mono text-[8px] font-bold text-amber-400">
+            {pins.length}P
+          </span>
+        )}
+      </div>
+    );
+  }
+
   // If item is an Image Component with a valid imageOverlayUrl / dataUrl
   if (imageOverlayUrl) {
     return (

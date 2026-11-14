@@ -132,6 +132,62 @@ export interface PlacedComponent {
 
 export type CadFormat = "glb" | "gltf" | "obj" | "dxf";
 
+export type MaterialType = "copper" | "aluminum" | "steel" | "insulator" | "custom";
+
+export interface MaterialPreset {
+  name: string;
+  materialType: MaterialType;
+  fillColor: string;
+  borderColor: string;
+  metalness: number;
+  roughness: number;
+}
+
+export const MATERIAL_PRESETS: Record<MaterialType, MaterialPreset> = {
+  copper: {
+    name: "Copper Busbar",
+    materialType: "copper",
+    fillColor: "#d97706",
+    borderColor: "#b45309",
+    metalness: 0.85,
+    roughness: 0.35,
+  },
+  aluminum: {
+    name: "Aluminum",
+    materialType: "aluminum",
+    fillColor: "#cbd5e1",
+    borderColor: "#94a3b8",
+    metalness: 0.75,
+    roughness: 0.4,
+  },
+  steel: {
+    name: "Steel Plate",
+    materialType: "steel",
+    fillColor: "#64748b",
+    borderColor: "#475569",
+    metalness: 0.6,
+    roughness: 0.5,
+  },
+  insulator: {
+    name: "Red Insulator",
+    materialType: "insulator",
+    fillColor: "#7f1d1d",
+    borderColor: "#dc2626",
+    metalness: 0.1,
+    roughness: 0.8,
+  },
+  custom: {
+    name: "Black Plastic",
+    materialType: "custom",
+    fillColor: "#1e293b",
+    borderColor: "#334155",
+    metalness: 0.1,
+    roughness: 0.85,
+  },
+};
+
+export type DrawShapeMode = "rectangle" | "circle";
+
 export interface CadCropMm {
   top: number;
   bottom: number;
@@ -164,6 +220,8 @@ export interface CustomCadAsset {
   showImageOverlay?: boolean;
   imageOpacity?: number;
   lockAspectRatio?: boolean;
+  materialType?: MaterialType;
+  drawShape?: DrawShapeMode;
   groupId?: string;
   groupName?: string;
   locked?: boolean;
@@ -171,7 +229,7 @@ export interface CustomCadAsset {
 
 export type ViewportMode = "3d" | "2d";
 export type ThemeMode = "dark" | "light";
-export type CanvasTool2D = "select" | "wire" | "pan" | "measure";
+export type CanvasTool2D = "select" | "wire" | "pan" | "measure" | "draw";
 export type WireColorCode = "R" | "S" | "T" | "N" | "PE" | "DC+" | "DC-";
 
 export interface WireConnection {

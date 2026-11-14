@@ -9,7 +9,7 @@ import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { parseDxfToMmSegments } from "@/lib/dxf-parser";
 import { getCadScaleFactorToMm } from "@/lib/units";
 import { usePanelStore } from "@/store/usePanelStore";
-import type { CustomCadAsset } from "@/types/panel";
+import { type CustomCadAsset, MATERIAL_PRESETS } from "@/types/panel";
 
 function CadAssetItem3D({
   asset,
@@ -165,6 +165,38 @@ function CadAssetItem3D({
           </mesh>
         </>
       )}
+
+      {/* Render 3D Solid Geometry for Custom Drawn Busbar / Plate */}
+      {asset.materialType && !loadedObject && !dxfGeometry && (() => {
+        const mat = MATERIAL_PRESETS[asset.materialType] || MATERIAL_PRESETS.copper;
+        const w = Math.max(2, asset.boundingBoxMm.w);
+        const h = Math.max(2, asset.boundingBoxMm.h);
+        const d = Math.max(2, asset.boundingBoxMm.d);
+
+        if (asset.drawShape === "circle") {
+          return (
+            <mesh>
+              <cylinderGeometry args={[w / 2, w / 2, d, 32]} />
+              <meshStandardMaterial
+                color={mat.fillColor}
+                metalness={mat.metalness}
+                roughness={mat.roughness}
+              />
+            </mesh>
+          );
+        }
+
+        return (
+          <mesh>
+            <boxGeometry args={[w, h, d]} />
+            <meshStandardMaterial
+              color={mat.fillColor}
+              metalness={mat.metalness}
+              roughness={mat.roughness}
+            />
+          </mesh>
+        );
+      })()}
 
       {(isSelected || isMarkingThis) && (
         <mesh>

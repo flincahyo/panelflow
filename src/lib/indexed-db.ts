@@ -20,6 +20,8 @@ export interface CustomLibraryCadItem {
   showImageOverlay?: boolean;
   imageOpacity?: number;
   lockAspectRatio?: boolean;
+  materialType?: CustomCadAsset["materialType"];
+  drawShape?: CustomCadAsset["drawShape"];
   entityCount?: number;
   parseWarning?: string;
   cloudId?: string;
@@ -131,6 +133,8 @@ export async function saveCustomCadToLibrary(
     showImageOverlay: asset.showImageOverlay,
     imageOpacity: asset.imageOpacity,
     lockAspectRatio: asset.lockAspectRatio,
+    materialType: asset.materialType,
+    drawShape: asset.drawShape,
     entityCount: asset.entityCount,
     parseWarning: asset.parseWarning,
     createdAt: Date.now(),

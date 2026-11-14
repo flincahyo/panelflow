@@ -468,7 +468,7 @@ export function BomPanelTab() {
                   </div>
                   <div className="mt-1 flex items-center justify-between gap-2">
                     <span className="rounded border border-amber-200 dark:border-amber-500/30 bg-amber-50 dark:bg-amber-500/10 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-amber-700 dark:text-amber-300">
-                      CAD • {a.format.toUpperCase()}
+                      {a.materialType ? `BUSBAR • ${a.materialType.toUpperCase()}` : `CAD • ${a.format}`}
                     </span>
                     <span className="font-mono text-[10px] tabular-nums text-[#64748b] dark:text-slate-400">
                       {a.widthMm}×{a.heightMm}×{a.depthMm}mm

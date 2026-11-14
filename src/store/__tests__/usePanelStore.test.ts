@@ -553,4 +553,47 @@ describe("usePanelStore - Default 2D & Context Menu Actions", () => {
     comp1 = state.components.find((c) => c.id === c1.id)!;
     expect(comp1.xMm).toBe(startX + 50);
   });
+
+  it("creates custom drawn busbars with material preset and pins", () => {
+    const store = usePanelStore.getState();
+    const id = store.addCustomDrawnComponent({
+      name: "Main Busbar R",
+      xMm: 150,
+      yMm: 200,
+      widthMm: 120,
+      heightMm: 20,
+      depthMm: 5,
+      materialType: "copper",
+      drawShape: "rectangle",
+    });
+
+    const state = usePanelStore.getState();
+    const busbar = state.cadAssets.find((a) => a.id === id);
+    expect(busbar).toBeDefined();
+    expect(busbar?.name).toBe("Main Busbar R");
+    expect(busbar?.materialType).toBe("copper");
+    expect(busbar?.boundingBoxMm.w).toBe(120);
+    expect(busbar?.boundingBoxMm.h).toBe(20);
+    expect(state.selected).toEqual({ kind: "cad", id });
+    expect(state.canvasTool2D).toBe("select");
+
+    // Add pins to busbar
+    store.addPinToAsset(id, {
+      label: "R-IN",
+      localXMm: -40,
+      localYMm: 0,
+      localZMm: 0,
+    });
+    store.addPinToAsset(id, {
+      label: "R-OUT",
+      localXMm: 40,
+      localYMm: 0,
+      localZMm: 0,
+    });
+
+    const updated = usePanelStore.getState().cadAssets.find((a) => a.id === id)!;
+    expect(updated.pins.length).toBe(2);
+    expect(updated.pins[0].label).toBe("R-IN");
+    expect(updated.pins[1].label).toBe("R-OUT");
+  });
 });

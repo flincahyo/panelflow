@@ -137,6 +137,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             dataUrl: isImage ? cadData : undefined,
             imageOverlayUrl: isImage ? cadData : undefined,
             showImageOverlay: isImage ? true : undefined,
+            materialType: rawBb.materialType,
+            drawShape: rawBb.drawShape,
           };
           await saveCustomCadToLibrary(asset).catch(() => {});
         }

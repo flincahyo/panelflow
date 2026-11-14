@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Cable,
   Check,
+  Circle,
   Hand,
   Hash,
   Layers,
@@ -11,6 +12,7 @@ import {
   MousePointer2,
   Redo2,
   Ruler,
+  Square,
   Trash2,
   Undo2,
   Users,
@@ -20,6 +22,7 @@ import {
 } from "lucide-react";
 import { ContextMenu } from "@/components/ui/ContextMenu";
 import { detectCollisionsAndBounds, getEffectiveCadBounds } from "@/lib/collision";
+import { MATERIAL_PRESETS } from "@/types/panel";
 import {
   buildAlignmentTargetBoxes,
   computeAlignmentGuides,
@@ -138,6 +141,13 @@ type DragState =
       startWorldYMm: number;
       lastDxMm: number;
       lastDyMm: number;
+    }
+  | {
+      type: "draw";
+      startWorldXMm: number;
+      startWorldYMm: number;
+      currentWorldXMm: number;
+      currentWorldYMm: number;
     };
 
 function Component2DSymbol({
@@ -709,24 +719,48 @@ function CadAsset2DSymbol({
         </defs>
       )}
 
-      {/* Interactive Hitbox & Background */}
-      <rect
-        x={effX}
-        y={effY}
-        width={effW}
-        height={effH}
-        fill={asset.format === "dxf" ? "#f0f9ff" : "#f8fafc"}
-        fillOpacity={asset.imageOverlayUrl ? 0.0 : (asset.format === "dxf" ? 0.35 : 0.85)}
-        stroke={
-          isMarkingThis
-            ? "#f59e0b"
-            : isSelected
-            ? "#0284c7"
-            : "#94a3b8"
+      {/* Interactive Hitbox & Background (Supports Busbar/Material Presets) */}
+      {(() => {
+        const mat = asset.materialType ? MATERIAL_PRESETS[asset.materialType] : null;
+        const fill = mat ? mat.fillColor : (asset.format === "dxf" ? "#f0f9ff" : "#f8fafc");
+        const strokeColor = isMarkingThis
+          ? "#f59e0b"
+          : isSelected
+          ? "#0284c7"
+          : mat
+          ? mat.borderColor
+          : "#94a3b8";
+
+        if (asset.drawShape === "circle") {
+          return (
+            <ellipse
+              cx={effX + effW / 2}
+              cy={effY + effH / 2}
+              rx={effW / 2}
+              ry={effH / 2}
+              fill={fill}
+              fillOpacity={asset.imageOverlayUrl ? 0.0 : (mat ? 0.88 : (asset.format === "dxf" ? 0.35 : 0.85))}
+              stroke={strokeColor}
+              strokeWidth={isMarkingThis || isSelected ? 1.1 : 0.75}
+            />
+          );
         }
-        strokeWidth={isMarkingThis || isSelected ? 1.1 : 0.6}
-        strokeDasharray={asset.imageOverlayUrl ? undefined : (asset.format === "dxf" ? "2,1.5" : undefined)}
-      />
+
+        return (
+          <rect
+            x={effX}
+            y={effY}
+            width={effW}
+            height={effH}
+            fill={fill}
+            fillOpacity={asset.imageOverlayUrl ? 0.0 : (mat ? 0.88 : (asset.format === "dxf" ? 0.35 : 0.85))}
+            stroke={strokeColor}
+            strokeWidth={isMarkingThis || isSelected ? 1.1 : 0.75}
+            strokeDasharray={asset.imageOverlayUrl || mat ? undefined : (asset.format === "dxf" ? "2,1.5" : undefined)}
+            rx={mat ? 1.5 : 0}
+          />
+        );
+      })()}
 
       {/* Direct Crisp Photo / Image Component Overlay */}
       {asset.imageOverlayUrl && (asset.showImageOverlay ?? true) && (
@@ -805,7 +839,7 @@ function CadAsset2DSymbol({
             />
           ))}
         </g>
-      ) : asset.imageOverlayUrl ? null : (
+      ) : asset.imageOverlayUrl || asset.materialType ? null : (
         <g
           clipPath={hasCrop ? `url(#${clipId})` : undefined}
           stroke="#64748b"
@@ -837,6 +871,23 @@ function CadAsset2DSymbol({
           {cleanLabel}
         </text>
       </g>
+
+      {/* Busbar / Drawn Part Label */}
+      {!asset.imageOverlayUrl && (asset.materialType || asset.format === "dxf") && (
+        <text
+          x={effX + effW / 2}
+          y={effY + effH / 2}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fontSize={Math.min(9, Math.max(5, effH * 0.35))}
+          fontFamily="monospace"
+          fontWeight="bold"
+          fill={asset.materialType === "copper" ? "#78350f" : "#1e293b"}
+          className="pointer-events-none select-none opacity-80"
+        >
+          {asset.name}
+        </text>
+      )}
 
       {/* 100% Transparent Crosshair Pin Markers (Outside clipPath, with text halo) */}
       <g className="cad-pin-markers">
@@ -1006,6 +1057,9 @@ export function Panel2DCanvas() {
   const updateRail = usePanelStore((s) => s.updateRail);
   const updateDuct = usePanelStore((s) => s.updateDuct);
   const addWire = usePanelStore((s) => s.addWire);
+  const addCustomDrawnComponent = usePanelStore((s) => s.addCustomDrawnComponent);
+  const drawShapeMode = usePanelStore((s) => s.drawShapeMode);
+  const setDrawShapeMode = usePanelStore((s) => s.setDrawShapeMode);
   const setGridSnapMm = usePanelStore((s) => s.setGridSnapMm);
   const undo = usePanelStore((s) => s.undo);
   const redo = usePanelStore((s) => s.redo);
@@ -1314,6 +1368,20 @@ export function Panel2DCanvas() {
       }
       return;
     }
+    if (e.button === 0 && canvasTool2D === "draw") {
+      e.stopPropagation();
+      const raw = screenToWorld(e.clientX, e.clientY);
+      const snappedX = snapToGrid(raw.xMm, gridSnapMm);
+      const snappedY = snapToGrid(raw.yMm, gridSnapMm);
+      setDragState({
+        type: "draw",
+        startWorldXMm: snappedX,
+        startWorldYMm: snappedY,
+        currentWorldXMm: snappedX,
+        currentWorldYMm: snappedY,
+      });
+      return;
+    }
     if (e.button === 0) {
       const raw = screenToWorld(e.clientX, e.clientY);
       setDragState({
@@ -1368,6 +1436,15 @@ export function Panel2DCanvas() {
       setPan({
         x: dragState.startPanX + (e.clientX - dragState.startClientX),
         y: dragState.startPanY + (e.clientY - dragState.startClientY),
+      });
+      return;
+    }
+
+    if (dragState.type === "draw") {
+      setDragState({
+        ...dragState,
+        currentWorldXMm: snapToGrid(world.xMm, gridSnapMm),
+        currentWorldYMm: snapToGrid(world.yMm, gridSnapMm),
       });
       return;
     }
@@ -1573,6 +1650,30 @@ export function Panel2DCanvas() {
     }
     if (activePointersRef.current.size < 2) {
       pinchRef.current = null;
+    }
+
+    if (dragState?.type === "draw") {
+      const minX = Math.min(dragState.startWorldXMm, dragState.currentWorldXMm);
+      const maxX = Math.max(dragState.startWorldXMm, dragState.currentWorldXMm);
+      const minY = Math.min(dragState.startWorldYMm, dragState.currentWorldYMm);
+      const maxY = Math.max(dragState.startWorldYMm, dragState.currentWorldYMm);
+      const w = Math.max(10, Math.round(maxX - minX));
+      const h = Math.max(10, Math.round(maxY - minY));
+      const centerX = Math.round(minX + w / 2);
+      const centerY = Math.round(minY + h / 2);
+
+      addCustomDrawnComponent({
+        name: drawShapeMode === "circle" ? "Round Plate" : "Busbar",
+        xMm: centerX,
+        yMm: centerY,
+        widthMm: w,
+        heightMm: h,
+        depthMm: 5,
+        materialType: "copper",
+        drawShape: drawShapeMode,
+      });
+      setDragState(null);
+      return;
     }
 
     if (dragState?.type === "marquee") {
@@ -1985,6 +2086,19 @@ export function Panel2DCanvas() {
           </button>
           <button
             type="button"
+            onClick={() => setCanvasTool2D("draw")}
+            className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
+              canvasTool2D === "draw"
+                ? "bg-[#0f172a] text-white dark:bg-white dark:text-black font-semibold shadow-xs"
+                : "text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
+            }`}
+            title="Draw Custom Geometry / Busbar Tool (Click & drag on canvas)"
+          >
+            <Square className="h-3.5 w-3.5" />
+            Draw
+          </button>
+          <button
+            type="button"
             onClick={() => setCanvasTool2D("pan")}
             className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all ${
               canvasTool2D === "pan"
@@ -2139,6 +2253,40 @@ export function Panel2DCanvas() {
                 ? "Click point B"
                 : "Measured (Esc clear)"}
             </span>
+          </div>
+        )}
+
+        {canvasTool2D === "draw" && (
+          <div className="flex items-center gap-1.5 border-l border-[#e2e8f0] dark:border-white/10 pl-2">
+            <span className="font-mono text-[10px] font-semibold text-amber-600 dark:text-amber-400 mr-1">
+              Shape:
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setDrawShapeMode("rectangle")}
+                className={`flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[10px] transition-all ${
+                  drawShapeMode === "rectangle"
+                    ? "border-amber-500 bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold"
+                    : "border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14] text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
+                }`}
+              >
+                <Square className="h-3 w-3" />
+                <span>Busbar / Plate</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDrawShapeMode("circle")}
+                className={`flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[10px] transition-all ${
+                  drawShapeMode === "circle"
+                    ? "border-amber-500 bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold"
+                    : "border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#0c0e14] text-[#64748b] dark:text-slate-400 hover:text-[#0f172a] dark:hover:text-slate-200"
+                }`}
+              >
+                <Circle className="h-3 w-3" />
+                <span>Round Part</span>
+              </button>
+            </div>
           </div>
         )}
 
@@ -3248,6 +3396,69 @@ export function Panel2DCanvas() {
               })}
             </g>
           )}
+
+          {/* Live Drawing Preview Overlay (Busbar / Custom Component) */}
+          {dragState?.type === "draw" && (() => {
+            const sx = Math.min(dragState.startWorldXMm, dragState.currentWorldXMm);
+            const sy = -Math.max(dragState.startWorldYMm, dragState.currentWorldYMm);
+            const sw = Math.max(1, Math.abs(dragState.currentWorldXMm - dragState.startWorldXMm));
+            const sh = Math.max(1, Math.abs(dragState.currentWorldYMm - dragState.startWorldYMm));
+            return (
+              <g className="pointer-events-none">
+                {drawShapeMode === "circle" ? (
+                  <ellipse
+                    cx={sx + sw / 2}
+                    cy={sy + sh / 2}
+                    rx={sw / 2}
+                    ry={sh / 2}
+                    fill="#d97706"
+                    fillOpacity={0.25}
+                    stroke="#f59e0b"
+                    strokeWidth={1.5 / zoom}
+                    strokeDasharray={`${4 / zoom},${3 / zoom}`}
+                  />
+                ) : (
+                  <rect
+                    x={sx}
+                    y={sy}
+                    width={sw}
+                    height={sh}
+                    fill="#d97706"
+                    fillOpacity={0.25}
+                    stroke="#f59e0b"
+                    strokeWidth={1.5 / zoom}
+                    strokeDasharray={`${4 / zoom},${3 / zoom}`}
+                    rx={2 / zoom}
+                  />
+                )}
+                {/* Live Dimension Badge (W x H mm) */}
+                <g transform={`translate(${sx + sw / 2}, ${sy - 8 / zoom})`}>
+                  <rect
+                    x={-35 / zoom}
+                    y={-10 / zoom}
+                    width={70 / zoom}
+                    height={14 / zoom}
+                    fill="#0f172a"
+                    rx={3 / zoom}
+                    stroke="#f59e0b"
+                    strokeWidth={0.8 / zoom}
+                  />
+                  <text
+                    x={0}
+                    y={0}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill="#fbbf24"
+                    fontSize={8.5 / zoom}
+                    fontFamily="monospace"
+                    fontWeight="bold"
+                  >
+                    {Math.round(sw)} × {Math.round(sh)} mm
+                  </text>
+                </g>
+              </g>
+            );
+          })()}
 
           {/* Marquee Box Selection Overlay */}
           {dragState?.type === "marquee" && (() => {

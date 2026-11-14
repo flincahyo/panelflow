@@ -18,9 +18,11 @@ import type {
   CustomCadAsset,
   DinRail,
   DoorMode,
+  DrawShapeMode,
   EnclosureConfig,
   GridSnapMm,
   LengthUnit,
+  MaterialType,
   PanelSheet,
   PinTerminal,
   PlacedComponent,
@@ -337,6 +339,8 @@ interface PanelStore {
   theme: ThemeMode;
   viewportMode: ViewportMode;
   canvasTool2D: CanvasTool2D;
+  drawShapeMode: DrawShapeMode;
+  setDrawShapeMode: (mode: DrawShapeMode) => void;
   displayUnit: LengthUnit;
   gridSnapMm: GridSnapMm;
   activeWireColor: WireColorCode;
@@ -469,6 +473,16 @@ interface PanelStore {
   removeCadAsset: (id: string) => void;
   rotateCadAsset: (id: string, deltaDeg?: 90 | 180 | 270) => void;
   duplicateCadAsset: (id: string, offsetMm?: { x: number; y: number }) => string | null;
+  addCustomDrawnComponent: (params: {
+    name?: string;
+    xMm: number;
+    yMm: number;
+    widthMm: number;
+    heightMm: number;
+    depthMm?: number;
+    materialType?: MaterialType;
+    drawShape?: DrawShapeMode;
+  }) => string;
   addPinToAsset: (assetId: string, pin: Omit<PinTerminal, "id">) => void;
   updatePinInAsset: (assetId: string, pinId: string, partial: Partial<PinTerminal>) => void;
   removePinFromAsset: (assetId: string, pinId: string) => void;
@@ -534,6 +548,8 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
   theme: "light",
   viewportMode: "2d",
   canvasTool2D: "select",
+  drawShapeMode: "rectangle",
+  setDrawShapeMode: (mode) => set({ drawShapeMode: mode }),
   displayUnit: "mm",
   gridSnapMm: 10,
   activeWireColor: "R",
@@ -2487,6 +2503,59 @@ export const usePanelStore = create<PanelStore>((set, get) => ({
     set({
       sheets: updated,
       selected: { kind: "cad", id: newId },
+      canUndo: true,
+      canRedo: false,
+      ...syncActiveSheetProjection(active),
+    });
+    return newId;
+  },
+
+  addCustomDrawnComponent: ({
+    name,
+    xMm,
+    yMm,
+    widthMm,
+    heightMm,
+    depthMm = 5,
+    materialType = "copper",
+    drawShape = "rectangle",
+  }) => {
+    const { sheets, activeSheetId } = get();
+    const activeSheet = sheets.find((s) => s.id === activeSheetId)!;
+    pushHistory(sheets);
+
+    const newId = `busbar-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const defaultPrefix = materialType === "copper" ? "Busbar" : "Plate";
+    const finalName = name || nextIncrementedName(defaultPrefix, activeSheet.cadAssets.map((a) => a.name));
+
+    const newAsset: CustomCadAsset = {
+      id: newId,
+      name: finalName,
+      fileName: `${finalName.toLowerCase().replace(/\s+/g, "-")}.custom`,
+      format: "dxf",
+      sourceUnit: "mm",
+      xMm,
+      yMm,
+      zMm: depthMm / 2 + 2,
+      rotationDeg: 0,
+      boundingBoxMm: {
+        w: widthMm,
+        h: heightMm,
+        d: depthMm,
+      },
+      pins: [],
+      materialType,
+      drawShape,
+    };
+
+    const updated = sheets.map((s) =>
+      s.id === activeSheetId ? { ...s, cadAssets: [...s.cadAssets, newAsset] } : s
+    );
+    const active = updated.find((s) => s.id === activeSheetId)!;
+    set({
+      sheets: updated,
+      selected: { kind: "cad", id: newId },
+      canvasTool2D: "select",
       canUndo: true,
       canRedo: false,
       ...syncActiveSheetProjection(active),

@@ -492,6 +492,8 @@ export function LeftSidebar() {
       showImageOverlay: item.showImageOverlay,
       imageOpacity: item.imageOpacity,
       lockAspectRatio: item.lockAspectRatio,
+      materialType: item.materialType,
+      drawShape: item.drawShape,
       entityCount: item.entityCount,
       parseWarning: item.parseWarning,
     };
@@ -847,6 +849,8 @@ export function LeftSidebar() {
                               format={item.format}
                               rawText={item.rawText}
                               imageOverlayUrl={item.imageOverlayUrl || item.dataUrl}
+                              materialType={item.materialType}
+                              drawShape={item.drawShape}
                               sourceUnit={item.sourceUnit}
                               boundingBoxMm={item.boundingBoxMm}
                               pins={item.pins}
@@ -1352,6 +1356,8 @@ export function LeftSidebar() {
                             format={asset.format}
                             rawText={asset.rawText}
                             imageOverlayUrl={asset.imageOverlayUrl || asset.dataUrl}
+                            materialType={asset.materialType}
+                            drawShape={asset.drawShape}
                             sourceUnit={asset.sourceUnit}
                             boundingBoxMm={asset.boundingBoxMm}
                             pins={asset.pins}

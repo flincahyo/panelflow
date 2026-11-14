@@ -48,6 +48,7 @@ export interface BomCadAssetRow {
   name: string;
   fileName: string;
   format: string;
+  materialType?: string;
   widthMm: number;
   heightMm: number;
   depthMm: number;
@@ -286,7 +287,10 @@ export function generateBomReport(
           key,
           name: asset.name,
           fileName: asset.fileName,
-          format: asset.format.toUpperCase(),
+          format: asset.materialType
+            ? `BUSBAR (${asset.materialType.toUpperCase()})`
+            : asset.format.toUpperCase(),
+          materialType: asset.materialType,
           widthMm: Number(asset.boundingBoxMm.w.toFixed(1)),
           heightMm: Number(asset.boundingBoxMm.h.toFixed(1)),
           depthMm: Number(asset.boundingBoxMm.d.toFixed(1)),

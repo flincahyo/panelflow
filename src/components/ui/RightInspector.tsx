@@ -14,7 +14,7 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BomPanelTab } from "@/components/ui/BomPanelTab";
 import { computeDoorCutouts, getDoorDimensions } from "@/lib/door-cutout";
 import { calculateDuctFillRatio, getDuctFillStatusColor } from "@/lib/duct-fill";
@@ -22,7 +22,12 @@ import { getEffectiveCadBounds } from "@/lib/collision";
 import { snapToGrid } from "@/lib/snap";
 import { formatDim, fromMm, inputStepForUnit, toMm } from "@/lib/units";
 import { usePanelStore } from "@/store/usePanelStore";
-import type { CadLabelPosition } from "@/types/panel";
+import {
+  type CadLabelPosition,
+  type MaterialType,
+  MATERIAL_PRESETS,
+} from "@/types/panel";
+import { saveCustomCadToLibrary, updateCustomCadCloudId } from "@/lib/indexed-db";
 
 interface RightInspectorProps {
   onClose?: () => void;
@@ -71,6 +76,8 @@ export function RightInspector({ onClose }: RightInspectorProps) {
   const setPinMarkingMode = usePanelStore((s) => s.setPinMarkingMode);
   const removePinFromAsset = usePanelStore((s) => s.removePinFromAsset);
   const updatePinInAsset = usePanelStore((s) => s.updatePinInAsset);
+  const addPinToAsset = usePanelStore((s) => s.addPinToAsset);
+  const [savedToLibToast, setSavedToLibToast] = useState(false);
   const updateComponentPin = usePanelStore((s) => s.updateComponentPin);
   const removePinFromComponent = usePanelStore((s) => s.removePinFromComponent);
   const renameGroup = usePanelStore((s) => s.renameGroup);
@@ -914,14 +921,62 @@ export function RightInspector({ onClose }: RightInspectorProps) {
         return (
         <div className={`${cardClass} space-y-3`}>
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-[13px] text-[#0f172a] dark:text-white">{cad.name}</span>
-            <button
-              type="button"
-              onClick={() => removeCadAsset(cad.id)}
-              className="text-[#94a3b8] dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
+            <input
+              type="text"
+              value={cad.name}
+              onChange={(e) => updateCadAsset(cad.id, { name: e.target.value })}
+              className="font-semibold text-[13px] text-[#0f172a] dark:text-white bg-transparent border-b border-transparent hover:border-[#cbd5e1] focus:border-sky-500 focus:outline-none px-0.5"
+            />
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const saved = await saveCustomCadToLibrary(cad);
+                    fetch("/api/custom-parts", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        name: cad.name,
+                        format: cad.format,
+                        bounding_box: cad.cropMm
+                          ? { ...cad.boundingBoxMm, cropMm: cad.cropMm }
+                          : cad.boundingBoxMm,
+                        pins: cad.pins,
+                        cad_data: cad.rawText || cad.dataUrl || null,
+                      }),
+                    })
+                      .then((res) => (res.ok ? res.json() : null))
+                      .then((data) => {
+                        const cloudId = data?.part?.id;
+                        if (typeof cloudId === "string" && cloudId) {
+                          updateCustomCadCloudId(saved.id, cloudId).catch(() => {});
+                        }
+                      })
+                      .catch(() => {});
+                    setSavedToLibToast(true);
+                    setTimeout(() => setSavedToLibToast(false), 2000);
+                  } catch {
+                    // ignore
+                  }
+                }}
+                title="Save to My CAD Library"
+                className={`rounded px-1.5 py-0.5 text-[10px] font-semibold transition-colors flex items-center gap-1 ${
+                  savedToLibToast
+                    ? "bg-emerald-500 text-white"
+                    : "border border-sky-500/40 text-sky-600 dark:text-sky-400 hover:bg-sky-500/10"
+                }`}
+              >
+                {savedToLibToast ? "✓ Saved" : "Save to Lib"}
+              </button>
+              <button
+                type="button"
+                onClick={() => removeCadAsset(cad.id)}
+                className="text-[#94a3b8] dark:text-slate-500 hover:text-rose-500 dark:hover:text-rose-400 p-0.5"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
           <div className={`${subBoxClass} p-2 font-mono text-[11px] tabular-nums text-[#64748b] dark:text-slate-400 space-y-0.5`}>
@@ -1199,6 +1254,120 @@ export function RightInspector({ onClose }: RightInspectorProps) {
               </div>
             </div>
           )}
+
+          {/* Material & Appearance Picker */}
+          <div className="space-y-1.5 border-t border-[#e2e8f0] dark:border-white/10 pt-2.5">
+            <span className="text-xs font-semibold text-[#64748b] dark:text-slate-400">
+              Material & Appearance
+            </span>
+            <div className="grid grid-cols-2 gap-1.5">
+              {(Object.keys(MATERIAL_PRESETS) as MaterialType[]).map((matKey) => {
+                const preset = MATERIAL_PRESETS[matKey];
+                const isSelectedMat = (cad.materialType ?? "copper") === matKey;
+                return (
+                  <button
+                    key={matKey}
+                    type="button"
+                    onClick={() => updateCadAsset(cad.id, { materialType: matKey })}
+                    className={`flex items-center gap-2 rounded-md border p-1.5 text-left text-xs transition-all ${
+                      isSelectedMat
+                        ? "border-sky-500 bg-sky-50 dark:bg-sky-950/40 font-semibold shadow-xs"
+                        : "border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#090b10] hover:border-[#cbd5e1] dark:hover:border-white/20"
+                    }`}
+                  >
+                    <span
+                      className="h-3.5 w-3.5 shrink-0 rounded-full border shadow-2xs"
+                      style={{
+                        backgroundColor: preset.fillColor,
+                        borderColor: preset.borderColor,
+                      }}
+                    />
+                    <span className="truncate text-[11px] text-[#0f172a] dark:text-slate-200">
+                      {preset.name}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Quick Pin Generators along Center & Edges */}
+          <div className="space-y-1.5 border-t border-[#e2e8f0] dark:border-white/10 pt-2.5">
+            <span className="text-xs font-semibold text-[#64748b] dark:text-slate-400">
+              Quick Pin Placement
+            </span>
+            <div className="grid grid-cols-3 gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  const w = effBounds.widthMm;
+                  const h = effBounds.heightMm;
+                  // Center pin
+                  addPinToAsset(cad.id, {
+                    label: `PIN-${cad.pins.length + 1}`,
+                    localXMm: 0,
+                    localYMm: 0,
+                    localZMm: 0,
+                  });
+                }}
+                className="rounded border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#090b10] px-1.5 py-1 text-[10px] font-medium text-[#0f172a] dark:text-slate-200 hover:border-sky-500 hover:text-sky-600 transition-colors"
+                title="Add 1 pin at center"
+              >
+                + Center Pin
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const w = effBounds.widthMm;
+                  const h = effBounds.heightMm;
+                  const isHoriz = w >= h;
+                  const count = 3;
+                  const step = (isHoriz ? w : h) / (count + 1);
+                  const labels = ["L1-IN", "L1-OUT1", "L1-OUT2"];
+                  for (let i = 0; i < count; i++) {
+                    const offset = -((isHoriz ? w : h) / 2) + step * (i + 1);
+                    addPinToAsset(cad.id, {
+                      label: labels[i] || `P${cad.pins.length + i + 1}`,
+                      localXMm: isHoriz ? Number(offset.toFixed(1)) : 0,
+                      localYMm: isHoriz ? 0 : Number(offset.toFixed(1)),
+                      localZMm: 0,
+                    });
+                  }
+                }}
+                className="rounded border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#090b10] px-1.5 py-1 text-[10px] font-medium text-[#0f172a] dark:text-slate-200 hover:border-sky-500 hover:text-sky-600 transition-colors"
+                title="Add 3 pins distributed along axis (L1-IN, OUT1, OUT2)"
+              >
+                + 3 Bus Pins
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const w = effBounds.widthMm;
+                  const h = effBounds.heightMm;
+                  const hw = Number((w / 2 - 2).toFixed(1));
+                  const hh = Number((h / 2 - 2).toFixed(1));
+                  const corners = [
+                    { x: -hw, y: -hh, l: "GND-1" },
+                    { x: hw, y: -hh, l: "GND-2" },
+                    { x: -hw, y: hh, l: "GND-3" },
+                    { x: hw, y: hh, l: "GND-4" },
+                  ];
+                  for (const c of corners) {
+                    addPinToAsset(cad.id, {
+                      label: c.l,
+                      localXMm: c.x,
+                      localYMm: c.y,
+                      localZMm: 0,
+                    });
+                  }
+                }}
+                className="rounded border border-[#e2e8f0] dark:border-white/10 bg-[#f8fafc] dark:bg-[#090b10] px-1.5 py-1 text-[10px] font-medium text-[#0f172a] dark:text-slate-200 hover:border-sky-500 hover:text-sky-600 transition-colors"
+                title="Add 4 corner mounting hole pins"
+              >
+                + 4 Edges
+              </button>
+            </div>
+          </div>
 
           <label className="block space-y-1 border-t border-[#e2e8f0] dark:border-white/10 pt-2.5">
             <span className="text-xs text-[#64748b] dark:text-slate-400">

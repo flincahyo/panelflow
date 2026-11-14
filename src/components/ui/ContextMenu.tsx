@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { usePanelStore } from "@/store/usePanelStore";
 import type { GridSnapMm, WireColorCode } from "@/types/panel";
+import { saveCustomCadToLibrary, updateCustomCadCloudId } from "@/lib/indexed-db";
 
 export type ContextMenuTarget =
   | { kind: "component"; id: string }
@@ -492,6 +493,43 @@ export function ContextMenu({ menu, onClose, onFitToScreen }: ContextMenuProps) 
             >
               <Copy className="h-3.5 w-3.5 text-emerald-400" />
               <span>Duplicate</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                try {
+                  const saved = await saveCustomCadToLibrary(currentCad);
+                  fetch("/api/custom-parts", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      name: currentCad.name,
+                      format: currentCad.format,
+                      bounding_box: currentCad.cropMm
+                        ? { ...currentCad.boundingBoxMm, cropMm: currentCad.cropMm, materialType: currentCad.materialType, drawShape: currentCad.drawShape }
+                        : { ...currentCad.boundingBoxMm, materialType: currentCad.materialType, drawShape: currentCad.drawShape },
+                      pins: currentCad.pins,
+                      cad_data: currentCad.rawText || currentCad.dataUrl || null,
+                    }),
+                  })
+                    .then((res) => (res.ok ? res.json() : null))
+                    .then((data) => {
+                      const cloudId = data?.part?.id;
+                      if (typeof cloudId === "string" && cloudId) {
+                        updateCustomCadCloudId(saved.id, cloudId).catch(() => {});
+                      }
+                    })
+                    .catch(() => {});
+                } catch {
+                  // ignore
+                }
+                onClose();
+              }}
+              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[#0f172a] dark:text-slate-200 hover:bg-[#f1f5f9] dark:hover:bg-sky-600/20 hover:text-[#0284c7] dark:hover:text-sky-300"
+            >
+              <Plus className="h-3.5 w-3.5 text-cyan-400" />
+              <span>Save to My CAD Library</span>
             </button>
 
             <button
